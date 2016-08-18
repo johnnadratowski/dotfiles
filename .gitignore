@@ -1,0 +1,10 @@
+*logs*
+*.log
+*~
+_vim/ropevim/src*
+_vim/ropevim/pylibs*
+*.netrwhist
+_vim/.netrwhist
+*.swp
+*.pyc
+history.sqlite

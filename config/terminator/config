@@ -1,0 +1,45 @@
+[global_config]
+  title_transmit_bg_color = "#000000"
+  title_inactive_bg_color = "#000000"
+  borderless = True
+[keybindings]
+  switch_to_tab_10 = None
+  new_tab = <Alt>t
+  go_next = <Alt>n
+  split_horiz = <Alt>h
+  go_prev = <Alt>p
+  switch_to_tab_6 = <Alt>6
+  switch_to_tab_4 = <Alt>4
+  switch_to_tab_5 = <Alt>5
+  split_vert = <Alt>v
+  switch_to_tab_3 = <Alt>3
+  switch_to_tab_1 = <Alt>1
+  switch_to_tab_2 = <Alt>2
+  hide_window = <Shift><Control>a
+[profiles]
+  [[default]]
+    scrollbar_position = hidden
+    palette = "#000000:#aa0000:#00aa00:#aa5500:#0000aa:#aa00aa:#00aaaa:#aaaaaa:#555555:#ff5555:#55ff55:#ffff55:#5555ff:#ff55ff:#55ffff:#ffffff"
+    background_darkness = 0.83
+    scrollback_lines = 5000
+    use_system_font = False
+    cursor_color = "#d8d8d8"
+    foreground_color = "#ff9000"
+    use_custom_command = True
+    scroll_on_output = False
+    show_titlebar = False
+    custom_command = tmux
+    color_scheme = custom
+    font = Inconsolata Medium 14
+    scrollback_infinite = True
+  [[New Profile]]
+[layouts]
+  [[default]]
+    [[[child1]]]
+      type = Terminal
+      parent = window0
+      profile = default
+    [[[window0]]]
+      type = Window
+      parent = ""
+[plugins]

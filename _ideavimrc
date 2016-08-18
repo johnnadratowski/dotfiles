@@ -1,0 +1,10 @@
+set smartcase
+set clipboard+=unnamed
+set surround
+vnoremap > >gv 
+vnoremap < <gv 
+" Space to run macros
+nnoremap <Space> q
+nnoremap <C-@> @
+nnoremap <C-Space> @
+#source ~/.vimrc
