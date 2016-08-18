@@ -1,0 +1,95 @@
+# conky configuration
+#
+# The list of variables has been removed from this file in favour
+# of keeping the documentation more maintainable.
+# Check http://conky.sf.net for an up-to-date-list.
+#
+# For ideas about how to modify conky, please see:
+# http://crunchbanglinux.org/forums/topic/59/my-conky-config/
+#
+# For help with conky, please see:
+# http://crunchbanglinux.org/forums/topic/2047/conky-help/
+#
+# Enjoy! :)
+##############################################
+# Settings
+##############################################
+background yes
+use_xft yes
+xftfont Inconsolata Bold:size=12
+xftalpha 1
+update_interval 1.0
+total_run_times 0
+own_window yes
+own_window_transparent yes
+own_window_type desktop
+#own_window_argb_visual yes
+own_window_hints undecorated,below,sticky,skip_taskbar,skip_pager
+double_buffer yes
+minimum_size 200 200
+maximum_width 500
+draw_shades no
+draw_outline no
+draw_borders no
+draw_graph_borders no
+default_color 656667
+default_shade_color 000000
+default_outline_color 828282
+alignment top_right
+gap_x 12
+gap_y 56
+no_buffers yes
+uppercase no
+cpu_avg_samples 2
+override_utf8_locale no
+##############################################
+#  Output
+##############################################
+TEXT
+S Y S T E M    I N F O
+${hr}
+Host:$alignr$nodename
+Uptime:$alignr$uptime
+RAM:$alignr$mem/$memmax
+Swap usage:$alignr$swap/$swapmax
+Disk usage:$alignr${fs_used /}/${fs_size /}
+CPU usage:$alignr${cpu cpu0}%
+
+
+S H O R T C U T    K E Y S
+${hr}
+Super+r$alignr   Alt Menu
+Super+Alt+r$alignr   Alt Menu (Root)
+Super+Shift+r$alignr   Run Dialog
+
+Super+F1$alignr   Pycharm
+Super+w/F2$alignr   Chromium
+Super+Shift+w/F2$alignr   IceWeasel
+Super+F3$alignr   PGAdmin
+Super+f/F4$alignr   GVim
+
+Super+t$alignr   Terminal
+Super+e$alignr   File Manager
+Super+m$alignr   Media Player
+Super+h$alignr   Task Manager
+
+Super+h$alignr   Paste History
+Super+Shift+v$alignr   Paste History Manager
+
+W I N D O W   K E Y S
+${hr}
+Super+x$alignr   Logout
+Super+l$alignr   Lock Screen
+
+Super+Space$alignr   Main Menu
+Super+Tab$alignr   Client Menu
+Alt+Space$alignr   Window Menu
+
+Super+Shift+Del$alignr   Kill Window
+Super+(number)$alignr   Switch to Virtual Desktop
+Super+Shift+(number)$alignr   Move Window to Virtual Desktop
+Super+d$alignr   Show Desktop
+Super+Esc$alignr   Reconfigure Openbox
+Super+Shift+Esc$alignr   Restart Openbox
+Super+Arrow$alignr   Tile Left/Right, Maximize, Minimize
+Super+Shift+Arrow$alignr   Grow Window Edge

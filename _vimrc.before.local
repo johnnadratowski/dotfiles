@@ -1,0 +1,123 @@
+""" SPF13 {
+
+    "let g:spf13_bundle_groups=['general', 'tagbar', 'youcompleteme', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
+    let g:spf13_bundle_groups=['general', 'tagbar', 'neocomplcache', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
+    "let g:spf13_bundle_groups=['general', 'tagbar', 'neocomplete', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
+    "
+    let g:spf13_no_autochdir = 1
+    let g:spf13_no_views = 1
+" }
+
+
+""" Plugins {
+
+    "" Autoclose
+    let g:autoclose_on = 0
+
+    "" NERDTREE
+    "let NERDTreeChDirMode=0
+
+    "" Powerline
+    let g:airline_powerline_fonts=1
+
+    "" Ultisnips
+    let g:UltiSnipsSnippetDirectories=["/bundle/vim-snippets/UltiSnips"]
+
+    "" Pymode
+    "let g:pymode_rope = 0
+
+    "" Silver Searcher
+    let g:ag_working_path_mode = 'r'
+
+    "" Surround
+    " Disable surround
+    " let g:loaded_surround = 1
+
+    "" Neocomplcache
+    if !exists('g:neocomplcache#keyword_patterns')
+        let g:neocomplcache#keyword_patterns = {}
+    endif
+    if !exists('g:neocomplcache#force_omni_input_patterns')
+        let g:neocomplcache#force_omni_input_patterns = {}
+    endif
+" }
+
+""" Functions {
+    function! GitRoot()
+      return substitute(system('git rev-parse --show-toplevel'), '[\n\r]', '', 'g')
+    endfunction
+
+    function! Rack(search, ...)
+      let cwd = GitRoot()
+      if executable('ag')
+          let cmdList = ['Ag', a:search]
+      else
+          let cmdList = ['Ack', a:search]
+      endif
+      let idx = 0
+      for i in a:000
+          let curPath = cwd . "/" . i
+          let cmdList = add(cmdList, curPath)
+      endfor
+      let cmd = join(cmdList, " ")
+      let x = input(cmd)
+      execute cmd
+    endfunction
+
+    command! -bang -nargs=* -bar Rack call Rack(<q-args>)
+
+    function! DelTagOfFile(file)
+      let fullpath = a:file
+      let cwd = GitRoot()
+      let tagfilename = cwd . "/tags"
+      let f = substitute(fullpath, cwd . "/", "", "")
+      let f = escape(f, './')
+      let cmd = 'sed -i "/' . f . '/d" "' . tagfilename . '"'
+      let resp = system(cmd)
+    endfunction
+
+    function! UpdateGoTags(...)
+      let cwd = GitRoot()
+      if cwd =~ "fatal: "
+          return
+      endif
+      let tagfilename = cwd . "/tags"
+      let cmdList = ['gotags', '-R', '-f ', tagfilename]
+      for i in a:000
+          let curPath = cwd . "/" . i
+          let x = add(cmdList, curPath)
+      endfor
+      let cmd = join(cmdList, " ")
+      let resp = system(cmd)
+    endfunction
+
+    function! UpdateGoTagsSingle()
+      " Currently has some issues - outputs multiple headers to ctag. Have to sed
+      " them out by the first //
+      let f = expand("%:p")
+      let cwd = GitRoot()
+      let tagfilename = cwd . "/tags"
+      let cmd = 'gotags -R ' . ' "' . f . '" >> ' . tagfilename
+      call DelTagOfFile(f)
+      let resp = system(cmd)
+    endfunction
+
+    function! UpdateJsTagsSingle()
+      " Currently has some issues - outputs multiple headers to ctag. Have to sed
+      " them out by the first //
+      let f = expand("%:p")
+      let cwd = GitRoot()
+      let tagfilename = cwd . "/tags"
+      let cmd = 'jsctags ' . ' "' . f . '" -f >> ' . tagfilename
+      call DelTagOfFile(f)
+      let resp = system(cmd)
+    endfunction
+
+" }
+
+
+""" Commands {
+    command ClrSwap execute "!rm -rf ~/.vimswap/"
+
+    command GoFmtSave execute "let g:go_fmt_command = 'goimports'"
+" }
