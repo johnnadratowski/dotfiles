@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import json
 import logging
@@ -6,22 +7,70 @@ import subprocess
 import tkinter as tk
 import time
 
+
 DATA = {
     'clips': []
 }
 
+ROOT = None
+
+
 class ClipList(tk.Listbox):
     def __init__(self, *args, **kwargs):
-        super().__init__(width=300, height=500, *args, **kwargs)
+        super().__init__(selectmode=tk.BROWSE, *args, **kwargs)
         for data in DATA['clips']:
             self.insert(tk.END, data['data'].strip())
+        self._create_binds()
+
+    def _create_binds(self):
+        self.bind("<Double-Button-1>", self.take_item)
+        self.bind("<Return>", self.take_item)
+
+    def move_down(self, event):
+        self.move(1)
+
+    def move_up(self, event):
+        self.move(-1)
+
+    def move(self, num):
+        selection = self.curselection()
+        if selection:
+            self.select_clear(selection[0])
+            new_selection = selection[0] + num
+            if new_selection < 0 or new_selection >= self.size():
+                new_selection = 0
+        else:
+            new_selection = 0
+
+        self.activate(new_selection)
+        self.select_set(new_selection)
+
+    def take_item(self, event):
+        selection = self.curselection()
+        if selection:
+            write_clipboard(DATA['clips'][selection[0]]['data'])
+            ROOT.destroy()
 
 
 class UI(tk.Tk):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        lb = ClipList(self)
-        lb.pack()
+
+        self._create_widgets()
+        self._create_binds()
+
+        self.attributes("-topmost", True)
+        self.focus_force()
+
+    def _create_widgets(self):
+        self.clipList = ClipList(self)
+        self.clipList.pack()
+
+    def _create_binds(self):
+        self.bind("<Control-j>", self.clipList.move_down)
+        self.bind("<Control-k>", self.clipList.move_up)
+        self.bind("<Return>", self.clipList.take_item)
+
 
 
 def read_clipboard():
@@ -70,12 +119,13 @@ def start_server_async(args):
 
 
 def start_ui():
+    global ROOT
     try:
-        root = UI()
-        root.mainloop()
+        ROOT = UI()
+        ROOT.mainloop()
     finally:
         try:
-            root.destroy()
+            ROOT.destroy()
         except:
             pass
 
@@ -83,12 +133,8 @@ def start_ui():
 def setup_args():
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--max",
-        default=1000,
-        type=int,
-        help='The limit on the number of clips. Defaults to 1000.'
-    )
+    argument = parser.add_argument("--max", default=1000, type=int,
+                                   help='The limit on the number of clips. Defaults to 1000.')
     parser.add_argument(
         '--poll',
         help="The polling interval in seconds. Defaults to 0.3.",
@@ -119,6 +165,8 @@ def start(args):
             start_ui()
         else:
             start_server(args)
+    except SystemExit:
+        pass
     except:
         logging.exception("Exception occurred in main method")
 
