@@ -1,9 +1,0 @@
-#!/usr/bin/python
-import tkMessageBox as box
-
-if __name__ == '__main__':
-    import sys
-    if '-a' in sys.argv:
-        box.showinfo("Output", "\n".join(sys.argv))
-    else:
-        box.showinfo("Output", "\n".join(sys.stdin.readlines()))

@@ -1,6 +1,3 @@
-" Unbundles
-UnBundle 'AutoClose'
-UnBundle 'auto-pairs'
 
 " Settings {
 
@@ -8,9 +5,9 @@ UnBundle 'auto-pairs'
     set nospell
 
     " Folding
-    set foldmethod=syntax 
-    set foldnestmax=3 
-    set nofoldenable
+    "set foldmethod=syntax 
+    "set foldnestmax=3 
+    "set nofoldenable
 
     set guifont=Hack\ 13
     set wildignore+=**/build/**,**/dist/**
@@ -36,17 +33,6 @@ UnBundle 'auto-pairs'
     " Search for word under cursor
     nnoremap K :grep! "\b<C-R><C-W>\b"<CR>:cw<CR>
 
-    " Tab
-    map <M-1> :tabn 1<CR>
-    map <M-2> :tabn 2<CR>
-    map <M-3> :tabn 3<CR>
-    map <M-4> :tabn 4<CR>
-    map <M-5> :tabn 5<CR>
-    map <M-6> :tabn 6<CR>
-    map <M-7> :tabn 7<CR>
-    map <M-8> :tabn 8<CR>
-    map <M-9> :tabn 9<CR>
-
     " Quickly close buffers
     map <leader>w :bd<CR>
     map <leader>W :1,1000bd<CR>
@@ -55,15 +41,6 @@ UnBundle 'auto-pairs'
     map <C-s> :w<CR>
     map <leader>s :wa<CR>
 
-    " Edit VimRC
-    map <silent> <leader>v :e ~/.vimrc.local<CR>
-
-    " Reload Vimrc
-    map <silent> <leader>V :source ~/.vimrc<CR>:filetype detect<CR>:exe ":echo 'vimrc reloaded'"<CR>
-
-    " Quick Command
-    map <leader>: :!
-    
     nmap M <Plug>(easymotion-prefix)
     nmap H <Plug>(easymotion-jumptoanywhere)
     nmap L <Plug>(easymotion-s)

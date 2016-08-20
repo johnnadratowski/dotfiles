@@ -14,8 +14,8 @@ alias _='please'
 #-------------------------------------------------------------
 ## The 'ls' family (this assumes you use a recent GNU ls)
 ##-------------------------------------------------------------
-alias ls='ls -hF --color' # add colors for filetype recognition
-alias ll="ls -l --group-directories-first"
+alias ls='ls -hFG' # add colors for filetype recognition
+alias ll="ls -l"
 alias l="ll"
 alias ldot='ls -ld .*'    # show only hidden files
 alias la='ll -A'          # show hidden files

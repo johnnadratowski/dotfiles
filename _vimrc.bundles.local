@@ -7,8 +7,12 @@ if executable('ag')
     Plugin 'rking/ag.vim'
 endif
 
+" Unbundles
+UnBundle 'AutoClose'
+UnBundle 'auto-pairs'
+
 UnBundle 'jiangmiao/auto-pairs'
 Plugin 'maxbrunsfeld/vim-emacs-bindings'
-"Bundle 'git://github.com/davidhalter/jedi-vim'
+Bundle 'git://github.com/davidhalter/jedi-vim'
 Bundle 'jpalardy/vim-slime'
 Plugin 'christoomey/vim-tmux-navigator'

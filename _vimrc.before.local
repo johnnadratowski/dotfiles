@@ -1,10 +1,10 @@
 """ SPF13 {
 
     "let g:spf13_bundle_groups=['general', 'tagbar', 'youcompleteme', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
-    let g:spf13_bundle_groups=['general', 'tagbar', 'neocomplcache', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
-    "let g:spf13_bundle_groups=['general', 'tagbar', 'neocomplete', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
-    "
+    let g:spf13_bundle_groups=['general', 'tagbar', 'neocomplete', 'programming', 'ruby', 'python', 'go', 'javascript', 'html', 'misc', 'writing' ]
     let g:spf13_no_autochdir = 1
+    let g:spf13_edit_config_mapping='<Leader>v'
+    let g:spf13_apply_config_mapping='<Leader>V'
     let g:spf13_no_views = 1
 " }
 
@@ -34,12 +34,12 @@
     " let g:loaded_surround = 1
 
     "" Neocomplcache
-    if !exists('g:neocomplcache#keyword_patterns')
-        let g:neocomplcache#keyword_patterns = {}
-    endif
-    if !exists('g:neocomplcache#force_omni_input_patterns')
-        let g:neocomplcache#force_omni_input_patterns = {}
-    endif
+    "if !exists('g:neocomplcache#keyword_patterns')
+        "let g:neocomplcache#keyword_patterns = {}
+    "endif
+    "if !exists('g:neocomplcache#force_omni_input_patterns')
+        "let g:neocomplcache#force_omni_input_patterns = {}
+    "endif
 " }
 
 """ Functions {

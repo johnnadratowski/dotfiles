@@ -8,3 +8,4 @@ _vim/.netrwhist
 *.swp
 *.pyc
 history.sqlite
+.idea/
