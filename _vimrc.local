@@ -5,9 +5,9 @@
     set nospell
 
     " Folding
-    set foldmethod=syntax 
-    set foldnestmax=3 
-    set nofoldenable
+    "set foldmethod=syntax 
+    "set foldnestmax=3 
+    "set nofoldenable
 
     set guifont=Hack\ 13
     set wildignore+=**/build/**,**/dist/**
