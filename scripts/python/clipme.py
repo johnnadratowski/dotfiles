@@ -8,6 +8,7 @@ import tkinter as tk
 import time
 
 
+
 DATA = {
     'clips': []
 }
@@ -71,6 +72,13 @@ class UI(tk.Tk):
         self.bind("<Control-k>", self.clipList.move_up)
         self.bind("<Return>", self.clipList.take_item)
 
+# Create a Qt application
+app = QApplication(sys.argv)
+
+# Our main window will be a QListView
+list = QListView()
+list.setWindowTitle('Example List')
+list.setMinimumSize(600, 400)
 
 
 def read_clipboard():
