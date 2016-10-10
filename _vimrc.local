@@ -72,6 +72,10 @@
     map <C-t> :TagbarOpenAutoClose<CR>
 " }
 
+" Bash Stuff {
+
+    au FileType sh setl ts=4 sts=4 noet
+" }
 
 
 " Go Stuff {
