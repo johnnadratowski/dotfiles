@@ -356,9 +356,9 @@ hammer() {
 	local cmd_prefix=${CMD_PREFIX:-$default_prefix}
 
 	if [[ $cmd_prefix == $default_prefix ]]; then
-		echo "Hammer Server\tStart Time\tEnd Time\tCall\tExit Code\tHTTP Code\tTotal Time\tTime To Connect\tTime for Name Lookup\tTime Pretransfer\tTime Redirected\tTime Start Transfer\tSize Downloaded\tSize Uploaded\tSize of Request\tSize of Header\tSpeed of Download\tSpeed of Upload\tNumber of Connections\tNumber of Redirects\tRedirect URL\tEffective URL" > $output_file
+		echo "Hammer Server\tStart Time (ms)\tEnd Time (ms)\tCall\tExit Code\tHTTP Code\tTotal Time (sec)\tTime To Connect (sec)\tTime for Name Lookup (sec)\tTime Pretransfer (sec)\tTime Redirected (sec)\tTime Start Transfer (sec)\tSize Downloaded (bytes)\tSize Uploaded (bytes)\tSize of Request (bytes)\tSize of Header (bytes)\tSpeed of Download (bytes/sec)\tSpeed of Upload (bytes/sec)\tNumber of Connections\tNumber of Redirects\tRedirect URL\tEffective URL" > $output_file
 	else
-		echo "Hammer Server\tStart Time\tEnd Time\tCall\tExit Code\tTotal Time" > $output_file
+		echo "Hammer Server\tStart Time (ms)\tEnd Time (ms)\tCall\tExit Code\tTotal Time(sec)" > $output_file
 	fi
 
 	local counter=1
