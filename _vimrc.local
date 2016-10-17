@@ -3,6 +3,7 @@
 
     " Spell Check
     set nospell
+    set wrap
 
     " Folding
     "set foldmethod=syntax 

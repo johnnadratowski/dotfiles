@@ -25,7 +25,9 @@ function explain {
 #-------------------------------------------------------------
 
 # Find files bigger than 50 MB
-function findbig { find ${1} -type f -size +50000k -exec ls -lh {} \; | awk '{ print $9 ": " $5 }' }
+function findbig { 
+	find $1 -type f -size +50000k -exec ls -lh {} \; | awk '{ print $9 ": " $5 }' 
+}
 
 # Find a file with a pattern in name:
 function ff() { find . -type f -iname '*'$*'*' -ls ; }
@@ -38,24 +40,24 @@ function fe()
 # (needs a recent version of egrep)
 function fstr()
 {
-    OPTIND=1
-    local case=""
-    local usage="fstr: find string in files.
+	OPTIND=1
+	local case=""
+	local usage="fstr: find string in files.
 Usage: fstr [-i] \"pattern\" [\"filename pattern\"] "
-    while getopts :it opt
-    do
-        case "$opt" in
-        i) case="-i " ;;
-        *) echo "$usage"; return;;
-        esac
-    done
-    shift $(( $OPTIND - 1 ))
-    if [ "$#" -lt 1 ]; then
-        echo "$usage"
-        return;
-    fi
-    find . -type f -name "${2:-*}" -print0 | \
-    xargs -0 egrep --color=always -sn ${case} "$1" 2>&- | more 
+	while getopts :it opt
+	do
+		case "$opt" in
+		i) case="-i " ;;
+		*) echo "$usage"; return;;
+		esac
+	done
+	shift $(( $OPTIND - 1 ))
+	if [ "$#" -lt 1 ]; then
+		echo "$usage"
+		return;
+	fi
+	find . -type f -name "${2:-*}" -print0 | \
+	xargs -0 egrep --color=always -sn ${case} "$1" 2>&- | more 
 
 }
 
@@ -452,3 +454,5 @@ hammerPMN() {
 -H "X-Unified-IdentityID: amadmin" http://localhost:8082/makeMeAnError
 END
 }
+
+
