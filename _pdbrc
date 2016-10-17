@@ -1,0 +1,4 @@
+import os
+import sys
+
+alias kk os.kill(os.getpid(), 9)
