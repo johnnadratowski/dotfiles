@@ -10,7 +10,7 @@
     "set foldnestmax=3 
     "set nofoldenable
 
-    set guifont=Hack\ 13
+    "set guifont=Hack\ 13
     set wildignore+=**/build/**,**/dist/**
     "let g:bundles = []
 
@@ -74,7 +74,6 @@
 " }
 
 " Bash Stuff {
-
     au FileType sh setl ts=4 sts=4 noet
 " }
 
@@ -169,6 +168,9 @@
     "endif
 " }
 
+" Markdown Stuff {
+let g:previm_open_cmd = 'open -a Google\ Chrome'
+"
 
 " Plugin Stuff {
 

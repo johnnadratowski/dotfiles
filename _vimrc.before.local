@@ -24,7 +24,7 @@
     let g:UltiSnipsSnippetDirectories=["/bundle/vim-snippets/UltiSnips"]
 
     "" Pymode
-    "let g:pymode_rope = 0
+    let g:pymode_rope = 0
 
     "" Silver Searcher
     let g:ag_working_path_mode = 'r'
