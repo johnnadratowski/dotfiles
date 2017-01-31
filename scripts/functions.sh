@@ -334,7 +334,7 @@ function swap_py2()
 
 function swap_py3()
 {
-    sudo rm /usr/bin/python
+    sudo rm -f /usr/bin/python
     sudo ln -s /usr/bin/python3 /usr/bin/python
 }
 

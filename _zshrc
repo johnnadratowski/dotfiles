@@ -64,10 +64,12 @@ if [ -f aws_zsh_completer.sh ]
 then
     source aws_zsh_completer.sh
 fi
-if $(ps -e | grep -q tmux); then 
-else
-    tmux -2
-fi
+
+if [ "$TMUX" = "" ]; then exec tmux -2; fi
+#if $(ps -e | grep -q tmux); then 
+#else
+    #tmux -2
+#fi
 
 
 # added by travis gem
