@@ -47,18 +47,7 @@ source $ZSH/oh-my-zsh.sh
 
 # Begin loading my stuff
 
-for plugin in $HOME/scripts/startup/*
-do
-    source $plugin
-done
-
-if [ -d $HOME/local-startup ]
-then
-    for plugin in $HOME/local-startup/*
-    do
-        source $plugin
-    done
-fi
+. ~/.shellrc
 
 if [ -f aws_zsh_completer.sh ]
 then

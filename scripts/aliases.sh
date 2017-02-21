@@ -3,9 +3,23 @@
 # loaded in a new bash shell session
 
 # zsh specific aliases
-# Make zsh know about hosts already accessed by SSH
-alias zshrc='vim ~/.zshrc' # Quick access to the ~/.zshrc file
-zstyle -e ':completion:*:(ssh|scp|sftp|rsh|rsync):hosts' hosts 'reply=(${=${${(f)"$(cat {/etc/ssh_,~/.ssh/known_}hosts(|2)(N) /dev/null)"}%%[# ]*}//,/ })'
+if which zstyle &> /dev/null; then
+  # Make zsh know about hosts already accessed by SSH
+  alias zshrc='vim ~/.zshrc' # Quick access to the ~/.zshrc file
+  zstyle -e ':completion:*:(ssh|scp|sftp|rsh|rsync):hosts' hosts 'reply=(${=${${(f)"$(cat {/etc/ssh_,~/.ssh/known_}hosts(|2)(N) /dev/null)"}%%[# ]*}//,/ })'
+
+  # Command line head / tail shortcuts
+  alias -g H='| head'
+  alias -g T='| tail'
+  alias -g G='| grep'
+  alias -g L="| less"
+  alias -g M="| most"
+  alias -g LL="2>&1 | less"
+  alias -g CA="2>&1 | cat -A"
+  alias -g NE="2> /dev/null"
+  alias -g NUL="> /dev/null 2>&1"
+  alias -g P="2>&1| pygmentize -l pytb"
+fi
 
 # sudo aliases
 alias please='sudo $(fc -ln -1)'
@@ -34,18 +48,6 @@ alias tree='tree -Csu'    # nice alternative to 'recursive ls'
 alias less='less -R'
 alias more='less'
 alias m='less'
-
-# Command line head / tail shortcuts
-alias -g H='| head'
-alias -g T='| tail'
-alias -g G='| grep'
-alias -g L="| less"
-alias -g M="| most"
-alias -g LL="2>&1 | less"
-alias -g CA="2>&1 | cat -A"
-alias -g NE="2> /dev/null"
-alias -g NUL="> /dev/null 2>&1"
-alias -g P="2>&1| pygmentize -l pytb"
 
 # file command aliases
 alias rm='rm -i'
@@ -79,7 +81,7 @@ alias help='man'
 # jobs aliases
 alias j='jobs -l'
 
-# directory movement 
+# directory movement
 alias cd~='cd ~'
 alias cd-='cd -'
 alias cdsop='cd ~/git/sop/unified_platform/'
