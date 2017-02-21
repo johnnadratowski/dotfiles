@@ -47,7 +47,7 @@ source $ZSH/oh-my-zsh.sh
 
 # Begin loading my stuff
 
-. _shellrc
+. ~/.shellrc
 
 if [ -f aws_zsh_completer.sh ]
 then

@@ -111,4 +111,4 @@ export NVM_DIR="/Users/johnnadratowski/.nvm"
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
 
-. _shellrc
+. ~/.shellrc
