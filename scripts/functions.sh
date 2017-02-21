@@ -255,9 +255,18 @@ function srv()
 # Dev utilities:
 #-------------------------------------------------------------
 
+function git-fullreset() {
+	git reset --hard; git clean -df
+}
+
 function gac()
 {
-    git add .; git commit -m "$1"
+    git add .; git commit -m "$@"
+}
+
+function gacnv()
+{
+    git add .; git commit --no-verify -m "$1"
 }
 
 function gacpm()
@@ -267,6 +276,7 @@ function gacpm()
 
 function gmv()
 {
+	[[ $1 != "" ]] || echo "Must pass branch"; exit 1
     git add .; git stash; git checkout -b $1; git stash pop
 }
 
@@ -288,7 +298,8 @@ function git-big-files()
 function git-purge-files()
 {
     if [ $# -eq 0 ]; then
-        exit 0are still
+		echo "missing file args"
+        exit 0
     fi
 
     # make sure we're at the root of git repo
@@ -298,7 +309,7 @@ function git-purge-files()
     fi
 
     # remove all paths passed as arguments from the history of the repo
-    files=$@
+    local files=$@
     git filter-branch --index-filter "git rm -rf --cached --ignore-unmatch $files" HEAD
 
     # remove the temporary history git-filter-branch otherwise leaves behind for a long time
@@ -307,6 +318,7 @@ function git-purge-files()
 
 function git-truncate-history()
 {
+	[[ $1 != "" ]] || echo "Must pass branch"; exit 1
     git checkout --orphan temp $1
     git commit --allow-empty -m "Truncated history"
     git rebase --onto temp $1 master
@@ -322,7 +334,7 @@ function swap_py2()
 
 function swap_py3()
 {
-    sudo rm /usr/bin/python
+    sudo rm -f /usr/bin/python
     sudo ln -s /usr/bin/python3 /usr/bin/python
 }
 
@@ -343,6 +355,62 @@ jsonfmt() {
     python -m json.tool "$1"
 }
 
+hammerDist() {
+	local calls=${CALLS:-"`cat`"}
+	if [[ -e calls ]]; then
+		calls="`cat $calls`" # I did it for the lulz
+	fi
+
+	local output_file=${OUTPUT_FILE:-/tmp/hammer.$start.dump.tsv}
+	local dump_file=${DUMP_FILE:-/tmp/hammer.$start.dump.tsv}
+	local run_local=${RUN_LOCAL:-0}
+	local command="`declare -f hammer`"
+	command+="\n\n"
+	command+="export THROTTLE_CALLS=\"${THROTTLE_CALLS}\"\n"
+	command+="export THROTTLE_TIME=\"${THROTTLE_TIME}\"\n"
+	command+="export CONCURRENCY=\"${CONCURRENCY}\"\n"
+	command+="export OUTPUT_FILE=\"${output_file}\"\n"
+	command+="export DUMP_FILE=\"${dump_file}\"\n"
+	command+="export ITERATIONS=\"${ITERATIONS}\"\n"
+	command+="export CALLS=\"${calls}\"\n"
+	command+="CMD_PREFIX=\"${CMD_PREFIX}\"\n"
+
+	for server in $@; do
+		local ssh_status="$(ssh -o BatchMode=yes -o ConnectTimeout=3 $server echo ok 2>&1)"
+
+		if [[ $ssh_status != ok ]] ; then
+			echo "Error connecting to server $server: $ssh_status"
+			return
+		fi
+	done
+
+	for server in $@; do
+		echo "Starting hammer on server $server"
+		local server_command="$command"
+		server_command+="export SERVER=${server}\n"
+		server_command+="\n"
+		server_command+="hammer"
+		echo "ssh $server <<< \"$server_command\" &" > /tmp/testme
+		ssh $server <<< "$server_command" &
+	done
+
+	if [[ $run_local != 0 ]]; then
+		hammer
+	fi
+
+	[[ $((`jobs -rp |wc -l`)) > 0 ]] && echo "WAITING FOR SERVERS TO FINISH" && wait
+
+	for server in $@; do
+		local outfile=/tmp/$server.${output_file%*/}
+		scp $server:$output_file $outfile
+		echo "Copied output file from server $server to $outfile"
+
+		local dumpfile=/tmp/$server.${output_file%*/}
+		scp $server:$dump_file $dumpfile
+		echo "Copied output file from server $server to $dumpfile"
+	done
+}
+
 hammer() {
 	local start=`timestamp`
 	local throttle_calls=${THROTTLE_CALLS:-0}
@@ -353,14 +421,18 @@ hammer() {
 	local dump_file=${DUMP_FILE:-/tmp/hammer.$start.dump.tsv}
 	local server=${HAMMER_SERVER:-"local"}
 	local iterations=${ITERATIONS:-100}
-	local calls="`cat`"
+	local calls=${CALLS:-"`cat`"}
+	if [[ -e calls ]]; then
+		calls="`cat $calls`" # I did it for the lulz
+	fi
+
 	local default_prefix="curl --w '%{http_code}\t%{time_total}\t%{time_connect}\t%{time_namelookup}\t%{time_pretransfer}\t%{time_redirect}\t%{time_starttransfer}\t%{size_download}\t%{size_upload}\t%{size_request}\t%{size_header}\t%{speed_download}\t%{speed_upload}\t%{num_connects}\t%{num_redirects}\t%{redirect_url}\t%{url_effective}'"
 	local cmd_prefix=${CMD_PREFIX:-$default_prefix}
 
 	if [[ $cmd_prefix == $default_prefix ]]; then
-		echo "Hammer Server\tStart Time (timestamp ms)\tEnd Time (timestamp ms)\tCall\tExit Code\tHTTP Code\tTotal Time (sec)\tTime To Connect (sec)\tTime for Name Lookup (sec)\tTime Pretransfer (sec)\tTime Redirected (sec)\tTime Start Transfer (sec)\tSize Downloaded (bytes)\tSize Uploaded (bytes)\tSize of Request (bytes)\tSize of Header (bytes)\tSpeed of Download (bytes/sec)\tSpeed of Upload (bytes/sec)\tNumber of Connections\tNumber of Redirects\tRedirect URL\tEffective URL" > $output_file
+		echo "ID\tHammer Server\tStart Time (timestamp ms)\tEnd Time (timestamp ms)\tCall\tExit Code\tHTTP Code\tTotal Time (sec)\tTime To Connect (sec)\tTime for Name Lookup (sec)\tTime Pretransfer (sec)\tTime Redirected (sec)\tTime Start Transfer (sec)\tSize Downloaded (bytes)\tSize Uploaded (bytes)\tSize of Request (bytes)\tSize of Header (bytes)\tSpeed of Download (bytes/sec)\tSpeed of Upload (bytes/sec)\tNumber of Connections\tNumber of Redirects\tRedirect URL\tEffective URL" > $output_file
 	else
-		echo "Hammer Server\tStart Time (timestamp ms)\tEnd Time (timestamp ms)\tCall\tExit Code\tTotal Time(sec)" > $output_file
+		echo "ID\tHammer Server\tStart Time (timestamp ms)\tEnd Time (timestamp ms)\tCall\tExit Code\tTotal Time(sec)" > $output_file
 	fi
 
 	local counter=1
@@ -405,21 +477,22 @@ hammer() {
 				local start_call=`timestamp_ms`
 				local index=$counter
 				local local_dump=`mktemp`
+				local uuid=`uuidgen`
 				if [[ $cmd_prefix == $default_prefix ]]; then
 					#echo "Running: $cmd_prefix -o $local_dump $call"
 					local cmd_output="`eval "$cmd_prefix -o $local_dump $call" 2> /dev/null`"
 					local exit_code=$?
 					local end_call=`timestamp_ms`
-					echo "$server\t$start_call\t$end_call\t$call\t$exit_code\t$cmd_output" >> $output_file
-					echo "$server\t$start_call\t$end_call\t$call\t$exit_code\t$(cat $local_dump)" >> $dump_file
+					echo "$uuid\t$server\t$start_call\t$end_call\t$call\t$exit_code\t$cmd_output" >> $output_file
+					echo "$uuid\t$server\t$start_call\t$end_call\t$call\t$exit_code\t$(cat $local_dump)" >> $dump_file
 				else
 					local time_output
 					time_output=`(time (eval "$cmd_prefix $call" > $local_dump) )2>&1`
 					local exit_code=$?
 					cur_time=`echo $time_output | cat | grep real | cut -f 2 | sed "s/.$//"`
 					local end_call=`timestamp_ms`
-					echo "$server\t$start_call\t$end_call\t$call\t$exit_code\t$cur_time" >> $output_file
-					echo "$server\t$start_call\t$end_call\t$call\t$exit_code\t$(cat $local_dump)" >> $dump_file
+					echo "$uuid\t$server\t$start_call\t$end_call\t$call\t$exit_code\t$cur_time" >> $output_file
+					echo "$uuid\t$server\t$start_call\t$end_call\t$call\t$exit_code\t$(cat $local_dump)" >> $dump_file
 				fi
 				rm -f $local_dump
 			} &
@@ -432,7 +505,7 @@ hammer() {
 
 	local elapsed=$((`timestamp` - $start))
 	echo "Completed $(($counter-1)) calls in $elapsed seconds. Saved output to $output_file and dump to $dump_file."
-	if [[ $open_output == 1 ]]; then
+	if [[ $open_output != 0 ]]; then
 		echo "Opening output file: $output_file"
 		open $output_file
 	fi

@@ -10,7 +10,7 @@
     "set foldnestmax=3 
     "set nofoldenable
 
-    set guifont=Hack\ 13
+    "set guifont=Hack\ 13
     set wildignore+=**/build/**,**/dist/**
     "let g:bundles = []
 
@@ -27,45 +27,19 @@
 
 " Key Remaps {
 "
-    "imap <C-m>     <Plug>(neosnippet_expand_or_jump)
-    "smap <C-m>     <Plug>(neosnippet_expand_or_jump)
-    "xmap <C-m>     <Plug>(neosnippet_expand_target)
+"
+    " Load current file with ,L
+    nnoremap <leader>L :so %<CR>
 
     " Search for word under cursor
     nnoremap K :grep! "\b<C-R><C-W>\b"<CR>:cw<CR>
-
-    " Quickly close buffers
-    map <leader>w :bd<CR>
-    map <leader>W :1,1000bd<CR>
-
-    " Quick Save
-    map <C-s> :w<CR>
-    map <leader>s :wa<CR>
-
-    nmap M <Plug>(easymotion-prefix)
-    nmap H <Plug>(easymotion-jumptoanywhere)
-    nmap L <Plug>(easymotion-s)
 
     " Space to toggle folding
     " nnoremap <space> za
 
     " Space to run macros
-    nnoremap <Space> q
-    nnoremap <C-@> @
+    nnoremap <Space> @
 
-    " Snippets
-    "
-    " SuperTab like snippets behavior for neosnipped
-
-    " Use my snippets
-    let g:neosnippet#snippets_directory='~/.vim-snippets'
-
-    "imap <expr><S-CR> neosnippet#expandable_or_jumpable() ? "\<Plug>(neosnippet_expand_or_jump)"
-                "\: "\<C-r>=<SID>my_cr_function()<CR>"
-    "function! s:my_cr_function()
-      "return pumvisible() ? neocomplcache#close_popup() : "\<CR>"
-    "endfunction
-    
     " Fixes stupid thing where escape doesn't go to normal mode when popup is
     " visible
     inoremap <expr> <Esc> "<Esc>"
@@ -74,7 +48,6 @@
 " }
 
 " Bash Stuff {
-
     au FileType sh setl ts=4 sts=4 noet
 " }
 
@@ -137,38 +110,20 @@
 
 
 " Python Stuff {
-    au FileType python setl ts=4 et sw=4 sts=4 expandtab autoindent fileformat=unix
-    "autocmd FileType python setlocal omnifunc=jedi#completions
-        "let g:jedi#completions_enabled = 0
-        "let g:jedi#auto_vim_configuration = 0
-        "let g:neocomplcache#force_omni_input_patterns.python = '\h\w*\|[^. \t]\.\w*'
-        "\ '\%([^. \t]\.\|^\s*@\|^\s*from\s.\+import \|^\s*from \|^\s*import \)\w*'
+    au FileType python setl ts=4 et sw=4 sts=4 isk+=_ expandtab autoindent fileformat=unix
 " }
 
 " JS Stuff {
     au FileType javascript setl sw=2 sts=2 et isk-=.
     au FileType jsx setl sw=2 sts=2 et isk-=.
-
-    " Create js tag file on save
-    autocmd BufWritePost *.js call UpdateJsTagsSingle()
     
     let g:js_fmt_fail_silently = 1
     let g:js_fmt_autosave = 0
-
-    "autocmd FileType javascript setlocal omnifunc=tern#Complete
-    "let g:neocomplcache#force_omni_input_patterns.javascript = '[^. \t]\.\w*'
-    
-    "if executable('node') && executable({'npm'})
-        "" to indent json files on save
-        "autocmd FileType json autocmd BufWritePre <buffer> %!./node_modules/.bin/esformatter
-    "endif
-
-    "if executable('python') 
-        "" indent json files on save
-        "autocmd FileType json autocmd BufWritePre <buffer> %!python -m json.tool
-    "endif
 " }
 
+" Markdown Stuff {
+let g:previm_open_cmd = 'open -a Google\ Chrome'
+"
 
 " Plugin Stuff {
 
