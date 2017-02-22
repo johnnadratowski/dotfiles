@@ -1,0 +1,19 @@
+"*":
+  core:
+    telemetryConsent: "limited"
+  "exception-reporting":
+    userId: "05eddb51-d4fb-4e46-8e1f-cd48a4002d42"
+  "go-plus":
+    config: {}
+  "vim-mode-plus":
+    automaticallyEscapeInsertModeOnActivePaneItemChange: true
+    clearMultipleCursorsOnEscapeInsertMode: true
+    highlightSearch: true
+    useClipboardAsDefaultRegister: true
+    useSmartcaseForSearch: true
+    useSmartcaseForSearchCurrentWord: true
+  welcome:
+    showOnStartup: false
+".python.source":
+  editor:
+    autoIndentOnPaste: true
