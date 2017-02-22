@@ -1,0 +1,28 @@
+"*":
+  "atom-beautify":
+    general:
+      _analyticsUserId: "fa868c9d-1e2c-4941-aa8e-672a627297ea"
+  core:
+    disabledPackages: [
+      "linter-golinter"
+    ]
+    projectHome: "/Users/johnnadratowski/go/src/github.com/Unified"
+    telemetryConsent: "limited"
+  "exception-reporting":
+    userId: "e77127dd-05bd-4fbe-81b8-d830e6889d0d"
+  "go-debug":
+    dlvPath: "dlv"
+  "go-plus":
+    currentPanelHeight: "14.212328767123289vh"
+  linter: {}
+  "vim-mode-plus":
+    clearHighlightSearchOnResetNormalMode: true
+    clearMultipleCursorsOnEscapeInsertMode: true
+    clearPersistentSelectionOnResetNormalMode: true
+    highlightSearch: true
+    incrementalSearch: true
+    useClipboardAsDefaultRegister: true
+    useSmartcaseForSearch: true
+    useSmartcaseForSearchCurrentWord: true
+  welcome:
+    showOnStartup: false
