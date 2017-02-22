@@ -13,12 +13,6 @@ TARGET_BASE = os.path.expanduser("~")
 
 EXTRA_FILES = {
     'scripts': None,
-    '.atom/config.cson': None,
-    '.atom/kite-config.json': None,
-    '.atom/init.coffee': None,
-    '.atom/keymap.cson': None,
-    '.atom/snippets.cson': None,
-    '.atom/styles.less': None,
     'zsh-custom/themes/unicandy.zsh-theme': ".oh-my-zsh/themes/unicandy.zsh-theme",
     '_zsh-theme': ".oh-my-zsh/themes/mine.zsh-theme",
 }
