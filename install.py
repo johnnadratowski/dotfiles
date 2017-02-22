@@ -2,101 +2,127 @@
 import os
 import sys
 import shlex
+from distutils.spawn import find_executable
 import shutil
 from subprocess import call
+
+from python_lib import shell
 
 SOURCE_BASE = os.path.abspath(os.path.curdir)
 TARGET_BASE = os.path.expanduser("~")
 
+EXTRA_FILES = {
+    'scripts': None,
+    '.atom/config.cson': None,
+    '.atom/kite-config.json': None,
+    '.atom/init.coffee': None,
+    '.atom/keymap.cson': None,
+    '.atom/snippets.cson': None,
+    '.atom/styles.less': None,
+    'zsh-custom/themes/unicandy.zsh-theme': ".oh-my-zsh/themes/unicandy.zsh-theme",
+    '_zsh-theme': ".oh-my-zsh/themes/mine.zsh-theme",
+}
+
+
+DIRS = [
+    '~/bin',
+    '~/git/',
+    '~/go/',
+    '~/tmp/vim-swap',
+    '~/venv',
+    '~/tmp/ipython',
+]
+
 
 def link_file(name, target_name=None):
     source = os.path.join(SOURCE_BASE, name)
-    target_name = target_name or name.replace('_', '.', 1) if name.startswith("_") else name
+
+    target_name = target_name or name
+    if target_name.startswith("_"):
+        target_name = target_name.replace('_', '.', 1)
+
     target = os.path.join(TARGET_BASE, target_name)
-    if os.path.islink(target):
-        return
 
-    bak_file = target + ".jn.bak"
-    if os.path.exists(target) and not os.path.islink(target):
-        shutil.move(target, bak_file)
+    if os.path.lexists(target):
+        if not os.path.islink(target) or os.path.abspath(os.readlink(target)) != os.path.abspath(source):
+            bak_file = target + ".dotfiles.bak"
+            shell.warning("Target exists. Backing up {target} to {bak_file}", target=target, bak_file=bak_file)
+            shutil.move(target, bak_file)
+        else:
+            shell.info("Source {source} already linked from target {target}", source=source, target=target)
+            return
 
-    print("Linking %s to %s" % (source, target))
+    shell.info("Linking {source} to {target}", source=source, target=target)
+
+    if not os.path.exists(os.path.dirname(target)):
+        os.makedirs(os.path.dirname(target))
 
     os.symlink(source, target)
 
 
 def unlink_file(name, target_name=None):
-    target_name = target_name or name.replace('_', '.', 1) if name.startswith("_") else name
+    target_name = target_name or name
+
+    if target_name.startswith("_"):
+        target_name = target_name.replace('_', '.', 1)
+
     target = os.path.join(TARGET_BASE, target_name)
 
-    bak_file = target + ".jn.bak"
-    if os.path.islink(target):
+    if os.path.islink(target) and os.path.abspath(os.readlink(target)).startswith(SOURCE_BASE):
         os.unlink(target)
+
+        bak_file = target + ".dotfiles.bak"
         if os.path.exists(bak_file):
+            shell.warning("Recovering backup file {bak_file}", bak_file=bak_file)
             shutil.move(bak_file, target)
 
 
-def run_files(fn, start_char="_", **extra):
+def run_files(fn, **extra):
     for f in os.listdir(SOURCE_BASE):
-        if f.startswith(start_char):
+        if f.startswith("_"):
             fn(f)
-        elif f in extra and extra[f]:
-            fn(f, target_name=extra[f])
-        elif f in extra:
-            fn(f)
+
+    for extra_source, extra_target in extra.items():
+        fn(extra_source, target_name=extra_target)
+
+
+def update_submodules():
+    if not find_executable('git'):
+        shell.error("Git not installed - unable to update submodules")
+        return
+    call(["git", "submodule", "update", "--init", "--recursive"])
+    call(["git", "submodule", "foreach", "--recursive", "git", "pull", "origin", "master"])
+
+
+def make_dirs(dirs):
+    for dir in dirs:
+        dir = os.path.abspath(os.path.expanduser(dir))
+        if not os.path.exists(dir):
+            shell.info("Creating directory {dir}", dir=dir)
+            os.makedirs(dir)
 
 
 def main():
+    update_submodules()
+
     if 'restore' in sys.argv:
-        if os.path.exists(os.path.join(TARGET_BASE, ".oh-my-zsh/themes/mine.zsh-theme")):
-            os.unlink(os.path.join(TARGET_BASE, ".oh-my-zsh/themes/mine.zsh-theme"))
-        run_files(unlink_file, scripts=None)
-    else:
-        run_files(link_file, scripts=None)
+        run_files(unlink_file, **EXTRA_FILES)
+        return
 
-        print("Updating submodules recursitvely")
-        call(["git", "submodule", "update", "--init", "--recursive"])
-        print("Pulling submodules recursitvely")
-        call(["git", "submodule", "foreach", "--recursive", "git", "pull", "origin", "master"])
+    run_files(link_file, **EXTRA_FILES)
 
-        source = os.path.join(SOURCE_BASE, "_zsh-theme")
-        target = os.path.join(TARGET_BASE, ".oh-my-zsh/themes/mine.zsh-theme")
+    make_dirs(DIRS)
 
-        if not os.path.exists(target):
-            print("Linking %s to %s" % (source, target))
-            os.symlink(source, target)
+    if 'install' in sys.argv:
+        if 'apt' in sys.argv:
+            call(['sudo', os.path.abspath('./apt_install.sh')])
+        elif 'brew' in sys.argv:
+            call(['sudo', os.path.abspath('./brew_install.sh')])
+        else:
+            call(['sudo', os.path.abspath('./pac_install.sh')])
 
-        source = os.path.join(SOURCE_BASE, "zsh-custom/themes/unicandy.zsh-theme")
-        target = os.path.join(TARGET_BASE, ".oh-my-zsh/themes/unicandy.zsh-theme")
+        call(['sudo', os.path.abspath('./install.sh')])
 
-        if not os.path.exists(target):
-            print("Linking %s to %s" % (source, target))
-            os.symlink(source, target)
-
-
-        if 'only-files' in sys.argv:
-            return
-
-        if not 'no-install' in sys.argv:
-            call(shlex.split('mkdir -p '
-                             '~/bin '
-                             '~/git/ '
-                             '~/opt '
-                             '~/var/log/ '
-                             '~/tmp/vim-swap '
-                             '~/.pythonpath '
-                             '~/venv '
-                             '~/tmp/ipython'))
-
-            if 'installer' in sys.argv:
-                if 'apt' in sys.argv:
-                    call(['sudo', os.path.abspath('./apt_install.sh')])
-                elif 'brew' in sys.argv:
-                    call(['sudo', os.path.abspath('./brew_install.sh')])
-                else:
-                    call(['sudo', os.path.abspath('./pac_install.sh')])
-
-            call(['sudo', os.path.abspath('./install.sh')])
 
 if __name__ == '__main__':
     main()
