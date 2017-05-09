@@ -12,7 +12,9 @@
     "set foldmethod=syntax 
     "set foldnestmax=3 
     "set nofoldenable
-
+    
+    
+    set guifont=Hack:h16,Andale\ Mono\ Regular:h16,Menlo\ Regular:h16,Consolas\ Regular:h16,Courier\ New\ Regular:h16
     "set guifont=Hack\ 13
     set wildignore+=**/build/**,**/dist/**
     "let g:bundles = []
