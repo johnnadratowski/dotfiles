@@ -363,3 +363,13 @@ cloneHTMLDocs() {
 
 	wget --no-parent --recursive --page-requisites --html-extension --convert-links $1
 }
+
+vimdo() {
+	local CMD=$1
+	shift
+
+	for f
+	do
+		vi -N -u NONE -n -c "set nomore" -c ":execute \"norm! $CMD\"" -cwq! $f
+	done
+}
