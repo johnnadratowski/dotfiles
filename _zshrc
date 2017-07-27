@@ -32,6 +32,10 @@ COMPLETION_WAITING_DOTS="true"
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 plugins=(aws history-substring-search archlinux bower celery dirhistory docker django env-vars fabric functions git git-extras git-flow hub jsontools lein mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant web-search wd)
+#encode64 vi-mode python pip django debian 
+#golang heroku sprunge supervisor taskwarrior jira node npm redis-cli 
+#urltools aliases functions env-vars) 
+#virtualenvwrapper)
 
 setopt HIST_IGNORE_ALL_DUPS
 bindkey -M emacs '^P' history-substring-search-up
@@ -51,7 +55,14 @@ then
 fi
 
 if [ "$TMUX" = "" ]; then exec tmux -2; fi
+#if $(ps -e | grep -q tmux); then 
+#else
+    #tmux -2
+#fi
 
 
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
+
+eval "$(pyenv init -)"
+
