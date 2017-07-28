@@ -370,6 +370,6 @@ vimdo() {
 
 	for f
 	do
-		vi -N -u NONE -n -c "set nomore" -c ":execute \"norm! $CMD\"" -cwq! $f
+		vim -N -u NONE -n -c "set nomore" -c ":execute \"norm! $CMD\"" -cwq! $f
 	done
 }
