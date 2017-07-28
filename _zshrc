@@ -37,6 +37,9 @@ plugins=(aws history-substring-search archlinux bower celery dirhistory docker d
 #urltools aliases functions env-vars) 
 #virtualenvwrapper)
 
+# AUTOLOADS
+autoload zmv
+
 setopt HIST_IGNORE_ALL_DUPS
 bindkey -M emacs '^P' history-substring-search-up
 bindkey -M emacs '^N' history-substring-search-down
