@@ -42,7 +42,15 @@ alias lt='ll -tr'         # sort by date, most recent last
 alias lm='ll -a |more'    # pipe through 'more'
 alias lr='ll -R'          # recursive ls
 alias lmr='ll -aR |more'  # recursive pipe through 'more'
-alias tree='tree -Csu'    # nice alternative to 'recursive ls'
+
+# Tree Aliases
+alias tree='tree --dirsfirst -C'
+alias t='tree -L 1'
+alias ta='t -a'
+alias t2='tree -L 2'
+alias t2a='t2 -a'
+alias t3='tree -L 3'
+alias t3a='t3 -a'
 
 #scrolling aliases
 alias less='less -R'

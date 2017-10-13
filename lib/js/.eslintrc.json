@@ -1,0 +1,19 @@
+{
+  "extends": ["standard", "standard-react"],
+  "globals": {
+    "__DEV__": true,
+    "__OFFLINE__": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 6
+  },
+  "rules": {
+    "comma-dangle": ["error", "only-multiline"],
+    "no-console": ["error"],
+    "no-use-before-define": ["error", { "functions": true, "classes": true }],
+    "no-var": ["error"],
+    "prefer-const": ["error", { "ignoreReadBeforeAssign": true }],
+    "react/jsx-no-bind": ["error", { "ignoreRefs": true }],
+    "object-shorthand": ["error", "always", { "avoidQuotes": true }]
+  }
+}
