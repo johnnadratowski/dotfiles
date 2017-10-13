@@ -49,6 +49,8 @@ alias t='tree -L 1'
 alias ta='t -a'
 alias t2='tree -L 2'
 alias t2a='t2 -a'
+alias t3='tree -L 3'
+alias t3a='t3 -a'
 
 #scrolling aliases
 alias less='less -R'
