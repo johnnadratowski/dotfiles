@@ -78,16 +78,19 @@ _ip.run_line_magic("autocall", "")
 _dbs = {}
 _local_path = os.path.expanduser('~/local-startup/python/pythonrc.py')
 if os.path.exists(_local_path):
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("local", _local_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    if hasattr(module, '_dbs'):
-        _dbs.update(module._dbs)
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("local", _local_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if hasattr(module, '_dbs'):
+            _dbs.update(module._dbs)
 
-    for attr in dir(module):
-        if not attr.startswith("_"):
-            globals()[attr] = getattr(module, attr)
+        for attr in dir(module):
+            if not attr.startswith("_"):
+                globals()[attr] = getattr(module, attr)
+    except:
+        print('Error loading pythonrc')
 
 
 ########################
