@@ -43,6 +43,10 @@ alias lm='ll -a |more'    # pipe through 'more'
 alias lr='ll -R'          # recursive ls
 alias lmr='ll -aR |more'  # recursive pipe through 'more'
 alias tree='tree -Csu'    # nice alternative to 'recursive ls'
+alias t='tree -L 1'
+alias ta='t -a'
+alias t2='tree -L 2'
+alias t2a='t2 -a'
 
 #scrolling aliases
 alias less='less -R'
