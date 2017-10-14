@@ -1,0 +1,27 @@
+#!/bin/sh
+# vim: syntax=sh tabstop=8 expandtab shiftwidth=4 softtabstop=4
+# To use, store as .git/hooks/pre-push inside your repository and make sure
+# it has execute permissions.
+#
+# Runs unit tests before allowing a push
+if [ ! -d ./.git ]; then
+    echo "You must push your project from the root, so the hooks run properly. Exiting."
+    exit 1
+fi
+
+git --no-pager grep -n 'pdb\.set_trace'  -- "*.py" && \
+echo "PUSH REJECTED! Please remove pdb.set_trace before commiting!" && \
+exit 1
+
+#nosetests ./
+#if [ $? -eq 0 ]; then
+    #echo >&2 "The unit tests passed"
+#else
+    #echo >&2 "PUSH FAILED::::::::::::::: Unit tests did not pass!."
+    #exit 1
+#fi
+
+
+echo "Git pre-push hook passed successfully"
+
+exit 0
