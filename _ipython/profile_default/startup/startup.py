@@ -1,6 +1,7 @@
 # Stdlib Imports
 import datetime
 from decimal import Decimal
+import json
 import sys
 import time
 import traceback
@@ -120,7 +121,11 @@ def query_db(sql, con, index_col=None, coerce_float=True, params=None, parse_dat
                              chunksize=chunksize)
 
 
-def DB(name):
+def DB(name=None):
+    if not name:
+        for k, v in _dbs.items():
+            print("%s: %s" % (k, json.dumps(v.info, sort_keys=True, indent=2)))
+        return
     db = _dbs[name]
     if not hasattr(db, 'query'):
         db = db()
