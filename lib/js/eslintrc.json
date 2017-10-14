@@ -1,5 +1,5 @@
 {
-  "extends": ["standard", "standard-react"],
+  "extends": ["standard"],
   "globals": {
     "__DEV__": true,
     "__OFFLINE__": true
@@ -13,7 +13,6 @@
     "no-use-before-define": ["error", { "functions": true, "classes": true }],
     "no-var": ["error"],
     "prefer-const": ["error", { "ignoreReadBeforeAssign": true }],
-    "react/jsx-no-bind": ["error", { "ignoreRefs": true }],
     "object-shorthand": ["error", "always", { "avoidQuotes": true }]
   }
 }

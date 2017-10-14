@@ -6,7 +6,7 @@ fi
     
 touched_js_files=`git diff --cached --name-only |egrep '\.js$' || true`
 if [ -n "$touched_js_files" ]; then
-	eslint -c $touched_js_files
+	eslint -c ./eslintrc.json $touched_js_files
 	if [ $? != 0 ]; then
 		echo "Code fails eslint check."
 		exit 1
