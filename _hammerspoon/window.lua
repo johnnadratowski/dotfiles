@@ -1,93 +1,44 @@
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "Y", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
+function move_window(direction)  
+    return function()  
+        local win = hs.window.focusedWindow()  
+        local app = win:application()  
+        local app_name = app:name()  
+        local f = win:frame()  
+        local screen = win:screen()  
+        local max = screen:frame()
 
-  f.x = f.x - 10
-  f.y = f.y - 10
-  win:setFrame(f)
-end)
+        if direction == "left" then  
+            if app_name == "Tweetbot" then  
+                f.x = max.x  
+            else  
+                f.x = max.x  
+                f.w = max.w / 2  
+            end  
+        elseif direction == "right" then  
+            if app_name == "Tweetbot" then  
+                f.x = max.x + (max.w - f.w)  
+            else  
+                f.x = max.x + (max.w / 2)  
+                f.w = max.w / 2  
+            end  
+        elseif direction == "up" then  
+            f.x = max.x  
+            f.w = max.w  
+        elseif direction == "down" then  
+            f.x = max.x + (max.w / 6)  
+            f.w = max.w * 2 / 3  
+        else  
+            hs.alert.show("move_window(): Freaky parameter received " .. direction)  
+        end
 
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "K", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
+        f.y = max.y  
+        f.h = max.h  
+        win:setFrame(f, 0)  
+    end  
+end
 
-  f.y = f.y - 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "U", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-
-  f.x = f.x + 10
-  f.y = f.y - 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "H", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-
-  f.x = f.x - 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "L", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-
-  f.x = f.x + 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "B", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-
-  f.x = f.x - 10
-  f.y = f.y + 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "J", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-
-  f.y = f.y + 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "N", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-
-  f.x = f.x + 10
-  f.y = f.y + 10
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "Left", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-  local screen = win:screen()
-  local max = screen:frame()
-
-  f.x = max.x
-  f.y = max.y
-  f.w = max.w / 2
-  f.h = max.h
-  win:setFrame(f)
-end)
-
-hs.hotkey.bind({"cmd", "alt", "ctrl"}, "Right", function()
-  local win = hs.window.focusedWindow()
-  local f = win:frame()
-  local screen = win:screen()
-  local max = screen:frame()
-
-  f.x = max.x + (max.w / 2)
-  f.y = max.y
-  f.w = max.w / 2
-  f.h = max.h
-  win:setFrame(f)
-end)
+local hyper = {"cmd", "ctrl", "alt"}  
+hs.hotkey.bind(hyper, "Left", move_window("left"))  
+hs.hotkey.bind(hyper, "Right", move_window("right"))  
+hs.hotkey.bind(hyper, "Up", move_window("up"))  
+hs.hotkey.bind(hyper, "Down", move_window("down"))  
