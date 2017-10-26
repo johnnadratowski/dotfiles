@@ -9,3 +9,4 @@ _vim/.netrwhist
 *.pyc
 history.sqlite
 .idea/
+.DS_Store
