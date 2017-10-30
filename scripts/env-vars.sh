@@ -45,10 +45,8 @@ export LIB_HOME=$HOME/lib
 export CLASSPATH=$CLASSPATH:$LIB_HOME/closurecompiler:$LIB_HOME/
 
 # Golang
-#export GOROOT=$HOME/lib/go
-#export GOBIN=$GOROOT/bin
 export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin:$GOBIN
+export PATH=$PATH:$GOPATH/bin
 
 # Python Stuff
 #export PYTHONSTARTUP="$HOME/.pythonrc.py"

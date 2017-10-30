@@ -30,10 +30,17 @@ hs.hotkey.bind(constants.hyper, 'R', hs.reload)
 -- How Hammerspoon Console
 hs.hotkey.bind(constants.hyper, 'C', hs.openConsole)
 
-function showSearch()
+function google()
     hs.application.launchOrFocus('Google Chrome')
-    hs.application.frontmostApplication():selectMenuItem("New Tab")
+    hs.timer.usleep(100000)
+    found = nil
+    while found == nil do
+        found = hs.application.frontmostApplication():selectMenuItem("New Tab")
+        if hs.application.frontmostApplication():name() then
+            break -- Just double check this to prevent infinite loop
+        end
+    end
 end
-hs.hotkey.bind(constants.hyper, 'Space', showSearch)
+hs.hotkey.bind(constants.hyper, 'G', google)
 
 hs.alert.show("Hammerspoon Reloaded")
