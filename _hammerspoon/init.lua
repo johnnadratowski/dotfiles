@@ -28,35 +28,6 @@ end)
 hs.hotkey.bind(constants.hyper, 'R', hs.reload)
 
 -- How Hammerspoon Console
-hs.hotkey.bind(constants.hyper, 'C', hs.openConsole)
-
-function google()
-    hs.application.launchOrFocus('Google Chrome')
-
-    local found
-    while found == nil do
-        hs.timer.usleep(100000)
-        found = hs.application.frontmostApplication():selectMenuItem("New Tab")
-        if hs.application.frontmostApplication():name() == 'Google Chrome' then
-            break -- Just double check this to prevent infinite loop
-        end
-    end
-end
-hs.hotkey.bind(constants.hyper, 'G', google)
-
-function devdocs()
-    hs.application.launchOrFocus('Google Chrome')
-
-    local found
-    while found == nil do
-        hs.timer.usleep(100000)
-        found = hs.application.frontmostApplication():selectMenuItem("New Tab")
-        if hs.application.frontmostApplication():name() == 'Google Chrome' then
-            break -- Just double check this to prevent infinite loop
-        end
-    end
-    hs.eventtap.keyStrokes('devdocs.io\n')
-end
-hs.hotkey.bind(constants.hyper, 'D', devdocs)
+hs.hotkey.bind(constants.hyper, '`', hs.toggleConsole)
 
 hs.alert.show("Hammerspoon Reloaded")
