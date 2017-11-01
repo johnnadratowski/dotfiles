@@ -16,11 +16,11 @@ function ensureOpen(app, timeout, delay, fn)
         end
     end
 
-    if not fn == nil then
-        return fn(app)
-    else
+    if fn == nil then
         return app
     end
+
+    return fn(app)
 end
 
 hs.hotkey.bind(constants.hyper, 'T', function() 
@@ -28,12 +28,12 @@ hs.hotkey.bind(constants.hyper, 'T', function()
 end)
 
 function google()
-    ensureOpen('Google Chrome', 3, 100000, doit):selectMenuItem("New Tab")
+    ensureOpen('Google Chrome', 3, 100000):selectMenuItem("New Tab")
 end
 hs.hotkey.bind(constants.hyper, 'G', google)
 
 function devdocs()
-    ensureOpen('Google Chrome', 3, 100000, doit):selectMenuItem("New Tab")
+    ensureOpen('Google Chrome', 3, 100000):selectMenuItem("New Tab")
     hs.eventtap.keyStrokes('devdocs.io\n')
 end
 hs.hotkey.bind(constants.hyper, 'D', devdocs)
