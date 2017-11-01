@@ -32,15 +32,31 @@ hs.hotkey.bind(constants.hyper, 'C', hs.openConsole)
 
 function google()
     hs.application.launchOrFocus('Google Chrome')
-    hs.timer.usleep(100000)
-    found = nil
+
+    local found
     while found == nil do
+        hs.timer.usleep(100000)
         found = hs.application.frontmostApplication():selectMenuItem("New Tab")
-        if hs.application.frontmostApplication():name() then
+        if hs.application.frontmostApplication():name() == 'Google Chrome' then
             break -- Just double check this to prevent infinite loop
         end
     end
 end
 hs.hotkey.bind(constants.hyper, 'G', google)
+
+function devdocs()
+    hs.application.launchOrFocus('Google Chrome')
+
+    local found
+    while found == nil do
+        hs.timer.usleep(100000)
+        found = hs.application.frontmostApplication():selectMenuItem("New Tab")
+        if hs.application.frontmostApplication():name() == 'Google Chrome' then
+            break -- Just double check this to prevent infinite loop
+        end
+    end
+    hs.eventtap.keyStrokes('devdocs.io\n')
+end
+hs.hotkey.bind(constants.hyper, 'D', devdocs)
 
 hs.alert.show("Hammerspoon Reloaded")
