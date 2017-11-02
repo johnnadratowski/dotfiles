@@ -30,4 +30,7 @@ hs.hotkey.bind(constants.hyper, 'R', hs.reload)
 -- How Hammerspoon Console
 hs.hotkey.bind(constants.hyper, '`', hs.toggleConsole)
 
+-- Show colorpicker
+hs.hotkey.bind(constants.hyper, 'C', function() hs.osascript.applescript('choose color') end)
+
 hs.alert.show("Hammerspoon Reloaded")

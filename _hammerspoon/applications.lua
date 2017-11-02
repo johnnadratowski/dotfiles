@@ -37,3 +37,12 @@ function devdocs()
     hs.eventtap.keyStrokes('devdocs.io\n')
 end
 hs.hotkey.bind(constants.hyper, 'D', devdocs)
+
+
+-- SWITCHER - probably won't use
+
+-- hs.hotkey.bind(constants.hyper, 'l', hs.window.switcher.nextWindow, nil, hs.window.switcher.nextWindow)
+-- hs.hotkey.bind(constants.hyper, 'h', hs.window.switcher.previousWindow, nil, hs.window.switcher.previousWindow)
+-- switcher = hs.window.switcher.new(hs.window.filter.new())
+-- hs.hotkey.bind(constants.hyper, 'l', function()switcher:next()end)
+-- hs.hotkey.bind(constants.hyper, 'h', function()switcher:previous()end)
