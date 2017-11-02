@@ -1,6 +1,10 @@
 
 constants = require('constants')
 
+-- Application quick switching
+hs.hotkey.bind(constants.hyper, '1', function() hs.application.launchOrFocus('Terminal') end)
+hs.hotkey.bind(constants.hyper, '2', function() hs.application.launchOrFocus('Google Chrome') end)
+
 function ensureOpen(app, timeout, delay, fn)
     local app = hs.application.open(app, timeout, true)
     if app == nil then
@@ -22,10 +26,6 @@ function ensureOpen(app, timeout, delay, fn)
 
     return fn(app)
 end
-
-hs.hotkey.bind(constants.hyper, 'T', function() 
-    hs.application.launchOrFocus('Terminal') 
-end)
 
 function google()
     ensureOpen('Google Chrome', 3, 100000):selectMenuItem("New Tab")
