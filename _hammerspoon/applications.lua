@@ -4,6 +4,9 @@ constants = require('constants')
 -- Application quick switching
 hs.hotkey.bind(constants.hyper, '1', function() hs.application.launchOrFocus('Terminal') end)
 hs.hotkey.bind(constants.hyper, '2', function() hs.application.launchOrFocus('Google Chrome') end)
+hs.hotkey.bind(constants.hyper, '3', function() hs.application.launchOrFocus('Slack') end)
+hs.hotkey.bind(constants.hyper, '4', function() hs.application.launchOrFocus('Gmail') end)
+hs.hotkey.bind(constants.hyper, '5', function() hs.application.launchOrFocus('Gcal') end)
 
 hs.hotkey.bind(constants.hyper, 'D', function() hs.application.launchOrFocus('DevDocs') end)
 
