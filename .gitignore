@@ -10,3 +10,4 @@ _vim/.netrwhist
 history.sqlite
 .idea/
 .DS_Store
+apps/build
