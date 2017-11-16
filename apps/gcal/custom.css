@@ -1,5 +1,7 @@
 /* HIDE SIDEBAR */
-
+div.AOL3Kb {
+    display: block !important;
+} 
 body > div.TOTjfb > div.AOL3Kb {
     -webkit-transform: translateX(-250px);
     -webkit-transition: -webkit-transform 250ms ease 1s;
@@ -136,7 +138,8 @@ html:not(img) {
 .gb_zb,
 .gbip,
 .gb_2,
-.gb_bb {
+.gb_bb,
+.jPtXgd {
     filter: invert(90%) hue-rotate(180deg)!important;
 }
 
