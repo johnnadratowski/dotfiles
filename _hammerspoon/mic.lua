@@ -8,9 +8,9 @@ end
 function displayMicMuteStatus()
     muted = getAudioDevice():inputMuted()
     if muted then
-        micMuteStatusMenu:setIcon(os.getenv("HOME") .. "/.hammerspoon/muted.png")
+        micMuteStatusMenu:setIcon(os.getenv("HOME") .. "/.hammerspoon/icons/muted.png")
     else
-        micMuteStatusMenu:setIcon(os.getenv("HOME") .. "/.hammerspoon/unmuted.png")
+        micMuteStatusMenu:setIcon(os.getenv("HOME") .. "/.hammerspoon/icons/unmuted.png")
     end
 end
 
