@@ -3,7 +3,7 @@ ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/
 brew update
 brew install git mercurial zsh tmux vim python3 hammerspoon node npm
 
-python3 install -r ./requirements.txt
+pip3 install -r ./requirements.txt
 # Install Hub
 cd ~/git/
 git clone https://github.com/github/hub.git

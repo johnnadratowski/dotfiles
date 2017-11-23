@@ -41,7 +41,18 @@ local curEditor = -1
 function editor()
     local front = hs.application.frontmostApplication()
     if curEditor == -1 or front:path() == constants.editors[curEditor] then
-        if curEditor == -1 or curEditor + 1 > #constants.editors then
+        local matchIndex = -1
+        for idx, path in pairs(constants.editors) do
+            if path == front:path() then matchIndex = idx end
+        end
+
+        if matchIndex > -1 and curEditor ~= matchIndex then
+            if curEditor == -1 then
+                curEditor = matchIndex + 1
+            else
+                curEditor = matchIndex
+            end
+        elseif curEditor == -1 or curEditor + 1 > #constants.editors then
             curEditor = 1
         else
             curEditor = curEditor + 1
@@ -54,7 +65,7 @@ function editor()
         log.e("Could not launch app", next)
     end
 end
-hs.hotkey.bind(constants.hyper, 'X', editor)
+hs.hotkey.bind(constants.hyper, 'Space', editor)
 
 local exports = {}
 exports.ensureOpen = ensureOpen

@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 import os
 import sys
-import shlex
 from distutils.spawn import find_executable
 import shutil
 from subprocess import call
 
-from .lib.python import shell
+from lib.python import shell
 
 SOURCE_BASE = os.path.abspath(os.path.curdir)
 TARGET_BASE = os.path.expanduser("~")
@@ -103,11 +102,11 @@ def update_submodules():
 
 
 def make_dirs(dirs):
-    for dir in dirs:
-        dir = os.path.abspath(os.path.expanduser(dir))
-        if not os.path.exists(dir):
-            shell.info("Creating directory {dir}", dir=dir)
-            os.makedirs(dir)
+    for dir_ in dirs:
+        dir_ = os.path.abspath(os.path.expanduser(dir_))
+        if not os.path.exists(dir_):
+            shell.info("Creating directory {dir}", dir=dir_)
+            os.makedirs(dir_)
 
 
 def main():
