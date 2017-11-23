@@ -1,5 +1,9 @@
 
 constants = require('constants')
+log = require('log')
+
+-- More flexible app searches
+hs.application.enableSpotlightForNameSearches(true)
 
 -- Application quick switching
 hs.hotkey.bind(constants.hyper, '1', function() hs.application.launchOrFocus('Terminal') end)
@@ -10,10 +14,10 @@ hs.hotkey.bind(constants.hyper, '5', function() hs.application.launchOrFocus('Gc
 
 hs.hotkey.bind(constants.hyper, 'D', function() hs.application.launchOrFocus('DevDocs') end)
 
-function ensureOpen(app, timeout, delay, fn)
-    local app = hs.application.open(app, timeout, true)
+function ensureOpen(appName, timeout, delay)
+    local app = hs.application.open(appName, timeout, timeout > 0)
     if app == nil then
-        hs.alert.show("Could not open " .. app)
+        hs.alert.show("Could not open " .. appName)
         return
     end
 
@@ -25,11 +29,7 @@ function ensureOpen(app, timeout, delay, fn)
         end
     end
 
-    if fn == nil then
-        return app
-    end
-
-    return fn(app)
+    return app
 end
 
 function google()
@@ -37,55 +37,31 @@ function google()
 end
 hs.hotkey.bind(constants.hyper, 'G', google)
 
+local curEditor = -1
+function editor()
+    local front = hs.application.frontmostApplication()
+    if curEditor == -1 or front:path() == constants.editors[curEditor] then
+        if curEditor == -1 or curEditor + 1 > #constants.editors then
+            curEditor = 1
+        else
+            curEditor = curEditor + 1
+        end
+    end
 
--- if hs.urlevent.getDefaultHandler("http") ~= "org.hammerspoon.hammerspoon" then
---     hs.urlevent.setDefaultHandler("http")
--- end
+    local next = constants.editors[curEditor]
 
--- local active_browser = hs.settings.get("active_browser") or "com.apple.safari"
--- local browser_menu = hs.menubar.new()
--- local available_browsers = {
---     ["com.apple.safari"] = {
---         name = "Safari",
---         icon = os.getenv("HOME") .. "/.hammerspoon/icons/safari.png"
---     },
---     ["org.mozilla.firefox"] = {
---         name = "Firefox",
---         icon = os.getenv("HOME") .. "/.hammerspoon/icons/firefox.png"
---     },
---     ["com.google.chrome"] = {
---         name = "Google Chrome",
---         icon = os.getenv("HOME") .. "/.hammerspoon/icons/chrome.png"
---     },
--- }
+    if not hs.application.launchOrFocus(next) then
+        log.e("Could not launch app", next)
+    end
+end
+hs.hotkey.bind(constants.hyper, 'X', editor)
 
--- function init_browser_menu()
---     local menu_items = {}
-
---     for browser_id, browser_data in pairs(available_browsers) do
---         local image = hs.image.imageFromPath(browser_data["icon"]):setSize({w=16, h=16})
-
---         if browser_id == active_browser then
---             browser_menu:setIcon(image)
---         end
-
---         table.insert(menu_items, {
---             title = browser_data["name"],
---             image = image,
---             checked = browser_id == active_browser,
---             fn = function()
---                 active_browser = browser_id
---                 hs.settings.set("active_browser", browser_id)
---                 init_browser_menu()
---             end
---         })
---     end
-
---     browser_menu:setMenu(menu_items)
--- end
-
--- init_browser_menu()
-
--- hs.urlevent.httpCallback = function(scheme, host, params, fullURL)
---     hs.urlevent.openURLWithBundle(fullURL, active_browser)
--- end
+local exports = {}
+exports.ensureOpen = ensureOpen
+exports.google = google
+exports.print_running = function()
+    for id, app in pairs(hs.application.runningApplications()) do
+        log.d(id, app:path() or app:name())
+    end
+end
+return exports
