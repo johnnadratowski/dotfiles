@@ -11,3 +11,4 @@ history.sqlite
 .idea/
 .DS_Store
 apps/build
+.vscode/

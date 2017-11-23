@@ -4,7 +4,6 @@ import shutil
 import sys
 import time
 
-
 HOST_FILE = os.environ.get('HOST_FILE', "/etc/hosts")
 
 
@@ -13,7 +12,7 @@ def get_hosts():
     Gets the hosts file data
     """
 
-    with file(HOST_FILE, 'r') as f:
+    with open(HOST_FILE, 'r') as f:
         output_file = f.readlines()
         output = []
 
@@ -68,7 +67,7 @@ def add_hosts(ip, hosts):
     except StopIteration:
         cur = dict(ip=ip, hosts=hosts, comment='', line='')
         HOSTS.append(cur)
-    
+
 
 def remove_host(host):
     """
@@ -96,11 +95,11 @@ def write_hosts():
             if 'ip' not in host:
                 output_lines.append(host['line'].strip())
                 continue
-            
+
             line = host['ip'].ljust(widths[0])
             for idx, h in enumerate(host['hosts']):
-                line += " " + h.ljust(widths[idx+1])
-        
+                line += " " + h.ljust(widths[idx + 1])
+
             if 'comment' in host and host['comment']:
                 line += " #" + host['comment']
 
@@ -122,6 +121,5 @@ if __name__ == "__main__":
         elif a.startswith("-r="):
             _, _, remove_host_str = a.partition("=")
             remove_host(remove_host_str.split(','))
-    
-    write_hosts()
 
+    write_hosts()
