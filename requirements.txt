@@ -1,4 +1,5 @@
 google-api-python-client
+Gooey
 httplib2
 ipdb
 ipython

@@ -1,10 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Trash Gmail Messages
 
 import argparse
 import logging
 import json
 import os
+import sys
 
 from apiclient import discovery
 import httplib2
@@ -42,7 +43,7 @@ def get_creds():
 
     logging.info(f'Storing credentials to ${CRED_FILE}')
 
-    return credentials
+    sys.exit(1)
 
 
 def execute(req):
@@ -62,7 +63,7 @@ def delete_messages(messages, service, user_id):
     body = {'ids': [m['id'] for m in messages]}
     req = service.users().messages().batchDelete(userId=user_id, body=body)
     execute(req)
-    print(f'Deleted {len(messages)} messages')
+    print(f'Deleted: {len(messages)} messages')
 
 
 def trash_messages(messages, service, user_id):
@@ -70,7 +71,7 @@ def trash_messages(messages, service, user_id):
     for msg in messages:
         req = service.users().messages().trash(userId=user_id, id=msg['id'])
         execute(req)
-    print(f'Trashed {len(messages)} messages')
+    print(f'Trashed: {len(messages)} messages')
 
 
 def get_messages(service, user_id, query):
@@ -123,7 +124,7 @@ def main(args):
 
         tally += len(messages)
 
-        print(f'Deleted: {len(messages)} | Total: {tally}')
+        print(f'Total: {tally}')
 
     print(f'Total Deleted Messages: {tally}')
 
