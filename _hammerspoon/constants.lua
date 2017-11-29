@@ -3,7 +3,8 @@ constants.hyper = {"ctrl", "alt", "cmd", "shift"}
 
 constants.loglevel = 'debug'
 
-constants.defaultBrowser = 'FirefoxDeveloperEdition'
+constants.defaultBrowser = 'Google Chrome'
+--constants.defaultBrowser = 'FirefoxDeveloperEdition'
 constants.defaultBrowserApp = 'org.mozilla.firefox'
 constants.availableBrowsers = {
     ["com.apple.safari"] = {

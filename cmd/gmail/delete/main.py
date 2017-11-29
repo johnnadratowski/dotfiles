@@ -6,6 +6,7 @@ import logging
 import json
 import os
 import sys
+import time
 
 from apiclient import discovery
 import httplib2
@@ -48,8 +49,22 @@ def get_creds():
 
 def execute(req):
     """Executes the given request"""
-    return req.execute()
+    retry = 0
+    def run():
+        nonlocal retry
+        try:
+            return req.execute()
+        except:
+            logging.exception(f"An error occurred making API call. Retry {retry} of 50")
+            time.sleep(2)
+            retry += 1
+            return None
+    
+    ret = None
+    while retry < 50 and ret is None:
+        ret = run()
 
+    return ret
 
 def print_messages(messages):
     """Hard delete messages"""
