@@ -6,7 +6,8 @@ log = require('log')
 hs.application.enableSpotlightForNameSearches(true)
 
 -- Application quick switching
-hs.hotkey.bind(constants.hyper, '1', function() hs.application.launchOrFocus('Terminal') end)
+hs.hotkey.bind(constants.hyper, 'Space', function() hs.application.launchOrFocus('Terminal') end)
+hs.hotkey.bind(constants.hyper, '1', function() hs.application.launchOrFocus('/Applications/Visual Studio Code.app') end)
 hs.hotkey.bind(constants.hyper, '2', function() hs.application.launchOrFocus(constants.defaultBrowser) end)
 hs.hotkey.bind(constants.hyper, '3', function() hs.application.launchOrFocus('Slack') end)
 hs.hotkey.bind(constants.hyper, '4', function() hs.application.launchOrFocus('Gmail') end)
@@ -65,7 +66,7 @@ function editor()
         log.e("Could not launch app", next)
     end
 end
-hs.hotkey.bind(constants.hyper, 'Space', editor)
+-- hs.hotkey.bind(constants.hyper, 'Space', editor)
 
 local exports = {}
 exports.ensureOpen = ensureOpen
