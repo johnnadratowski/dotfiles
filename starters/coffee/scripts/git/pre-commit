@@ -1,0 +1,15 @@
+#!/bin/bash
+if [ ! -d ./.git ]; then
+    echo "You must push your project from the root, so the hooks run properly. Exiting."
+    exit 1
+fi
+    
+touched=`git diff --cached --name-only |egrep '\.coffee$' || true`
+if [ -n "$touched" ]; then
+	coffeelint -f ./coffeelint.json $touched
+	if [ $? != 0 ]; then
+		echo "Code fails lint check."
+		exit 1
+	fi
+fi
+exit 0

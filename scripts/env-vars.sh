@@ -41,8 +41,7 @@ then
 fi
 
 export GIT_HOME=$HOME/git
-export LIB_HOME=$HOME/lib
-export CLASSPATH=$CLASSPATH:$LIB_HOME/closurecompiler:$LIB_HOME/
+export DOTFILES=$GIT_HOME/dotfiles
 
 # Golang
 export GOPATH=$HOME/go

@@ -116,9 +116,9 @@ def main():
         run_files(unlink_file, **EXTRA_FILES)
         return
 
-    run_files(link_file, **EXTRA_FILES)
-
     make_dirs(DIRS)
+
+    run_files(link_file, **EXTRA_FILES)
 
     if 'install' in sys.argv:
         if 'apt' in sys.argv:
