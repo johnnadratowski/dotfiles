@@ -1,4 +1,5 @@
 #!/usr/bin/env coffee
+require('../lib/js/ld.coffee')
 fs = require 'fs'
 path = require 'path'
 
@@ -23,6 +24,6 @@ walk = (inDir, outDir, conf) ->
       fs.copyFileSync node newNode
 
 if process.argv.length < 3
-  throw Error("NOT ENOUGH ARGS")
+  throw new Error "NOT ENOUGH ARGS"
 
 walk path.join(process.cwd, process.argv[2]) process.argv[3]

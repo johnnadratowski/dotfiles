@@ -76,8 +76,10 @@ alias gmd='gfpm; git merge develop'
 alias gcob='gco -b '
 alias gst='git st'
 alias gacp='gadd && gci && gpush'
-alias gacwip='gac "WIP"'
-alias gacpwip='gacpm "WIP"'
+alias gacw='gac "WIP"'
+alias gacwip='gacw'
+alias gacpwp='gacpm "WIP"'
+alias gacpwip='gacpwp'
 alias gitdot='cdd && gacpwip && cd -'
 
 # networking aliases
