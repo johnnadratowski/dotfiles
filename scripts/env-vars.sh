@@ -6,11 +6,6 @@
 # Helpful with node building
 ulimit -n 10000
 
-if [ -d /opt/scripts/bash ]
-then
-	export PATH=$PATH:/opt/scripts/bash
-fi
-
 if [ -d $HOME/bin ]
 then
 	export PATH=$HOME/bin:$PATH
@@ -24,11 +19,6 @@ export PAGER="less"
 export EDITOR="vim"
 export GIT_EDITOR="vim"
 export VISUAL="vim"
-export DEFAULTPS1=${debian_chroot:+($debian_chroot)}\u@\h:\w\$
-
-export PS1old="\n\e[33;1m###\e[0m \e[32;1m\w\e[0m | 
-\e[34;1m\d \@\e[0m \e[33;1m###\e[0m \e[36m 
-Unified Standard Dev Environment\e[0m\n\u@\H|(\e[31;1m\j\e[0m)\$>"
 
 export LESSCHARSET='latin1'
 
@@ -42,6 +32,7 @@ fi
 
 export GIT_HOME=$HOME/git
 export DOTFILES=$GIT_HOME/dotfiles
+export PATH=$PATH:$DOTFILES/bin
 
 # Golang
 export GOPATH=$HOME/go

@@ -141,6 +141,6 @@ mapping =
 
 for type, fnNames of extensions
   for ctor in mapping[type]
-    for fnName of fnNames
-      if not ctor::[fnName]
-        ctor::[fnName] = lodash[fnName]
+    for fnName in fnNames
+      if not ctor.prototype[fnName]
+        ctor.prototype[fnName] = lodash[fnName]

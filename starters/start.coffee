@@ -1,5 +1,4 @@
-#!/usr/bin/env coffee
-require('../lib/js/ld.coffee')
+#!/usr/bin/env cof
 fs = require 'fs'
 path = require 'path'
 
@@ -23,7 +22,7 @@ walk = (inDir, outDir, conf) ->
     else
       fs.copyFileSync node newNode
 
-if process.argv.length < 3
-  throw new Error "NOT ENOUGH ARGS"
+# if process.argv.length < 3
+#   throw new Error "NOT ENOUGH ARGS"
 
-walk path.join(process.cwd, process.argv[2]) process.argv[3]
+# walk path.join(process.cwd, process.argv[2]) process.argv[3]
