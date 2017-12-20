@@ -1,4 +1,5 @@
-lodash = require('./lodash')
+global.lodash = lodash = require('./lodash')
+global.alasql = alasql = require('alasql')
 
 extensions =
   array: [
@@ -14,7 +15,6 @@ extensions =
     "intersection"
     "last"
     "lastIndexOf"
-    "object"
     "range"
     "rest"
     "sortedIndex"
@@ -22,54 +22,38 @@ extensions =
     "take"
     "union"
     "uniq"
-    "unique"
     "unzip"
     "without"
     "zip"
     "zipObject"
   ]
   collection: [
-    "all"
-    "any"
     "at"
-    "collect"
-    "contains"
     "countBy"
-    "detect"
     "each"
     "every"
     "filter"
     "find"
-    "findWhere"
-    "foldl"
-    "foldr"
     "forEach"
     "groupBy"
-    "include"
-    "inject"
     "invoke"
     "map"
     "max"
     "min"
-    "pluck"
     "reduce"
     "reduceRight"
     "reject"
-    "select"
     "shuffle"
     "size"
     "some"
     "sortBy"
     "toArray"
-    "where"
   ]
   function: [
     "after"
     "bind"
     "bindAll"
     "bindKey"
-    "compose"
-    "createCallback"
     "debounce"
     "defer"
     "delay"
@@ -111,9 +95,7 @@ extensions =
     "isUndefined"
     "keys"
     "merge"
-    "methods"
     "omit"
-    "pairs"
     "pick"
     "transform"
     "values"
@@ -139,8 +121,24 @@ mapping =
   string: [String]
   number: [Number]
 
+ld = (name) ->
+  f = lodash[name]
+  if not f
+    console.log("UNDEFINED", name)
+
+  ->
+    args = new Array (arguments.length)
+    args = (v for v in arguments)
+    f(this, ...args)
+
+
 for type, fnNames of extensions
   for ctor in mapping[type]
+    ext = {}
     for fnName in fnNames
-      if not ctor.prototype[fnName]
-        ctor.prototype[fnName] = lodash[fnName]
+      if not ctor::[fnName]
+        ext[fnName] = ld(fnName)
+      else if not ctor::["_#{fnName}"]
+        ext["_#{fnName}"] = ld(fnName)
+      else console.log type, fnName
+    lodash.extend(ctor::, ext)

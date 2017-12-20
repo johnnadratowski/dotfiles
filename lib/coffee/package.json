@@ -1,0 +1,28 @@
+{
+  "name": "lib",
+  "version": "0.0.1",
+  "description": "JS Lib",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnnadratowski/dotfiles.git"
+  },
+  "keywords": [
+    "Javascript",
+    "Coffeescript",
+    "lib",
+    "library"
+  ],
+  "author": "John Nadratowski",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/johnnadratowski/dotfiles/issues"
+  },
+  "homepage": "https://github.com/johnnadratowski/dotfiles#readme",
+  "dependencies": {
+    "alasql": "^0.4.4"
+  }
+}
