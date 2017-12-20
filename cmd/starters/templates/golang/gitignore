@@ -1,0 +1,45 @@
+{% extends "common/gitignore" %}
+
+{% block content %}
+
+# Folders
+_obj
+_test
+/src
+/bin
+/pkg
+/vendor
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+_testmain.go
+
+*.exe
+*.test
+*.prof
+*.cpuprofile
+*.memprofile
+
+# Golang test files
+lint.txt
+*.coverprofile
+*.coverprofile.*
+coverage.raw
+coverage.xml
+coverage.html
+
+# JUnit test report files
+junit.xml
+
+# Prevent checking in the executable
+{{BUILD_TARGET}}
+
+{% endblock %}

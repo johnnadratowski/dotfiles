@@ -10,38 +10,94 @@ import traceback
 
 
 SHELL_CONTROL_SEQUENCES = {
+    'BLACK': '\033[30m',
     'BLUE': '\033[34m',
-    'LTBLUE': '\033[94m',
-    'GREEN': '\033[32m',
-    'LTGREEN': '\033[92m',
-    'YELLOW': '\033[33m',
-    'LTYELLOW': '\033[93m',
-    'RED': '\033[31m',
-    'LTRED': '\033[91m',
     'CYAN': '\033[36m',
+    'DEFAULT': '\033[39m',
+    'DKGRAY': '\033[90m',
+    'GREEN': '\033[32m',
+    'LTBLUE': '\033[94m',
     'LTCYAN': '\033[96m',
-    'MAGENTA': '\033[35m',
+    'LTGRAY': '\033[37m',
+    'LTGREEN': '\033[92m',
     'LTMAGENTA': '\033[95m',
-    'ENDC': '\033[0m',
+    'LTRED': '\033[91m',
+    'LTYELLOW': '\033[93m',
+    'MAGENTA': '\033[35m',
+    'RED': '\033[31m',
+    'WHITE': '\033[97m',
+    'YELLOW': '\033[33m',
+
+    'BK_BLACK': '\033[40m',
+    'BK_BLUE': '\033[44m',
+    'BK_CYAN': '\033[46m',
+    'BK_DEFAULT': '\033[49m',
+    'BK_DKGRAY': '\033[100m',
+    'BK_GREEN': '\033[42m',
+    'BK_LTBLUE': '\033[104m',
+    'BK_LTCYAN': '\033[106m',
+    'BK_LTGRAY': '\033[47m',
+    'BK_LTGREEN': '\033[102m',
+    'BK_LTMAGENTA': '\033[105m',
+    'BK_LTRED': '\033[101m',
+    'BK_LTYELLOW': '\033[103m',
+    'BK_MAGENTA': '\033[45m',
+    'BK_RED': '\033[41m',
+    'BK_WHITE': '\033[107m',
+    'BK_YELLOW': '\033[43m',
+
+    'BLINK': '\033[5m',
     'BOLD': '\033[1m',
+    'DIM': '\033[2m',
+    'HIDDEN': '\033[8m',
+    'RESET': '\033[0m',
+    'REVERSE': '\033[7m',
     'UNDERLINE': '\033[4m',
 }
 
 
+BLACK = "{BLACK}"
 BLUE = "{BLUE}"
-LTBLUE = "{LTBLUE}"
-GREEN = "{GREEN}"
-LTGREEN = "{LTGREEN}"
-YELLOW = "{YELLOW}"
-LTYELLOW = "{LTYELLOW}"
-RED = "{RED}"
-LTRED = "{LTRED}"
 CYAN = "{CYAN}"
+DEFAULT = "{DEFAULT}"
+DKGRAY = "{DKGRAY}"
+GREEN = "{GREEN}"
+LTBLUE = "{LTBLUE}"
 LTCYAN = "{LTCYAN}"
-MAGENTA = "{MAGENTA}"
+LTGRAY = "{LTGRAY}"
+LTGREEN = "{LTGREEN}"
 LTMAGENTA = "{LTMAGENTA}"
-ENDC = "{ENDC}"
+LTRED = "{LTRED}"
+LTYELLOW = "{LTYELLOW}"
+MAGENTA = "{MAGENTA}"
+RED = "{RED}"
+WHITE = "{WHITE}"
+YELLOW = "{YELLOW}"
+
+BK_BLACK = "{BLACK}"
+BK_BLUE = "{BLUE}"
+BK_CYAN = "{CYAN}"
+BK_DEFAULT = "{DEFAULT}"
+BK_DKGRAY = "{DKGRAY}"
+BK_GREEN = "{GREEN}"
+BK_LTBLUE = "{LTBLUE}"
+BK_LTCYAN = "{LTCYAN}"
+BK_LTGRAY = "{LTGRAY}"
+BK_LTGREEN = "{LTGREEN}"
+BK_LTMAGENTA = "{LTMAGENTA}"
+BK_LTRED = "{LTRED}"
+BK_LTYELLOW = "{LTYELLOW}"
+BK_MAGENTA = "{MAGENTA}"
+BK_RED = "{RED}"
+BK_WHITE = "{WHITE}"
+BK_YELLOW = "{YELLOW}"
+
+BLINK = "{BLINK}"
 BOLD = "{BOLD}"
+DIM = "{DIM}"
+HIDDEN = "{HIDDEN}"
+RESET = "{RESET}"
+REVERSE = "{REVERSE}"
 UNDERLINE = "{UNDERLINE}"
 
 
@@ -114,7 +170,7 @@ def choice(choices, msg='Enter your choice: ', color=True, default=None, **kwarg
 
     choice_msg.append("")
     if color:
-        choice_msg.append("{LTMAGENTA}{BOLD}" + msg + "{ENDC}")
+        choice_msg.append("{LTMAGENTA}{BOLD}" + msg + "{RESET}")
     else:
         choice_msg.append(msg)
 
@@ -141,8 +197,8 @@ def ask(*args, **kwargs):
 
     print_args.append(kwargs.get('end', ''))
     if 'color' in kwargs:
-        print_args.insert(0, '{' + kwargs['color'] + '}')
-        print_args.append(ENDC)
+        print_args.insert(0, kwargs['color'])
+        print_args.append(RESET)
 
     while True:
         stderr(*print_args, end='', **kwargs)
@@ -230,7 +286,7 @@ def stderr(*output, **kwargs):
 def print_color(color, *output, **kwargs):
     """Print message to stderr in the given color"""
     print_args = list(output)
-    print_args.append(ENDC)
+    print_args.append(RESET)
     if "file" in kwargs:
         write_output(kwargs["file"], *output, **kwargs)
     else:
@@ -276,7 +332,7 @@ def elapsed(output, **kwargs):
     info("Starting: ", output, **kwargs)
     yield
     info("Completed: " + output +
-         " {MAGENTA}(Elapsed Time: {elapsed}s){ENDC}", elapsed=timestamp() - start, **kwargs)
+         " {MAGENTA}(Elapsed Time: {elapsed}s){RESET}", elapsed=timestamp() - start, **kwargs)
 
 
 def elapsed_decorator(output):
