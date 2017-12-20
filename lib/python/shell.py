@@ -54,7 +54,7 @@ class JSONEncoder(json.JSONEncoder):
         return super(JSONEncoder, self).default(o)
 
 
-def read_json(timeout=0):
+def read_json():
     """Read json data from stdin"""
     data = read()
     if data:
@@ -106,18 +106,20 @@ def choice(choices, msg='Enter your choice: ', color=True, default=None, **kwarg
     validate = []
     for idx, item in enumerate(choices):
         if color:
-            choice_msg.append("\t{LTYELLOW}%d{LTMAGENTA}: %s" % (idx, str(item)))
+            choice_msg.append(
+                "\t{LTYELLOW}%d{LTMAGENTA}: %s" % (idx, str(item)))
         else:
             choice_msg.append("\t%d: %s" % (idx, str(item)))
         validate.append(str(idx))
 
     choice_msg.append("")
     if color:
-        choice_msg.append("{LTMAGENTA}{BOLD}"+msg+"{ENDC}")
+        choice_msg.append("{LTMAGENTA}{BOLD}" + msg + "{ENDC}")
     else:
         choice_msg.append(msg)
 
-    output = ask("\n".join(choice_msg), validate=validate, default=default, color=None, **kwargs)
+    output = ask("\n".join(choice_msg), validate=validate,
+                 default=default, color=None, **kwargs)
 
     if choices_dict:
         key = choices[int(output)]
@@ -129,34 +131,39 @@ def choice(choices, msg='Enter your choice: ', color=True, default=None, **kwarg
 def ask(*args, **kwargs):
     """Ask for input"""
     if not sys.stdin.isatty():
-        error("Cannot ask user for input, no tty exists")
+        error('Cannot ask user for input, no tty exists')
         sys.exit(1)
 
     print_args = list(args)
-    print_args.append(kwargs.get("end", "\n"))
-    if kwargs["color"]:
-        print_args.insert(0, "{" + kwargs["color"] + "}")
+
+    if 'default' in kwargs:
+        print_args.append('[' + kwargs['default'] + ']')
+
+    print_args.append(kwargs.get('end', ''))
+    if 'color' in kwargs:
+        print_args.insert(0, '{' + kwargs['color'] + '}')
         print_args.append(ENDC)
 
     while True:
         stderr(*print_args, end='', **kwargs)
 
         in_ = input()
+        in_ = in_.strip()
         if in_:
-            if not kwargs["validate"]:
+            if not 'validate' in kwargs:
                 return in_
-            if isinstance(kwargs["validate"], (tuple, list)) and in_ in kwargs["validate"]:
+            if isinstance(kwargs['validate'], (tuple, list)) and in_ in kwargs['validate']:
                 return in_
-            if callable(kwargs["validate"]) and kwargs["validate"](in_):
+            if callable(kwargs['validate']) and kwargs['validate'](in_):
                 return in_
 
-        if kwargs["default"] is not None:
-            return kwargs["default"]
+        if kwargs['default'] is not None:
+            return kwargs['default']
 
-        if kwargs["error_msg"] is not None:
-            error("\n" + kwargs["error_msg"] + "\n")
+        if kwargs['error_msg'] is not None:
+            error('\n' + kwargs['error_msg'] + '\n')
         else:
-            error("\nYou didn't enter a valid choice!\n")
+            error('\nYou did not enter a valid choice!\n')
 
         time.sleep(1)
 
@@ -173,7 +180,7 @@ def _shell_format(output, **kwargs):
         try:
             output[idx] = item.format(**kwargs)
         except KeyError:
-            pass # Can happen if some item is not in the kwargs dict
+            pass  # Can happen if some item is not in the kwargs dict
 
     return output
 
@@ -193,6 +200,7 @@ def stdout_to_stderr():
     """Temporarily redirects stdout to stderr. Returns no-arg function to turn it back on."""
     stdout = sys.stdout
     sys.stdout = sys.stderr
+
     def restore_stdout():
         sys.stdout = stdout
     return restore_stdout
@@ -267,7 +275,8 @@ def elapsed(output, **kwargs):
     start = timestamp()
     info("Starting: ", output, **kwargs)
     yield
-    info("Completed: " + output + " {MAGENTA}(Elapsed Time: {elapsed}s){ENDC}", elapsed=timestamp()-start, **kwargs)
+    info("Completed: " + output +
+         " {MAGENTA}(Elapsed Time: {elapsed}s){ENDC}", elapsed=timestamp() - start, **kwargs)
 
 
 def elapsed_decorator(output):
@@ -282,7 +291,8 @@ def elapsed_decorator(output):
 
 def print_section(color, *output, **kwargs):
     """Prints a section title header"""
-    output = ["\n\n", 60 * "#", "\n", "# "] + list(output) + ["\n", 60 * "#", "\n"]
+    output = ["\n\n", 60 * "#", "\n", "# "] + \
+        list(output) + ["\n", 60 * "#", "\n"]
     print_color(color, *output, end="\n", **kwargs)
 
 
@@ -303,7 +313,8 @@ def print_table(headers, *table_data, **kwargs):
     print(all_data)
     all_data.insert(0, headers)
 
-    widths = [max(len(d[idx]) for d in all_data) for idx, _ in enumerate(headers)]
+    widths = [max(len(d[idx]) for d in all_data)
+              for idx, _ in enumerate(headers)]
 
     output = []
     for row_idx, data in enumerate(all_data):
