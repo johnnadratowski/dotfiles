@@ -192,7 +192,7 @@ def ask(*args, **kwargs):
 
     print_args = list(args)
 
-    if 'default' in kwargs:
+    if kwargs.get('default') is not None:
         print_args.append('[' + kwargs['default'] + ']')
 
     print_args.append(kwargs.get('end', ''))
@@ -206,22 +206,22 @@ def ask(*args, **kwargs):
         in_ = input()
         in_ = in_.strip()
         if in_:
-            if not 'validate' in kwargs:
-                return in_
-            if isinstance(kwargs['validate'], (tuple, list)) and in_ in kwargs['validate']:
-                return in_
-            if callable(kwargs['validate']) and kwargs['validate'](in_):
+            if 'validate' not in kwargs:
                 return in_
 
-        if kwargs['default'] is not None:
+            v = kwargs['validate']
+            if isinstance(v, (tuple, list)) and in_ in v:
+                return in_
+            if callable(v) and v(in_):
+                return in_
+
+        if kwargs.get('default') is not None:
             return kwargs['default']
 
-        if kwargs['error_msg'] is not None:
+        if 'error_msg' in kwargs:
             error('\n' + kwargs['error_msg'] + '\n')
         else:
             error('\nYou did not enter a valid choice!\n')
-
-        time.sleep(1)
 
 
 def pretty(output):
@@ -347,8 +347,17 @@ def elapsed_decorator(output):
 
 def print_section(color, *output, **kwargs):
     """Prints a section title header"""
-    output = ["\n\n", 60 * "#", "\n", "# "] + \
-        list(output) + ["\n", 60 * "#", "\n"]
+    count = len(' '.join(output)) + 6
+    output = (["\n\n", count * "#", "\n", "# "]
+              + list(output)
+              + ["\n", count * "#", "\n"])
+    print_color(color, *output, end="\n", **kwargs)
+
+
+def print_subsection(color, *output, **kwargs):
+    """Prints a section title header"""
+    count = len(' '.join(output))
+    output = ["\n\n"] + list(output) + ["\n", count * "=", "\n"]
     print_color(color, *output, end="\n", **kwargs)
 
 

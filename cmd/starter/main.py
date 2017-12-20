@@ -11,20 +11,98 @@ from slugify import slugify
 from lib import shell
 
 
+def get_golang_conf(args, ans):
+
+    golang_version = shell.ask(
+        'Golang Version',
+        color=shell.MAGENTA,
+        default='1.9.2'
+    )
+
+    default_path = None
+    gopath = os.getenv('GOPATH')
+    if gopath and args.outdir.startswith(gopath):
+        srcpath = os.path.join(gopath, 'src', '')
+        default_path = OUTDIR[len(srcpath):]
+
+    import_path = shell.ask(
+        'Import Path (relative to GOPATH)',
+        color=shell.MAGENTA,
+        default=default_path
+    )
+
+    build_target = shell.ask(
+        'Build Target (if applicable)',
+        color=shell.MAGENTA,
+        default=f'./{ans["PROJECT_SLUG"]}'
+    )
+
+    return dict(
+        GOLANG_VERSION=golang_version,
+        IMPORT_PATH=import_path,
+        BUILD_TARGET=build_target
+    )
+
+
+def get_js_conf(args, ans):
+
+    node_version = shell.ask(
+        'Node Version',
+        color=shell.MAGENTA,
+        default='9.3.0'
+    )
+
+    return dict(NODE_VERSION=node_version)
+
+
+def get_python_conf(args, ans):
+
+    python_version = shell.ask(
+        'Python Version',
+        color=shell.MAGENTA,
+        default='3.6.4'
+    )
+
+    return dict(PYTHON_VERSION=python_version)
+
+
 def get_conf(args):
-    proj_name = os.path.basename(args.outdir).strip()
-    proj_name = proj_name or os.path.basename(os.path.dirname(args.outdir))
+    proj_name = os.path.basename(OUTDIR).strip()
+    proj_name = proj_name or os.path.basename(os.path.dirname(OUTDIR))
 
     shell.print_section(shell.GREEN, 'Project Configuration Wizard')
+
     proj_name = shell.ask(
-        'Project Name', color=shell.MAGENTA, default=proj_name)
+        'Project Name',
+        color=shell.MAGENTA,
+        default=proj_name
+    )
+
+    description = shell.ask(
+        'Description',
+        color=shell.MAGENTA,
+        default=''
+    )
 
     slug = slugify(proj_name)
 
-    build_target = shell.ask('Build Target (if applicable)', color=shell.MAGENTA,
-                             default=f'./{slug}')
+    answers = dict(
+        PROJECT_NAME=proj_name,
+        PROJECT_SLUG=slug,
+        DESCRIPTION=description,
+    )
 
-    return dict(PROJECT_NAME=proj_name, BUILD_TARGET=build_target)
+    proj_func = globals().get(f'get_{args.starter}_conf')
+    if proj_func:
+        shell.print_subsection(
+            shell.GREEN,
+            f'{args.starter.upper()} questions'
+        )
+        answers.update(proj_func(args, answers))
+
+    shell.info("Wizard complete")
+
+    return answers
 
 
 def copy_file(f, out, conf):
@@ -66,8 +144,12 @@ def main(args):
 
     conf = get_conf(args)
 
-    copy_dir(common, args.outdir, conf)
-    copy_dir(starter, args.outdir, conf)
+    shell.info(f'Generating project output to {OUTDIR}')
+
+    copy_dir(common, OUTDIR, conf)
+    copy_dir(starter, OUTDIR, conf)
+
+    shell.info('Project generated')
 
 
 if __name__ == '__main__':
@@ -95,6 +177,7 @@ if __name__ == '__main__':
         format="%(asctime)s %(levelname)s: %(message)s",
         level=LOGLEVEL)
 
+    OUTDIR = os.path.abspath(os.path.expanduser(ARGS.outdir))
     CUR_DIR = os.path.dirname(os.path.realpath(__file__))
     TEMPLATE_DIR = os.path.join(CUR_DIR, 'templates')
     LOADER = jinja2.FileSystemLoader(searchpath=['/', TEMPLATE_DIR])
