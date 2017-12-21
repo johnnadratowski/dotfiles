@@ -4,11 +4,27 @@ import argparse
 import logging
 import os
 import shutil
+import subprocess
 
 import jinja2
 from slugify import slugify
 
 from lib import shell
+
+
+def validate_args(args):
+    os.makedirs(OUTDIR, exist_ok=True)
+    if not os.path.exists(GIT_DIR):
+        shell.info('Initializing git in output directory')
+        subprocess.check_call(['git', 'init', OUTDIR])
+
+    common = os.path.join(TEMPLATE_DIR, 'common')
+    starter = os.path.join(TEMPLATE_DIR, args.starter)
+
+    if not os.path.exists(starter):
+        raise ValueError(f'Invalid starter {starter}.')
+
+    return common, starter
 
 
 def get_golang_conf(args, ans):
@@ -135,11 +151,7 @@ def copy_dir(d, outdir, conf):
 
 
 def main(args):
-    common = os.path.join(TEMPLATE_DIR, 'common')
-    starter = os.path.join(TEMPLATE_DIR, args.starter)
-
-    if not os.path.exists(starter):
-        raise ValueError(f'Invalid starter {starter}.')
+    common, starter = validate_args(args)
 
     conf = get_conf(args)
 
@@ -149,6 +161,8 @@ def main(args):
     copy_dir(starter, OUTDIR, conf)
 
     shell.info('Project generated')
+
+    os.chdir(OUTDIR)
 
 
 if __name__ == '__main__':
@@ -177,6 +191,7 @@ if __name__ == '__main__':
         level=LOGLEVEL)
 
     OUTDIR = os.path.abspath(os.path.expanduser(ARGS.outdir))
+    GIT_DIR = os.path.join(OUTDIR, '.git')
     FOLDER_NAME = os.path.basename(OUTDIR)
     CUR_DIR = os.path.dirname(os.path.realpath(__file__))
     TEMPLATE_DIR = os.path.join(CUR_DIR, 'templates')
