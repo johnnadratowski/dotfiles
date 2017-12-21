@@ -1,0 +1,45 @@
+#!/bin/sh
+# vim: syntax=sh tabstop=8 expandtab shiftwidth=4 softtabstop=4
+# Copyright 2012 The Go Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style
+# license that can be found in the LICENSE file.
+
+# git gofmt pre-commit hook
+#
+# To use, store as .git/hooks/pre-commit inside your repository and make sure
+# it has execute permissions.
+#
+# This script does not handle file names that contain spaces.
+if [ ! -d ./.git ]; then
+    echo ":::::COMMIT FAILED: You must commit your project from the root"
+    exit 1
+fi
+
+make clean || {
+    echo ":::::COMMIT FAILED: Error cleaning old builds"
+    exit 1
+}
+
+make build || {
+    echo ":::::COMMIT FAILED: Build Failed"
+    exit 1
+}
+
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.go$' | grep -v "vendor\/")
+[ -z "$gofiles" ] && exit 0
+
+unformatted=$(gofmt -l $gofiles)
+[ -z "$unformatted" ] || {
+    echo ":::::COMMIT FAILED: Not all files go fmt'ed. Run `go fmt ./...`"
+    exit 1
+}
+
+golint -set_exit_status . || {
+    echo ":::::COMMIT FAILED: Golint failed"
+    exit 1
+}
+
+go vet -all ./... || {
+    echo ":::::COMMIT FAILED: Go Vet failed"
+    exit 1
+}
