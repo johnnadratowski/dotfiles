@@ -4,13 +4,12 @@ PACKAGEDIR := $(CURDIR)
 SCRIPTSDIR := $(CURDIR)/scripts
 GLIDE := glide
 GO := go
-VERSION := $(cat ./VERSION)
-GIT_HASH := $(git rev-parse HEAD)
-BUILD_TIMESTAMP := $(date '+%%Y-%%m-%%dT%%H:%%M:%%S-%%Z')
-HOSTNAME := $(hostname)
-LDFLAGS := -ldflags "-X cmd.Version=${VERSION} -X cmd.GitHash=${GIT_HASH} -X cmd.BuildTimestamp=${BUILD_TIMESTAMP} cmd.BuildHostname=${HOSTNAME}"
-SQLITE_FILE := /tmp/tasks.sqlite
-VAGRANT_DIR := /{{FOLDER_NAME}}
+VERSION := $(shell cat ./VERSION)
+GIT_HASH := $(shell git rev-parse HEAD)
+BUILD_TIMESTAMP := $(shell date +%Y-%m-%dT%H:%M:%S-%Z)
+HOSTNAME := $(shell hostname)
+LDFLAGS := -ldflags "-X {{IMPORT_PATH}}/cmd.Version=${VERSION} -X {{IMPORT_PATH}}/cmd.GitHash=${GIT_HASH} -X {{IMPORT_PATH}}/cmd.BuildTimestamp=${BUILD_TIMESTAMP} -X {{IMPORT_PATH}}/cmd.BuildHostname=${HOSTNAME}"
+VAGRANT_DIR := /go/src/{{IMPORT_PATH}}
 
 define rmfile
     if [ -f $(1) ] ; then rm -f $(1) ; fi
@@ -33,7 +32,6 @@ build:
 
 # generate glide lock file by installing install
 glide.lock: .git/hooks/pre-commit
-	$(call rmfile, ./glide.lock)
 	$(GLIDE) install
 
 update:
@@ -44,7 +42,11 @@ clean:
 	$(call rmfile, ${BINARY})
 	$(call rmfile, ${BINARY_LINUX})
 
+reset:
+	$(call rmfile, ./glide.lock)
+	make clean
+
 watch:
 	watcher
 
-.PHONY: build clean update
+.PHONY: build clean reset update

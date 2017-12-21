@@ -1,0 +1,5 @@
+package: {{IMPORT_PATH}}
+import:
+- package: github.com/canthefason/go-watcher
+- package: github.com/golang/lint/golint
+- package: github.com/urfave/cli

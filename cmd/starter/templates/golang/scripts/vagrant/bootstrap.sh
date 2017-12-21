@@ -39,7 +39,7 @@ if ! command -v go >/dev/null 2>&1; then
     echo "export PATH=$PATH:/go/bin" >> /home/vagrant/.bashrc
     echo "export GOPATH=/go/" >> /home/vagrant/.bashrc
     
-    echo "cd /{{FOLDER_NAME}}" >> /home/vagrant/.bashrc
+    echo "cd /go/src/{{IMPORT_PATH}}" >> /home/vagrant/.bashrc
 fi
 
 # echo "BUILDING Task Monitor"

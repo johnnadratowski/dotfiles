@@ -10,6 +10,7 @@ var (
 	Version        string
 	BuildTimestamp string
 	GitHash        string
+	BuildHostname  string
 )
 
 var VersionCmd cli.Command = cli.Command{
@@ -19,7 +20,7 @@ var VersionCmd cli.Command = cli.Command{
 		if Version == "" {
 			fmt.Printf("Binary not built with version information.")
 		} else {
-			fmt.Printf("Version: %s\nBuild Timestamp: %s\nGit Hash: %s\n", Version, BuildTimestamp, GitHash)
+			fmt.Printf("Version: %s\nBuild Timestamp: %s\nGit Hash: %s\nBuild Hostname: %s\n", Version, BuildTimestamp, GitHash, BuildHostname)
 		}
 	},
 }

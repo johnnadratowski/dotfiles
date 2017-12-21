@@ -1,32 +1,20 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
+Vagrant.configure("2") do |config|
+  config.vm.box = "{{PROJECT_SLUG}}"
 
-TM_VAGRANT_VERSION = "2"
-
-Vagrant.configure(TM_VAGRANT_VERSION) do |config|
-
-  config.vm.box = "task-monitor"
-
-  config.vm.define "tm" do |tm|
+  config.vm.define "{{PROJECT_SLUG}}-linux-build-machine" do |tm|
     tm.vm.provider "virtualbox" do |v, override|
       override.vm.box = "ubuntu/trusty64"
-      v.memory = 2048
-      v.cpus = 4
+      v.memory = 512
+      v.cpus = 1
     end
 
     tm.vm.network "private_network", ip: "192.168.51.7"
 
-    tm.vm.synced_folder "../task-monitor", "/srv/unified/task-monitor/"
-    tm.vm.synced_folder "/tmp", "/tmp/scratch"
+    tm.vm.synced_folder ".", "/go/src/{{IMPORT_PATH}}"
+    tm.vm.synced_folder "/tmp", "/tmp"
 
-    if ENV['docker'] == 1 
-      tm.vm.provision "docker", run: "always" do |d|
-        d.build_image "/srv/unified/task-monitor/", args: "-t task-monitor"
-        d.run "task-monitor", args: "-e HOST=0.0.0.0 -e PORT=8082 -e NEO4J_HOST=0.0.0.0 -e NEO4J_PORT=7474 -e STATSD_ENABLED=false -i -t -d --privileged --expose 8082 -p 8082:8082 --name task-monitor"
-      end
-    else
-      tm.vm.provision "shell", run: "always", path: "./conf/vagrant/bootstrap.sh"
-    end
-
+    tm.vm.provision "shell", run: "always", path: "./scripts/vagrant/bootstrap.sh"
   end
 end
