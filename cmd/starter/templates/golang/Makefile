@@ -15,17 +15,20 @@ define rmfile
     if [ -f $(1) ] ; then rm -f $(1) ; fi
 endef
 
-all: ${BINARY} ${BINARY_LINUX}
+all: build build-linux
+
+build:
+	make ${BINARY}
+
+build-linux:
+	make ${BINARY_LINUX}
 
 # Builds the project
 ${BINARY}: glide.lock
 	$(GO) build ${LDFLAGS} -o ${BINARY}
 
 ${BINARY_LINUX}: glide.lock
-	vagrant ssh -c 'cd ${VAGRANT_DIR}; GOPATH=/go/ go build ${LDFLAGS} -o ${BINARY}-linux'
-
-build:
-	make ${BINARY}
+	docker run --rm -v $(CURDIR):/go/src/{{IMPORT_PATH}} -w /go/src/{{IMPORT_PATH}} golang go build ${LDFLAGS} -o ${BINARY_LINUX}
 
 .git/hooks/pre-commit:
 	ln -s ../../scripts/git/pre-commit .git/hooks/pre-commit
@@ -49,4 +52,4 @@ reset:
 watch:
 	watcher
 
-.PHONY: build clean reset update
+.PHONY: build build-linux clean reset update watch

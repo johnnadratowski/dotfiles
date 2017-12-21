@@ -40,6 +40,7 @@ coverage.html
 junit.xml
 
 # Prevent checking in the executable
-{{BUILD_TARGET}}
+{{BUILD_FILE}}
+{{BUILD_FILE}}-linux
 
 {% endblock %}

@@ -56,6 +56,7 @@ def get_golang_conf(args, ans):
     return dict(
         GOLANG_VERSION=golang_version,
         IMPORT_PATH=import_path,
+        BUILD_FILE=os.path.basename(build_target),
         BUILD_TARGET=build_target
     )
 
