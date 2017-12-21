@@ -26,10 +26,10 @@ if __name__ == '__main__':
         help="increase output verbosity",
         action="store_true")
     PARSER.add_argument(
-        "-t",
-        "--time",
-        help="time",
-        type="datetime.datetime")
+        "-n",
+        "--num",
+        help="num",
+        type=int)
     ARGS = PARSER.parse_args()
 
     # Setup logging
