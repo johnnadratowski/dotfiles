@@ -1,0 +1,33 @@
+# VIM
+*.swp
+*.un~
+tags
+
+## Jetbrains
+.idea/
+*.ipr
+*.iws
+*.iml
+atlassian-ide-plugin.xml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# VS Code
+.vscode/
+
+# Vagrant
+/.vagrant
+
+# AWS
+.elasticbeanstalk/
+
+# Mac
+.DS_Store⏎
+
+# Other
+tmp/
+
+{% block content %}
+{% endblock %}

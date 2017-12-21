@@ -1,22 +1,23 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import os
 import sys
-import shlex
 from distutils.spawn import find_executable
 import shutil
 from subprocess import call
 
-from python_lib import shell
+from lib.python import shell
 
 SOURCE_BASE = os.path.abspath(os.path.curdir)
 TARGET_BASE = os.path.expanduser("~")
 
 EXTRA_FILES = {
-    'scripts': None,
-    'zsh-custom/themes/unicandy.zsh-theme': ".oh-my-zsh/themes/unicandy.zsh-theme",
-    '_zsh-theme': ".oh-my-zsh/themes/mine.zsh-theme",
+    'scripts':
+    None,
+    'zsh-custom/themes/unicandy.zsh-theme':
+    ".oh-my-zsh/themes/unicandy.zsh-theme",
+    '_zsh-theme':
+    ".oh-my-zsh/themes/mine.zsh-theme",
 }
-
 
 DIRS = [
     '~/bin',
@@ -38,12 +39,19 @@ def link_file(name, target_name=None):
     target = os.path.join(TARGET_BASE, target_name)
 
     if os.path.lexists(target):
-        if not os.path.islink(target) or os.path.abspath(os.readlink(target)) != os.path.abspath(source):
+        if not os.path.islink(target) or os.path.abspath(
+                os.readlink(target)) != os.path.abspath(source):
             bak_file = target + ".dotfiles.bak"
-            shell.warning("Target exists. Backing up {target} to {bak_file}", target=target, bak_file=bak_file)
+            shell.warning(
+                "Target exists. Backing up {target} to {bak_file}",
+                target=target,
+                bak_file=bak_file)
             shutil.move(target, bak_file)
         else:
-            shell.info("Source {source} already linked from target {target}", source=source, target=target)
+            shell.info(
+                "Source {source} already linked from target {target}",
+                source=source,
+                target=target)
             return
 
     shell.info("Linking {source} to {target}", source=source, target=target)
@@ -62,12 +70,14 @@ def unlink_file(name, target_name=None):
 
     target = os.path.join(TARGET_BASE, target_name)
 
-    if os.path.islink(target) and os.path.abspath(os.readlink(target)).startswith(SOURCE_BASE):
+    if os.path.islink(target) and os.path.abspath(
+            os.readlink(target)).startswith(SOURCE_BASE):
         os.unlink(target)
 
         bak_file = target + ".dotfiles.bak"
         if os.path.exists(bak_file):
-            shell.warning("Recovering backup file {bak_file}", bak_file=bak_file)
+            shell.warning(
+                "Recovering backup file {bak_file}", bak_file=bak_file)
             shutil.move(bak_file, target)
 
 
@@ -85,15 +95,18 @@ def update_submodules():
         shell.error("Git not installed - unable to update submodules")
         return
     call(["git", "submodule", "update", "--init", "--recursive"])
-    call(["git", "submodule", "foreach", "--recursive", "git", "pull", "origin", "master"])
+    call([
+        "git", "submodule", "foreach", "--recursive", "git", "pull", "origin",
+        "master"
+    ])
 
 
 def make_dirs(dirs):
-    for dir in dirs:
-        dir = os.path.abspath(os.path.expanduser(dir))
-        if not os.path.exists(dir):
-            shell.info("Creating directory {dir}", dir=dir)
-            os.makedirs(dir)
+    for dir_ in dirs:
+        dir_ = os.path.abspath(os.path.expanduser(dir_))
+        if not os.path.exists(dir_):
+            shell.info("Creating directory {dir}", dir=dir_)
+            os.makedirs(dir_)
 
 
 def main():
@@ -103,9 +116,9 @@ def main():
         run_files(unlink_file, **EXTRA_FILES)
         return
 
-    run_files(link_file, **EXTRA_FILES)
-
     make_dirs(DIRS)
+
+    run_files(link_file, **EXTRA_FILES)
 
     if 'install' in sys.argv:
         if 'apt' in sys.argv:

@@ -112,3 +112,5 @@ export NVM_DIR="/Users/johnnadratowski/.nvm"
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
 
 . ~/.shellrc
+
+export PATH=$PATH:/usr/local/bin 

@@ -1,3 +1,6 @@
+{% extends "common/gitignore" %}
+
+{% block content %}
 # Project artifacts
 # =================
 
@@ -15,24 +18,8 @@ public/fonts
 npm-debug.log
 linter
 
-# Vim temp files
-*~
-
-
-# OS X - Desktop Services Store
-# =============================
-
-.DS_Store
-
-
-# IDE - IntelliJ
-# ==============
-
-.bak/
-.idea/
-*.iml
-
-
 # IDE - TernJS
 # ============
 .tern-project
+
+{% endblock %}

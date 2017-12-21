@@ -16,8 +16,9 @@ class DynamicObject(object):
     Object that does not throw exceptions when working with attributes that it does not
     currently contain.  Can specify a default for attributes that do not exist.
     """
+
     def __init__(self, default=None, **kwargs):
-        self._default=default
+        self._default = default
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
 
@@ -97,7 +98,8 @@ class Table(object):
 
         if func.is_list_type(data[0]):
             if not columns:
-                raise Exception("Headers must be specified if passing a list of data")
+                raise Exception(
+                    "Headers must be specified if passing a list of data")
 
             self._data = func.list_to_dict(columns, data)
         elif isinstance(data[0], dict):
@@ -106,7 +108,8 @@ class Table(object):
 
             self._data = [self._initialize_row(row) for row in data]
         else:
-            raise Exception("Data type %s not supported for a row", type(data[0]))
+            raise Exception("Data type %s not supported for a row",
+                            type(data[0]))
 
     @staticmethod
     def from_csv(f):
@@ -137,7 +140,8 @@ class Table(object):
 
     @staticmethod
     def from_clipboard(self):
-        data = subprocess.check_output('pbpaste', env={'LANG': 'en_US.UTF-8'}).decode('utf-8')
+        data = subprocess.check_output(
+            'pbpaste', env={'LANG': 'en_US.UTF-8'}).decode('utf-8')
         with tempfile.NamedTemporaryFile() as t:
             t.write(data)
 
@@ -145,7 +149,6 @@ class Table(object):
             return Table.from_json(t.name)
         except:
             return Table.from_csv(t.name)
-
 
     def to_dicts(self):
         return copy.copy(self._data)
@@ -171,7 +174,9 @@ class Table(object):
 
         output = {}
         for unique in unique_data[0]:
-            output[unique] = self._group([d for d in data if d[columns[0]] == unique], unique_data[1:], columns[1:])
+            output[unique] = self._group(
+                [d for d in data
+                 if d[columns[0]] == unique], unique_data[1:], columns[1:])
 
     def unique(self, *columns):
         return [list(set(self[col]) for col in columns)]
@@ -192,27 +197,34 @@ class Table(object):
         return Table(table_data, self.columns)
 
     def sort(self, cmp=None, key=None, reverse=False):
-        output = sorted(copy.copy(self._data), cmp=cmp, key=key, reverse=reverse)
+        output = sorted(
+            copy.copy(self._data), cmp=cmp, key=key, reverse=reverse)
         return Table(output, self.columns)
 
     def join(self, table, left_on, right_on, how='left', default=None):
         if not table or not left_on or not right_on:
-            raise Exception("Missing arguments to join. Table, left_on, and right_on must have values.")
+            raise Exception(
+                "Missing arguments to join. Table, left_on, and right_on must have values."
+            )
         if not len(left_on) == len(right_on):
-            raise Exception("Left on and right on args to join must be same length.")
+            raise Exception(
+                "Left on and right on args to join must be same length.")
         if isinstance(left_on, str):
             left_on = [left_on]
         if isinstance(right_on, str):
             right_on = [right_on]
         if any(l not in self.columns for l in left_on):
-            raise Exception("Left on join field not in columns: " + ", ".join(self.columns))
+            raise Exception("Left on join field not in columns: " +
+                            ", ".join(self.columns))
         if any(r not in table.columns for r in right_on):
-            raise Exception("Right on join field not in columns: " + ", ".join(table.columns))
+            raise Exception("Right on join field not in columns: " +
+                            ", ".join(table.columns))
 
         data = []
         for left in self._data:
             for right in table._data:
-                matches = all(left[left_on[i]] == right[right_on[i]] for i in range(len(left_on)))
+                matches = all(left[left_on[i]] == right[right_on[i]]
+                              for i in range(len(left_on)))
                 if how == 'inner':
                     if matches:
                         new = self._join_column(left, right)
@@ -221,16 +233,19 @@ class Table(object):
                     if matches:
                         new = self._join_column(left, right)
                     else:
-                        new = self._join_empty_column(table.columns, default, left)
+                        new = self._join_empty_column(table.columns, default,
+                                                      left)
                     data.append(new)
                 elif how == 'outer':
                     if matches:
                         new = self._join_column(left, right)
                         data.append(new)
                     else:
-                        new = self._join_empty_column(table.columns, default, left)
+                        new = self._join_empty_column(table.columns, default,
+                                                      left)
                         data.append(new)
-                        new = self._join_empty_column(self.columns, default, right, suffix='right')
+                        new = self._join_empty_column(
+                            self.columns, default, right, suffix='right')
                         data.append(new)
 
         new_cols = copy.copy(self.columns)
@@ -268,12 +283,15 @@ class Table(object):
             return copy.copy(self._data[item])
         elif func.is_list_type(item):
             if not all(isinstance(i, (str, int)) for i in item):
-                raise Exception("List of columns to get item must be all of either string or int, cannot mix them")
+                raise Exception(
+                    "List of columns to get item must be all of either string or int, cannot mix them"
+                )
 
             if isinstance(item[0], int):
                 return Table([self[i] for i in item], columns=self.columns)
             elif isinstance(item[0], str):
-                return Table([func.take(d, *item) for d in self._data], columns=item)
+                return Table(
+                    [func.take(d, *item) for d in self._data], columns=item)
 
     def __setitem__(self, key, value):
         if isinstance(key, str):
@@ -313,8 +331,8 @@ class Table(object):
             f.close()
 
     def __repr__(self):
-        return "Table [{headers}] (Rows: {num_rows})".format(headers=", ".join(self.columns), num_rows=len(self._data))
+        return "Table [{headers}] (Rows: {num_rows})".format(
+            headers=", ".join(self.columns), num_rows=len(self._data))
 
     def __str__(self):
         return json.dumps(self._data, indent=4, sort_keys=True)
-

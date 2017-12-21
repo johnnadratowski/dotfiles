@@ -10,38 +10,94 @@ import traceback
 
 
 SHELL_CONTROL_SEQUENCES = {
+    'BLACK': '\033[30m',
     'BLUE': '\033[34m',
-    'LTBLUE': '\033[94m',
-    'GREEN': '\033[32m',
-    'LTGREEN': '\033[92m',
-    'YELLOW': '\033[33m',
-    'LTYELLOW': '\033[93m',
-    'RED': '\033[31m',
-    'LTRED': '\033[91m',
     'CYAN': '\033[36m',
+    'DEFAULT': '\033[39m',
+    'DKGRAY': '\033[90m',
+    'GREEN': '\033[32m',
+    'LTBLUE': '\033[94m',
     'LTCYAN': '\033[96m',
-    'MAGENTA': '\033[35m',
+    'LTGRAY': '\033[37m',
+    'LTGREEN': '\033[92m',
     'LTMAGENTA': '\033[95m',
-    'ENDC': '\033[0m',
+    'LTRED': '\033[91m',
+    'LTYELLOW': '\033[93m',
+    'MAGENTA': '\033[35m',
+    'RED': '\033[31m',
+    'WHITE': '\033[97m',
+    'YELLOW': '\033[33m',
+
+    'BK_BLACK': '\033[40m',
+    'BK_BLUE': '\033[44m',
+    'BK_CYAN': '\033[46m',
+    'BK_DEFAULT': '\033[49m',
+    'BK_DKGRAY': '\033[100m',
+    'BK_GREEN': '\033[42m',
+    'BK_LTBLUE': '\033[104m',
+    'BK_LTCYAN': '\033[106m',
+    'BK_LTGRAY': '\033[47m',
+    'BK_LTGREEN': '\033[102m',
+    'BK_LTMAGENTA': '\033[105m',
+    'BK_LTRED': '\033[101m',
+    'BK_LTYELLOW': '\033[103m',
+    'BK_MAGENTA': '\033[45m',
+    'BK_RED': '\033[41m',
+    'BK_WHITE': '\033[107m',
+    'BK_YELLOW': '\033[43m',
+
+    'BLINK': '\033[5m',
     'BOLD': '\033[1m',
+    'DIM': '\033[2m',
+    'HIDDEN': '\033[8m',
+    'RESET': '\033[0m',
+    'REVERSE': '\033[7m',
     'UNDERLINE': '\033[4m',
 }
 
 
+BLACK = "{BLACK}"
 BLUE = "{BLUE}"
-LTBLUE = "{LTBLUE}"
-GREEN = "{GREEN}"
-LTGREEN = "{LTGREEN}"
-YELLOW = "{YELLOW}"
-LTYELLOW = "{LTYELLOW}"
-RED = "{RED}"
-LTRED = "{LTRED}"
 CYAN = "{CYAN}"
+DEFAULT = "{DEFAULT}"
+DKGRAY = "{DKGRAY}"
+GREEN = "{GREEN}"
+LTBLUE = "{LTBLUE}"
 LTCYAN = "{LTCYAN}"
-MAGENTA = "{MAGENTA}"
+LTGRAY = "{LTGRAY}"
+LTGREEN = "{LTGREEN}"
 LTMAGENTA = "{LTMAGENTA}"
-ENDC = "{ENDC}"
+LTRED = "{LTRED}"
+LTYELLOW = "{LTYELLOW}"
+MAGENTA = "{MAGENTA}"
+RED = "{RED}"
+WHITE = "{WHITE}"
+YELLOW = "{YELLOW}"
+
+BK_BLACK = "{BLACK}"
+BK_BLUE = "{BLUE}"
+BK_CYAN = "{CYAN}"
+BK_DEFAULT = "{DEFAULT}"
+BK_DKGRAY = "{DKGRAY}"
+BK_GREEN = "{GREEN}"
+BK_LTBLUE = "{LTBLUE}"
+BK_LTCYAN = "{LTCYAN}"
+BK_LTGRAY = "{LTGRAY}"
+BK_LTGREEN = "{LTGREEN}"
+BK_LTMAGENTA = "{LTMAGENTA}"
+BK_LTRED = "{LTRED}"
+BK_LTYELLOW = "{LTYELLOW}"
+BK_MAGENTA = "{MAGENTA}"
+BK_RED = "{RED}"
+BK_WHITE = "{WHITE}"
+BK_YELLOW = "{YELLOW}"
+
+BLINK = "{BLINK}"
 BOLD = "{BOLD}"
+DIM = "{DIM}"
+HIDDEN = "{HIDDEN}"
+RESET = "{RESET}"
+REVERSE = "{REVERSE}"
 UNDERLINE = "{UNDERLINE}"
 
 
@@ -54,7 +110,7 @@ class JSONEncoder(json.JSONEncoder):
         return super(JSONEncoder, self).default(o)
 
 
-def read_json(timeout=0):
+def read_json():
     """Read json data from stdin"""
     data = read()
     if data:
@@ -106,18 +162,20 @@ def choice(choices, msg='Enter your choice: ', color=True, default=None, **kwarg
     validate = []
     for idx, item in enumerate(choices):
         if color:
-            choice_msg.append("\t{LTYELLOW}%d{LTMAGENTA}: %s" % (idx, str(item)))
+            choice_msg.append(
+                "\t{LTYELLOW}%d{LTMAGENTA}: %s" % (idx, str(item)))
         else:
             choice_msg.append("\t%d: %s" % (idx, str(item)))
         validate.append(str(idx))
 
     choice_msg.append("")
     if color:
-        choice_msg.append("{LTMAGENTA}{BOLD}"+msg+"{ENDC}")
+        choice_msg.append("{LTMAGENTA}{BOLD}" + msg + "{RESET}")
     else:
         choice_msg.append(msg)
 
-    output = ask("\n".join(choice_msg), validate=validate, default=default, color=None, **kwargs)
+    output = ask("\n".join(choice_msg), validate=validate,
+                 default=default, color=None, **kwargs)
 
     if choices_dict:
         key = choices[int(output)]
@@ -129,36 +187,41 @@ def choice(choices, msg='Enter your choice: ', color=True, default=None, **kwarg
 def ask(*args, **kwargs):
     """Ask for input"""
     if not sys.stdin.isatty():
-        error("Cannot ask user for input, no tty exists")
+        error('Cannot ask user for input, no tty exists')
         sys.exit(1)
 
     print_args = list(args)
-    print_args.append(kwargs.get("end", "\n"))
-    if kwargs["color"]:
-        print_args.insert(0, "{" + kwargs["color"] + "}")
-        print_args.append(ENDC)
+
+    if kwargs.get('default') is not None:
+        print_args.append('[' + kwargs['default'] + ']')
+
+    print_args.append(kwargs.get('end', ''))
+    if 'color' in kwargs:
+        print_args.insert(0, kwargs['color'])
+        print_args.append(RESET)
 
     while True:
         stderr(*print_args, end='', **kwargs)
 
         in_ = input()
+        in_ = in_.strip()
         if in_:
-            if not kwargs["validate"]:
-                return in_
-            if isinstance(kwargs["validate"], (tuple, list)) and in_ in kwargs["validate"]:
-                return in_
-            if callable(kwargs["validate"]) and kwargs["validate"](in_):
+            if 'validate' not in kwargs:
                 return in_
 
-        if kwargs["default"] is not None:
-            return kwargs["default"]
+            v = kwargs['validate']
+            if isinstance(v, (tuple, list)) and in_ in v:
+                return in_
+            if callable(v) and v(in_):
+                return in_
 
-        if kwargs["error_msg"] is not None:
-            error("\n" + kwargs["error_msg"] + "\n")
+        if kwargs.get('default') is not None:
+            return kwargs['default']
+
+        if 'error_msg' in kwargs:
+            error('\n' + kwargs['error_msg'] + '\n')
         else:
-            error("\nYou didn't enter a valid choice!\n")
-
-        time.sleep(1)
+            error('\nYou did not enter a valid choice!\n')
 
 
 def pretty(output):
@@ -173,7 +236,7 @@ def _shell_format(output, **kwargs):
         try:
             output[idx] = item.format(**kwargs)
         except KeyError:
-            pass # Can happen if some item is not in the kwargs dict
+            pass  # Can happen if some item is not in the kwargs dict
 
     return output
 
@@ -193,6 +256,7 @@ def stdout_to_stderr():
     """Temporarily redirects stdout to stderr. Returns no-arg function to turn it back on."""
     stdout = sys.stdout
     sys.stdout = sys.stderr
+
     def restore_stdout():
         sys.stdout = stdout
     return restore_stdout
@@ -222,7 +286,7 @@ def stderr(*output, **kwargs):
 def print_color(color, *output, **kwargs):
     """Print message to stderr in the given color"""
     print_args = list(output)
-    print_args.append(ENDC)
+    print_args.append(RESET)
     if "file" in kwargs:
         write_output(kwargs["file"], *output, **kwargs)
     else:
@@ -267,7 +331,8 @@ def elapsed(output, **kwargs):
     start = timestamp()
     info("Starting: ", output, **kwargs)
     yield
-    info("Completed: " + output + " {MAGENTA}(Elapsed Time: {elapsed}s){ENDC}", elapsed=timestamp()-start, **kwargs)
+    info("Completed: " + output +
+         " {MAGENTA}(Elapsed Time: {elapsed}s){RESET}", elapsed=timestamp() - start, **kwargs)
 
 
 def elapsed_decorator(output):
@@ -282,7 +347,17 @@ def elapsed_decorator(output):
 
 def print_section(color, *output, **kwargs):
     """Prints a section title header"""
-    output = ["\n\n", 60 * "#", "\n", "# "] + list(output) + ["\n", 60 * "#", "\n"]
+    count = len(' '.join(output)) + 6
+    output = (["\n\n", count * "#", "\n", "# "]
+              + list(output)
+              + ["\n", count * "#", "\n"])
+    print_color(color, *output, end="\n", **kwargs)
+
+
+def print_subsection(color, *output, **kwargs):
+    """Prints a section title header"""
+    count = len(' '.join(output))
+    output = ["\n\n"] + list(output) + ["\n", count * "=", "\n"]
     print_color(color, *output, end="\n", **kwargs)
 
 
@@ -303,7 +378,8 @@ def print_table(headers, *table_data, **kwargs):
     print(all_data)
     all_data.insert(0, headers)
 
-    widths = [max(len(d[idx]) for d in all_data) for idx, _ in enumerate(headers)]
+    widths = [max(len(d[idx]) for d in all_data)
+              for idx, _ in enumerate(headers)]
 
     output = []
     for row_idx, data in enumerate(all_data):
