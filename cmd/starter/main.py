@@ -67,15 +67,13 @@ def get_python_conf(args, ans):
 
 
 def get_conf(args):
-    proj_name = os.path.basename(OUTDIR).strip()
-    proj_name = proj_name or os.path.basename(os.path.dirname(OUTDIR))
 
     shell.print_section(shell.GREEN, 'Project Configuration Wizard')
 
     proj_name = shell.ask(
         'Project Name',
         color=shell.MAGENTA,
-        default=proj_name
+        default=FOLDER_NAME
     )
 
     description = shell.ask(
@@ -87,6 +85,7 @@ def get_conf(args):
     slug = slugify(proj_name)
 
     answers = dict(
+        FOLDER_NAME=FOLDER_NAME,
         PROJECT_NAME=proj_name,
         PROJECT_SLUG=slug,
         DESCRIPTION=description,
@@ -178,6 +177,7 @@ if __name__ == '__main__':
         level=LOGLEVEL)
 
     OUTDIR = os.path.abspath(os.path.expanduser(ARGS.outdir))
+    FOLDER_NAME = os.path.basename(OUTDIR)
     CUR_DIR = os.path.dirname(os.path.realpath(__file__))
     TEMPLATE_DIR = os.path.join(CUR_DIR, 'templates')
     LOADER = jinja2.FileSystemLoader(searchpath=['/', TEMPLATE_DIR])
