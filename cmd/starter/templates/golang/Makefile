@@ -8,7 +8,7 @@ VERSION := $(shell cat ./VERSION)
 GIT_HASH := $(shell git rev-parse HEAD)
 BUILD_TIMESTAMP := $(shell date +%Y-%m-%dT%H:%M:%S-%Z)
 HOSTNAME := $(shell hostname)
-LDFLAGS := -ldflags "-X {{IMPORT_PATH}}/cmd.Version=${VERSION} -X {{IMPORT_PATH}}/cmd.GitHash=${GIT_HASH} -X {{IMPORT_PATH}}/cmd.BuildTimestamp=${BUILD_TIMESTAMP} -X {{IMPORT_PATH}}/cmd.BuildHostname=${HOSTNAME}"
+LDFLAGS := -ldflags "-X {{IMPORT_PATH}}/src/cmd.Version=${VERSION} -X {{IMPORT_PATH}}/src/cmd.GitHash=${GIT_HASH} -X {{IMPORT_PATH}}/src/cmd.BuildTimestamp=${BUILD_TIMESTAMP} -X {{IMPORT_PATH}}/src/cmd.BuildHostname=${HOSTNAME}"
 VAGRANT_DIR := /go/src/{{IMPORT_PATH}}
 
 define rmfile
