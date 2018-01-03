@@ -56,4 +56,4 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 
 # Java stuff
-export JAVA_HOME='/usr/lib/jvm/default'
+export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
