@@ -132,8 +132,8 @@ alias pysrv='python -m SimpleHTTPServer'
 alias setPython2='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python2) $PY_PATH'
 alias setPython3='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python3) $PY_PATH'
 
-venwrap=`command -v virtualenvwrapper.sh`
-VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
-if [ "$venwrap" != "" ]; then
-    source $venwrap
-fi
+#venwrap=`command -v virtualenvwrapper.sh`
+#VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
+#if [ "$venwrap" != "" ]; then
+    #source $venwrap
+#fi

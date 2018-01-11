@@ -33,7 +33,8 @@ COMPLETION_WAITING_DOTS="true"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(aws history-substring-search archlinux bower celery dirhistory docker django env-vars fabric functions git git-extras git-flow hub jsontools lein mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant virtualenv virtualenvwrapper web-search wd)
+plugins=(aws history-substring-search dirhistory docker env-vars functions git git-extras jsontools mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant web-search wd)
+#virtualenv virtualenvwrapper 
 #encode64 vi-mode python pip django debian
 #golang heroku sprunge supervisor taskwarrior jira node npm redis-cli
 #urltools aliases functions env-vars)
@@ -60,11 +61,6 @@ then
 fi
 
 if [ "$TMUX" = "" ]; then exec tmux -2; fi
-#if $(ps -e | grep -q tmux); then
-#else
-#tmux -2
-#fi
-
 
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh

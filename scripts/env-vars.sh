@@ -43,7 +43,7 @@ export PATH=$PATH:$GOPATH/bin
 export PYTHONPATH='/usr/lib/python2.7/dist-packages/IPython/:$HOME/.pythonpath'
 export WORKON_HOME=~/venv
 export PROJECT_HOME=~/go/src/github.com/Unified/
-export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
+#export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
 
 # Ruby Stuff
 if which ruby >/dev/null && which gem >/dev/null; then
