@@ -3,9 +3,11 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"time"
 )
@@ -22,12 +24,47 @@ func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 	logger.Println("Server is starting...")
 
+	var proxy *httputil.ReverseProxy
+	proxyAddr := os.Getenv("PROXY")
+	if proxyAddr != "" {
+		logger.Println("Proxy for " + proxyAddr)
+		proxyURL, err := url.Parse(proxyAddr)
+		if err != nil {
+			panic("Invalid proxy url" + proxyAddr + ": " + err.Error())
+		}
+		proxy = httputil.NewSingleHostReverseProxy(proxyURL)
+	}
+
 	server := &http.Server{
 		Addr: os.Getenv("ADDR"),
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cnt++
 			params := r.URL.Query()
 			respData := params.Get("_server_response")
 			params.Del("_server_response")
+
+			// body, err := ioutil.ReadAll(r.Body)
+			// if err != nil {
+			// 	log.Println("Error reading body: " + err.Error())
+			// 	return
+			// }
+			// dump := fmt.Sprintf(
+			// 	":: REQUEST[%d]:\n\n[%s] %s\n\nParams:\n\t%#v\n\n"+
+			// 		"Headers:\n\t%#v\n\nBody:\n\t%s",
+			// 	cnt, r.Method, r.URL.Path, params, r.Header, body)
+
+			dump, err := httputil.DumpRequest(r, true)
+			if err != nil {
+				log.Println("Error reading body: " + err.Error())
+				return
+			}
+
+			if proxy != nil {
+				logger.Printf(string(dump))
+				proxy.ServeHTTP(w, r)
+				return
+			}
+
 			resp := Response{Status: 200}
 			if len(respData) > 0 {
 				err := json.Unmarshal([]byte(respData), &resp)
@@ -37,16 +74,7 @@ func main() {
 				}
 			}
 
-			body, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				log.Println("Error reading body: " + err.Error())
-				return
-			}
-
-			logger.Printf(
-				":: REQUEST[%d]:\n\n[%s] %s\n\nParams:\n\t%#v\n\n"+
-					"Headers:\n\t%#v\n\nBody:\n\t%s\n\nResponse:\n\t%#v",
-				cnt, r.Method, r.URL.Path, params, r.Header, body, resp)
+			logger.Printf(string(dump) + fmt.Sprintf("\n\nResponse:\n\t %#v", resp))
 
 			if len(resp.Headers) > 0 {
 				for k, v := range resp.Headers {
@@ -57,8 +85,6 @@ func main() {
 			if len(resp.Body) > 0 {
 				w.Write([]byte(resp.Body))
 			}
-
-			cnt++
 		}),
 		ErrorLog:     logger,
 		ReadTimeout:  2 * time.Second,
