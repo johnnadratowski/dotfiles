@@ -1,4 +1,5 @@
 #!/bin/bash
+set -xe
 echo "Building Devdocs"
 nativefier -m -n DevDocs -i ./devdocs.icns --inject ./custom.js http://devdocs.io ../build
 echo "Installing Devdocs"
