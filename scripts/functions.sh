@@ -2,12 +2,20 @@
 # This contains all of the custom functions
 # to be included in a new bash shell session
 
+function vl () {
+	if [ -e /Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh]; then
+		/Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh
+	else
+		less
+	fi
+}
+
 function bytesIn {
 	python -c "import pprint;pprint.pprint(list(zip(('Byte', 'KByte', 'MByte', 'GByte', 'TByte'), (1 << 10*i for i in range(5)))))"
 }
 
 function sizeOf {
-	python -c 'print("\n".join("%i Byte = %i Bit = largest number: %i" % (j, j*8, 256**j-1) for j in (1 << i for i in xrange(8))))'
+	python -c 'print("\n".join("%i Byte = %i Bit = largest number: %i" % (j, j*8, 256**j-1) for j in (1 << i for i in range(8))))'
 }
 
 function explain {
