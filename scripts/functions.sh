@@ -4,9 +4,9 @@
 
 function vl () {
 	if [ -e /Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh]; then
-		/Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh
+		/Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh "${@}"
 	else
-		less
+		less "${@}"
 	fi
 }
 
