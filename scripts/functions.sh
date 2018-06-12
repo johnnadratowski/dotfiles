@@ -231,6 +231,7 @@ function mcd()        # Make a directory and CD into it
             mkdir -p "$1" && cd "$1" 
         else 
             echo "mcd: will not create directory \`$1': directory exists"
+			cd "$1"
         fi 
     fi 
 }
