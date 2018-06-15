@@ -394,7 +394,7 @@ function timestamp_pretty () {
 # get a date string representing the given timestamp in milliseconds
 function timestamp_ms_pretty () {
     local ts="${1:-$(cat -)}"
-    time_timestampToDate "$(( ${ts} / 1000 ))"
+    timestamp_pretty "$(( ${ts} / 1000 ))"
 }
 
 jsonfmt() {
