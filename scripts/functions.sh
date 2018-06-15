@@ -385,6 +385,18 @@ timestamp() {
 	date +"%s"
 }
 
+# get a date string representing the given timestamp in seconds
+function timestamp_pretty () {
+    local ts="${1:-$(cat -)}"
+    date -d "@${ts}" 2> /dev/null || date -r "${ts}" 2> /dev/null
+}
+
+# get a date string representing the given timestamp in milliseconds
+function timestamp_ms_pretty () {
+    local ts="${1:-$(cat -)}"
+    time_timestampToDate "$(( ${ts} / 1000 ))"
+}
+
 jsonfmt() {
 	python -m json.tool "$1"
 }
