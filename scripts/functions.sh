@@ -1,24 +1,10 @@
 #!/bin/sh
-# This contains all of the custom functions
-# to be included in a new bash shell session
 
-function vl () {
-	if [ -e /Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh]; then
-		/Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh "${@}"
-	else
-		less "${@}"
-	fi
-}
+# =====================================
+# SHELL
+# =====================================
 
-function bytesIn {
-	python -c "import pprint;pprint.pprint(list(zip(('Byte', 'KByte', 'MByte', 'GByte', 'TByte'), (1 << 10*i for i in range(5)))))"
-}
-
-function sizeOf {
-	python -c 'print("\n".join("%i Byte = %i Bit = largest number: %i" % (j, j*8, 256**j-1) for j in (1 << i for i in range(8))))'
-}
-
-function explain {
+function shell_explain {
 	# base url with first command already injected
 	# $ explain tar
 	#   => http://explainshel.com/explain/tar?args=
@@ -36,25 +22,251 @@ function explain {
 	open $url
 }
 
-#-------------------------------------------------------------
-# File & string-related functions:
-#-------------------------------------------------------------
+# Determine if variables have been declared (not necessarily set)
+function shell_isDeclared () {
+    local var
+    for var in "${@}"; do
+        if ! declare -p ${1} &>/dev/null; then
+            return 1
+        fi
+    done
+}
+
+# Determine if variables have been set
+function shell_isSet () {
+    if ! shell_isDeclared "${@}"; then
+        return 1
+    fi
+
+    local var
+    for var in "${@}"; do
+        if [[ ! -v "${1}" ]]; then
+            return 1
+        fi
+    done
+}
+
+# Get a stack trace
+function shell_getStack () {
+    if [ ${#FUNCNAME[@]} -gt 2 ]; then
+        printf "%s" "STACK TRACE (Subshell Level: ${BASH_SUBSHELL}):\n\n"
+        for ((i=1;i<${#FUNCNAME[@]}-1;i++)); do
+           printf "%s" " $i: ${BASH_SOURCE[$i+1]}:${BASH_LINENO[$i]} ${FUNCNAME[$i]}(...)\n"
+        done
+    fi
+}
+
+# Colors
+if ! shell_isDeclared "shell_COLOR_END" ]]; then
+    readonly shell_COLOR_END="\033[0m"
+    readonly shell_COLOR_DEFAULT="\033[0;39m"
+    readonly shell_COLOR_DEFAULT_BG="\033[0;49m"
+    readonly shell_COLOR_DEFAULT_BOLD="\033[1;39m"
+    readonly shell_COLOR_LIGHT_GRAY="\033[0;37m"
+    readonly shell_COLOR_LIGHT_GRAY_BG="\033[0;47m"
+    readonly shell_COLOR_LIGHT_GRAY_BOLD="\033[1;37m"
+    readonly shell_COLOR_DARK_GRAY="\033[0;90m"
+    readonly shell_COLOR_DARK_GRAY_BG="\033[0;100m"
+    readonly shell_COLOR_DARK_GRAY_BOLD="\033[1;90m"
+    readonly shell_COLOR_BLACK="\033[0;30m"
+    readonly shell_COLOR_BLACK_BG="\033[0;40m"
+    readonly shell_COLOR_BLACK_BOLD="\033[1;30m"
+    readonly shell_COLOR_WHITE="\033[0;97m"
+    readonly shell_COLOR_WHITE_BG="\033[0;107m"
+    readonly shell_COLOR_WHITE_BOLD="\033[1;97m"
+    readonly shell_COLOR_RED="\033[0;31m"
+    readonly shell_COLOR_RED_BG="\033[0;41m"
+    readonly shell_COLOR_RED_BOLD="\033[1;31m"
+    readonly shell_COLOR_LIGHT_RED="\033[0;91m"
+    readonly shell_COLOR_LIGHT_RED_BG="\033[0;101m"
+    readonly shell_COLOR_LIGHT_RED_BOLD="\033[1;91m"
+    readonly shell_COLOR_GREEN="\033[0;32m"
+    readonly shell_COLOR_GREEN_BG="\033[0;42m"
+    readonly shell_COLOR_GREEN_BOLD="\033[1;32m"
+    readonly shell_COLOR_LIGHT_GREEN="\033[0;92m"
+    readonly shell_COLOR_LIGHT_GREEN_BG="\033[0;102m"
+    readonly shell_COLOR_LIGHT_GREEN_BOLD="\033[1;92m"
+    readonly shell_COLOR_YELLOW="\033[0;33m"
+    readonly shell_COLOR_YELLOW_BG="\033[0;43m"
+    readonly shell_COLOR_YELLOW_BOLD="\033[1;33m"
+    readonly shell_COLOR_LIGHT_YELLOW="\033[0;93m"
+    readonly shell_COLOR_LIGHT_YELLOW_BG="\033[0;103m"
+    readonly shell_COLOR_LIGHT_YELLOW_BOLD="\033[1;93m"
+    readonly shell_COLOR_BLUE="\033[0;34m"
+    readonly shell_COLOR_BLUE_BG="\033[0;44m"
+    readonly shell_COLOR_BLUE_BG_BG="\033[0;104m"
+    readonly shell_COLOR_BLUE_BOLD="\033[1;34m"
+    readonly shell_COLOR_LIGHT_BLUE="\033[0;94m"
+    readonly shell_COLOR_LIGHT_BLUE_BOLD="\033[1;94m"
+    readonly shell_COLOR_MAGENTA="\033[0;35m"
+    readonly shell_COLOR_MAGENTA_BG="\033[0;45m"
+    readonly shell_COLOR_MAGENTA_BOLD="\033[1;35m"
+    readonly shell_COLOR_LIGHT_MAGENTA="\033[0;95m"
+    readonly shell_COLOR_LIGHT_MAGENTA_BG="\033[0;105m"
+    readonly shell_COLOR_LIGHT_MAGENTA_BOLD="\033[1;95m"
+    readonly shell_COLOR_CYAN="\033[0;36m"
+    readonly shell_COLOR_CYAN_BG="\033[0;46m"
+    readonly shell_COLOR_CYAN_BOLD="\033[1;36m"
+    readonly shell_COLOR_LIGHT_CYAN="\033[0;96m"
+    readonly shell_COLOR_LIGHT_CYAN_BG="\033[0;106m"
+    readonly shell_COLOR_LIGHT_CYAN_BOLD="\033[1;96m"
+fi
+
+# =====================================
+# LOG
+# =====================================
+
+# Write a log message. Echos to stderr
+function log_log () {
+    echo -e "$@" 1>&2
+}
+
+# Write info log to stderr, with timestamp
+function log_info () {
+    log_log "[$(time_now)] $@"
+}
+# Write warn log to stderr, with timestamp
+function log_warn () {
+    log_info "${shell_COLOR_LIGHT_YELLOW}[WARN] ${@} ${shell_COLOR_END}"
+}
+
+# Write error log to stderr, with timestamp
+function log_error () {
+    log_info "${shell_COLOR_LIGHT_RED}[ERROR] ${@}${shell_COLOR_END}"
+}
+
+# ====================================
+# STRINGS
+# ====================================
+
+# Runs a bash variable substitution on a string
+function strings_varSubstitute () {
+    eval echo "$1"
+}
+
+# Remove ALL whitespace from a string
+function strings_removeWhitespace () {
+    local cur="${1:-$(cat -)}"
+    printf "%s" "${cur//[[:space:]]/}"
+}
+
+# Remove whitespace from the left side of a string
+function strings_trimLeft () {
+    local cur="${1:-$(cat -)}"
+    printf "%s" "${cur}" \
+        | sed -e "s/^[[:space:]]*//"
+}
+
+# Remove whitespace from the right side of a string
+function strings_trimRight () {
+    local cur="${1:-$(cat -)}"
+    printf "%s" "${cur}" \
+        | sed -e "s/[[:space:]]*$//"
+}
+
+# Remove whitespace from both sides of a string
+function strings_trim () {
+    local cur="${1:-$(cat -)}"
+
+    strings_trimLeft "${cur}" | strings_trimRight
+}
+
+# Split a string based on a delimiter
+function strings_split () {
+    IFS=${1} read -ra ${2} <<< "${3}"
+}
+
+# Multiply a string the given number of times
+function strings_multiply () {
+    local toMultiply="${1}"
+    local by="${2}"
+
+    local output=''
+    local i
+    for i in $(seq 1 ${by}); do
+        output+="${toMultiply}"
+    done
+
+    printf "%s" "${output}"
+}
+
+# ====================================
+# TIME
+# ====================================
+
+# Get unix timestamp, in seconds
+function time_timestamp () {
+    date +"%s"
+}
+
+# get a datetime string of the current time
+function time_now () {
+    date +%Y-%m-%d\ %H:%M:%S
+}
+
+# get a date string of the current date
+function time_today () {
+    date +%Y-%m-%d
+}
+
+# get a date string representing the given timestamp in seconds
+function time_timestampToDate () {
+    local ts="${1:-$(cat -)}"
+    date -d "@${ts}" 2> /dev/null || date -r "${ts}" 2> /dev/null
+}
+
+# get a date string representing the given timestamp in milliseconds
+function time_timestampMsToDate () {
+    local ts="${1:-$(cat -)}"
+    time_timestampToDate "$(( ${ts} / 1000 ))"
+}
+
+# This contains all of the custom functions
+# to be included in a new bash shell session
+
+function vl () {
+	if [ -e /Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh]; then
+		/Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh "${@}"
+	else
+		less "${@}"
+	fi
+}
+
+# ====================================
+# HELP
+# ====================================
+
+function help_bytesIn {
+	python -c "import pprint;pprint.pprint(list(zip(('Byte', 'KByte', 'MByte', 'GByte', 'TByte'), (1 << 10*i for i in range(5)))))"
+}
+
+function help_sizeOf {
+	python -c 'print("\n".join("%i Byte = %i Bit = largest number: %i" % (j, j*8, 256**j-1) for j in (1 << i for i in range(8))))'
+}
+
+# ====================================
+# FILES
+# ====================================
 
 # Find files bigger than 50 MB
-function findbig { 
+function fs_findbig { 
 	find $1 -type f -size +50000k -exec ls -lh {} \; | awk '{ print $9 ": " $5 }' 
 }
 
 # Find a file with a pattern in name:
-function ff() { find . -type f -iname '*'$*'*' -ls ; }
+function fs_ff() { find . -type f -iname '*'$*'*' -ls ; }
 
 # Find a file with pattern $1 in name and Execute $2 on it:
-function fe()
+function fs_fe()
 { find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
+
+function fs_largest() {
+	du -h | sort -hr | head -n $@
+}
 
 # Find a pattern in a set of files and highlight them:
 # (needs a recent version of egrep)
-function fstr()
+function fs_fstr()
 {
 	OPTIND=1
 	local case=""
@@ -77,14 +289,8 @@ function fstr()
 
 }
 
-function cuttail() # cut last n lines in file, 10 by default
-{
-	nlines=${2:-10}
-	sed -n -e :a -e "1,${nlines}!{P;N;D;};N;ba" $1
-}
-
-function lowercase()  # move filenames to lowercase
-{
+# move filenames to lowercase
+function fs_lowercase() {
 	for file ; do
 		filename=${file##*/}
 		case "$filename" in
@@ -102,9 +308,8 @@ function lowercase()  # move filenames to lowercase
 	done
 }
 
-
-function swap()  # Swap 2 filenames around, if they exist
-{                #(from Uzi's bashrc).
+# Swap 2 filenames around, if they exist
+function fs_swap() {
 	local TMPFILE=tmp.$$ 
 
 	[ $# -ne 2 ] && echo "swap: 2 arguments needed" && return 1
@@ -116,9 +321,8 @@ function swap()  # Swap 2 filenames around, if they exist
 	mv $TMPFILE "$2"
 }
 
-
-tarview() 
-{
+# Display contents of tar file
+function fs_tarview() {
 	echo "Displaying contents of file(s): $@ "
 	for file in $@
 	do
@@ -142,8 +346,8 @@ tarview()
 	done
 }
 
-function extract()      # Handy Extract Program.
-{
+# Extract Anything
+function fs_extract() {
 	local file="${1}"
 	if [[ ! -f ${file} ]]; then
 		echo "'${file}' is not a valid file"
@@ -181,17 +385,15 @@ function extract()      # Handy Extract Program.
 	esac
 }
 
-#-------------------------------------------------------------
-# Process/system related functions:
-#-------------------------------------------------------------
+# ====================================
+# PROCESS
+# ====================================
 
+function proc_my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
+function proc_pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
 
-function my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
-function pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
-
-
-function killps()                 # Kill by process name.
-{
+# Kill by process name.
+function proc_killps() {
 	local pid pname sig="-TERM"   # Default signal.
 	if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
 		echo "Usage: killps [-SIGNAL] pattern"
@@ -206,17 +408,15 @@ function killps()                 # Kill by process name.
 	done
 }
 
-#-------------------------------------------------------------
-# Misc utilities:
-#-------------------------------------------------------------
+# ====================================
+# PROCESS
+# ====================================
 
-function my_ip_mac()
-{
+function my_ip_mac() {
 	ipconfig getifaddr en0
 }
-
-function repeat()       # Repeat n times command.
-{
+# Repeat n times command.
+function repeat() {
 	local i max
 	max=$1; shift;
 	for ((i=1; i <= max ; i++)); do  # --> C-like syntax
@@ -224,9 +424,8 @@ function repeat()       # Repeat n times command.
 	done
 }
 
-
-function ask()          # See 'killps' for example of use.
-{
+# Prompt user for answer
+function ask() {
 	echo -n "$@" '[y/n] ' ; read ans
 	case "$ans" in
 		y*|Y*) return 0 ;;
@@ -234,15 +433,8 @@ function ask()          # See 'killps' for example of use.
 	esac
 }
 
-function corename()   # Get name of app that created a corefile.
-{ 
-	for file ; do
-		echo -n $file : ; gdb --core=$file --batch | head -1
-	done 
-}
-
-function mcd()        # Make a directory and CD into it
-{ 
+# Make a directory and CD into it
+function mcd() { 
 	if [ -n "$1" ] ; then 
 		if [ ! -d "$1" ] ; then 
 			mkdir -p "$1" && cd "$1" 
@@ -253,35 +445,19 @@ function mcd()        # Make a directory and CD into it
 	fi 
 }
 
-function randpass()
-{
+function randpass() {
 	echo `</dev/urandom tr -dc A-Za-z0-9 | head -c$1`
 }
 
-function hs()
-{
+function hs() {
 	history | grep -i "$@"
 }
 
-function pgr()
-{
+function pgr() {
 	px | grep -i "$@"
 }
 
-function largest-files()
-{
-	du -h | sort -hr| head -n $@
-}
-
-function updatedns()
-{
-	echo "Updating DNS"
-	./update-freedns-unified.sh
-	echo "DNS Updated"
-}
-
-function srv()
-{
+function srv() {
 	sudo /etc/init.d/$1 $2
 }
 
@@ -372,36 +548,11 @@ function swap_py3()
 	sudo ln -s /usr/bin/python3 /usr/bin/python
 }
 
-# Define a timestamp function
-timestamp_ms() {
-if which 'python' &> /dev/null; then
-	python -c 'import time; print(int(time.time()*1000))'
-else
-	date +"%s000"
-fi
-}
-
-timestamp() {
-	date +"%s"
-}
-
-# get a date string representing the given timestamp in seconds
-function timestamp_pretty () {
-    local ts="${1:-$(cat -)}"
-    date -d "@${ts}" 2> /dev/null || date -r "${ts}" 2> /dev/null
-}
-
-# get a date string representing the given timestamp in milliseconds
-function timestamp_ms_pretty () {
-    local ts="${1:-$(cat -)}"
-    timestamp_pretty "$(( ${ts} / 1000 ))"
-}
-
-jsonfmt() {
+function jsonfmt() {
 	python -m json.tool "$1"
 }
 
-cloneHTMLDocs() {
+function cloneHTMLDocs() {
 	if [[ $1 == "" ]]; then
 		echo "No website specified"
 		return
@@ -410,7 +561,7 @@ cloneHTMLDocs() {
 	wget --no-parent --recursive --page-requisites --html-extension --convert-links $1
 }
 
-vimdo() {
+function vimdo() {
 	local CMD=$1
 	shift
 
@@ -418,4 +569,48 @@ vimdo() {
 	do
 		vim -N -u NONE -n -c "set nomore" -c ":execute \"norm! $CMD\"" -cwq! $f
 	done
+}
+
+# Swap out AWS Access Keys and delete the old ones
+function swap_aws_access_keys () {
+	local backupAwsKey=$(mktemp)
+	log_info "Making backup of Aws Credentials"
+	cp -f ~/.aws/credentials $backupAwsKey
+	log_info "Made backup of aws keys: $backupAwsKey"
+	local oldAccessKey
+	oldAccessKey=$(cat ~/.aws/credentials | grep aws_access_key_id | cut -d' ' -f3) || { log_error "failed"; return 1}
+
+	log_info "Old Access Key: $oldAccessKey"
+	local filename="$(mktemp)"
+	log_info "Getting new Access Key. Temp New Cred File: $filename"
+	aws iam create-access-key > $filename || { log_error "failed"; return 1}
+
+	log_info "New Creds:$(cat $filename)"
+	local accessKeyID
+	accessKeyID=$(cat $filename | jq -r .AccessKey.AccessKeyId) || { log_error "failed"; return 1}
+
+	log_info "New Access Key ID: $accessKeyID"
+	local accessKeySecret
+	accessKeySecret=$(cat $filename | jq -r .AccessKey.SecretAccessKey) || { log_error "failed"; return 1}
+
+	log_info "New Access Key Secret: $accessKeySecret"
+	local tmpCreds=$(mktemp)
+	log_info "Replacing credentials file. Old file:\n\n$(cat ~/.aws/credentials)\n\n"
+	sed "s/^aws_access_key_id = .*$/aws_access_key_id = $accessKeyID/" ~/.aws/credentials > $tmpCreds || { log_error "failed"; return 1}
+
+	mv -f $tmpCreds ~/.aws/credentials || { log_error "failed"; return 1}
+
+	sed "s|^aws_secret_access_key = .*$|aws_secret_access_key = $accessKeySecret|g" ~/.aws/credentials > $tmpCreds || { log_error "failed"; return 1}
+
+	mv -f $tmpCreds ~/.aws/credentials || { log_error "failed"; return 1}
+
+	log_info "New credentials file:\n\n$(cat ~/.aws/credentials)\n\n"
+
+	log_info "Process completed successfully. Now run:\n\naws iam delete-access-key --access-key-id $oldAccessKey || { echo "failed to delete key" }"
+	# log_info "Checking credentials worked"
+
+	# aws sts get-caller-identity || { log_error "failed"; return 1}
+
+	# log_info "Deleting old access key"
+	# aws iam delete-access-key --access-key-id $oldAccessKey || { log_error "failed"; return 1}
 }
