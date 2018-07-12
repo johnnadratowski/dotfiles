@@ -4,6 +4,8 @@ import sys
 from distutils.spawn import find_executable
 import shutil
 from subprocess import call
+import platform
+import shutil
 
 from lib.python import shell
 
@@ -121,12 +123,12 @@ def main():
     run_files(link_file, **EXTRA_FILES)
 
     if 'install' in sys.argv:
-        if 'apt' in sys.argv:
-            call(['sudo', os.path.abspath('./apt_install.sh')])
-        elif 'brew' in sys.argv:
+        if platform.system() == 'Darwin':
             call(['sudo', os.path.abspath('./brew_install.sh')])
-        else:
+        elif shutil.which('pacman'):
             call(['sudo', os.path.abspath('./pac_install.sh')])
+        else:
+            call(['sudo', os.path.abspath('./apt_install.sh')])
 
         call(['sudo', os.path.abspath('./install.sh')])
 

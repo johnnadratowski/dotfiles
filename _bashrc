@@ -114,3 +114,4 @@ export NVM_DIR="/Users/johnnadratowski/.nvm"
 . ~/.shellrc
 
 export PATH=$PATH:/usr/local/bin 
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion

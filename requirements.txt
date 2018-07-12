@@ -1,8 +1,9 @@
-google-api-python-client
 Gooey
+google-api-python-client
 httplib2
 ipdb
 ipython
+pipenv
 pylint
 rope
 sqlalchemy
