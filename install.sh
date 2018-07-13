@@ -39,5 +39,4 @@ log "Install Cheat Sheet"
 curl https://cht.sh/:cht.sh > ~/bin/cht.sh
 chmod +x ~/bin/cht.sh
 
-rm -f ~/bin/ch
-ln -s ~/bin/cht.sh ~/bin/ch
+curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
