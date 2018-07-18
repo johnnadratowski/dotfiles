@@ -24,6 +24,7 @@ log "Install favorite python packages"
 pip3 install -r ./requirements.txt
 
 log "Install NVM"
+mkdir -p ~/.nvm
 curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
 
 log "Install native node apps"
