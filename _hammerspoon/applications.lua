@@ -42,6 +42,11 @@ function gmail()
     hs.eventtap.keyStroke({"cmd"}, "1")
 end
 
+function gcal()
+    ensureOpen(constants.defaultBrowser, 3, 100000)
+    hs.eventtap.keyStroke({"cmd"}, "2")
+end
+
 local curEditor = -1
 function editor()
     local front = hs.application.frontmostApplication()
@@ -114,6 +119,8 @@ hs.hotkey.bind(
 )
 
 hs.hotkey.bind(constants.hyper, "4", gmail)
+
+hs.hotkey.bind(constants.hyper, "5", gcal)
 
 hs.hotkey.bind(
     constants.hyper,
