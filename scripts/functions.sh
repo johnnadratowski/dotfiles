@@ -225,7 +225,7 @@ function time_timestampMsToDate () {
 # to be included in a new bash shell session
 
 function vl () {
-	if [ -e /Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh]; then
+	if [ -e /Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh ]; then
 		/Applications/MacVim.app/Contents/Resources/vim/runtime/macros/less.sh "${@}"
 	else
 		less "${@}"
@@ -248,45 +248,39 @@ function help_sizeOf {
 # FILES
 # ====================================
 
+# Converts a byte count to a human readable format in IEC binary notation (base-1024),
+# rounded to two decimal places for anything larger than a byte.
+# switchable to padded format and base-1000 if desired.
+# https://unix.stackexchange.com/questions/44040/a-standard-tool-to-convert-a-byte-count-into-human-kib-mib-etc-like-du-ls1
+function fs_humanBytes () {
+    local L_BYTES="${1:-0}"
+    local L_PAD="${2:-no}"
+    local L_BASE="${3:-1024}"
+    BYTESTOHUMAN_RESULT=$(awk -v bytes="${L_BYTES}" -v pad="${L_PAD}" -v base="${L_BASE}" 'function human(x, pad, base) {
+         if(base!=1024)base=1000
+         basesuf=(base==1024)?"iB":"B"
+
+         s="BKMGTEPYZ"
+         while (x>=base && length(s)>1)
+               {x/=base; s=substr(s,2)}
+         s=substr(s,1,1)
+
+         xf=(pad=="yes") ? ((s=="B")?"%5d   ":"%8.2f") : ((s=="B")?"%d":"%.2f")
+         s=(s!="B") ? (s basesuf) : ((pad=="no") ? s : ((basesuf=="iB")?(s "  "):(s " ")))
+
+         return sprintf( (xf " %s\n"), x, s)
+      }
+      BEGIN{print human(bytes, pad, base)}')
+    return $?
+}
+
 # Find files bigger than 50 MB
-function fs_findbig { 
+function fs_findBig {
 	find $1 -type f -size +50000k -exec ls -lh {} \; | awk '{ print $9 ": " $5 }' 
 }
 
-# Find a file with a pattern in name:
-function fs_ff() { find . -type f -iname '*'$*'*' -ls ; }
-
-# Find a file with pattern $1 in name and Execute $2 on it:
-function fs_fe()
-{ find . -type f -iname '*'${1:-}'*' -exec ${2:-file} {} \;  ; }
-
 function fs_largest() {
 	du -h | sort -hr | head -n $@
-}
-
-# Find a pattern in a set of files and highlight them:
-# (needs a recent version of egrep)
-function fs_fstr()
-{
-	OPTIND=1
-	local case=""
-	local usage="fstr: find string in files.
-	Usage: fstr [-i] \"pattern\" [\"filename pattern\"] "
-	while getopts :it opt
-	do
-		case "$opt" in
-			i) case="-i " ;;
-			*) echo "$usage"; return;;
-		esac
-	done
-	shift $(( $OPTIND - 1 ))
-	if [ "$#" -lt 1 ]; then
-		echo "$usage"
-		return;
-	fi
-	find . -type f -name "${2:-*}" -print0 | \
-		xargs -0 egrep --color=always -sn ${case} "$1" 2>&- | more 
-
 }
 
 # move filenames to lowercase
@@ -385,28 +379,6 @@ function fs_extract() {
 	esac
 }
 
-# ====================================
-# PROCESS
-# ====================================
-
-function proc_my_ps() { ps $@ -u $USER -o pid,%cpu,%mem,bsdtime,command ; }
-function proc_pp() { my_ps f | awk '!/awk/ && $0~var' var=${1:-".*"} ; }
-
-# Kill by process name.
-function proc_killps() {
-	local pid pname sig="-TERM"   # Default signal.
-	if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-		echo "Usage: killps [-SIGNAL] pattern"
-		return;
-	fi
-	if [ $# = 2 ]; then sig=$1 ; fi
-	for pid in $(my_ps| awk '!/awk/ && $0~pat { print $1 }' pat=${!#} ) ; do
-		pname=$(my_ps | awk '$1~var { print $5 }' var=$pid )
-		if ask "Kill process $pid <$pname> with signal $sig?"
-		then kill $sig $pid
-		fi
-	done
-}
 
 # ====================================
 # PROCESS
@@ -415,6 +387,7 @@ function proc_killps() {
 function my_ip_mac() {
 	ipconfig getifaddr en0
 }
+
 # Repeat n times command.
 function repeat() {
 	local i max
@@ -455,10 +428,6 @@ function hs() {
 
 function pgr() {
 	px | grep -i "$@"
-}
-
-function srv() {
-	sudo /etc/init.d/$1 $2
 }
 
 #-------------------------------------------------------------
