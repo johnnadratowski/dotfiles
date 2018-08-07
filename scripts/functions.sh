@@ -201,7 +201,7 @@ function time_timestamp () {
 
 # get a datetime string of the current time
 function time_now () {
-    date +%Y-%m-%d\ %H:%M:%S
+    date '+%Y-%m-%d %H:%M:%S'
 }
 
 # get a date string of the current date
@@ -466,7 +466,7 @@ function git-all-files()
 
 function git-unique-files()
 {
-	git rev-list --objects --all | sort -k 2 | cut -f 2 -d\  | uniq
+	git rev-list --objects --all | sort -k 2 | cut -f 2 -d' '  | uniq
 }
 
 function git-big-files()
@@ -547,35 +547,59 @@ function swap_aws_access_keys () {
 	cp -f ~/.aws/credentials $backupAwsKey
 	log_info "Made backup of aws keys: $backupAwsKey"
 	local oldAccessKey
-	oldAccessKey=$(cat ~/.aws/credentials | grep aws_access_key_id | cut -d' ' -f3) || { log_error "failed"; return 1}
+	oldAccessKey=$(cat ~/.aws/credentials | grep aws_access_key_id | cut -d' ' -f3) || { 
+		log_error "failed"
+		return 1 
+	}
 
 	log_info "Old Access Key: $oldAccessKey"
 	local filename="$(mktemp)"
 	log_info "Getting new Access Key. Temp New Cred File: $filename"
-	aws iam create-access-key > $filename || { log_error "failed"; return 1}
+	aws iam create-access-key > $filename || { 
+		log_error "failed"
+		return 1
+	}
 
 	log_info "New Creds:$(cat $filename)"
 	local accessKeyID
-	accessKeyID=$(cat $filename | jq -r .AccessKey.AccessKeyId) || { log_error "failed"; return 1}
+	accessKeyID=$(cat $filename | jq -r .AccessKey.AccessKeyId) || { 
+		log_error "failed"
+		return 1
+	}
 
 	log_info "New Access Key ID: $accessKeyID"
 	local accessKeySecret
-	accessKeySecret=$(cat $filename | jq -r .AccessKey.SecretAccessKey) || { log_error "failed"; return 1}
+	accessKeySecret=$(cat $filename | jq -r .AccessKey.SecretAccessKey) || { 
+		log_error "failed"
+		return 1
+	}
 
 	log_info "New Access Key Secret: $accessKeySecret"
 	local tmpCreds=$(mktemp)
 	log_info "Replacing credentials file. Old file:\n\n$(cat ~/.aws/credentials)\n\n"
-	sed "s/^aws_access_key_id = .*$/aws_access_key_id = $accessKeyID/" ~/.aws/credentials > $tmpCreds || { log_error "failed"; return 1}
+	sed "s/^aws_access_key_id = .*$/aws_access_key_id = $accessKeyID/" ~/.aws/credentials > $tmpCreds || { 
+		log_error "failed"
+		return 1
+	}
 
-	mv -f $tmpCreds ~/.aws/credentials || { log_error "failed"; return 1}
+	mv -f $tmpCreds ~/.aws/credentials || { 
+		log_error "failed"
+		return 1
+	}
 
-	sed "s|^aws_secret_access_key = .*$|aws_secret_access_key = $accessKeySecret|g" ~/.aws/credentials > $tmpCreds || { log_error "failed"; return 1}
+	sed "s|^aws_secret_access_key = .*$|aws_secret_access_key = $accessKeySecret|g" ~/.aws/credentials > $tmpCreds || { 
+		log_error "failed"
+		return 1
+	}
 
-	mv -f $tmpCreds ~/.aws/credentials || { log_error "failed"; return 1}
+	mv -f $tmpCreds ~/.aws/credentials || { 
+		log_error "failed"
+		return 1
+	}
 
 	log_info "New credentials file:\n\n$(cat ~/.aws/credentials)\n\n"
 
-	log_info "Process completed successfully. Now run:\n\naws iam delete-access-key --access-key-id $oldAccessKey || { echo "failed to delete key" }"
+	log_info "Process completed successfully. Now run:\n\naws iam delete-access-key --access-key-id $oldAccessKey || { echo \"failed to delete key\" }"
 	# log_info "Checking credentials worked"
 
 	# aws sts get-caller-identity || { log_error "failed"; return 1}
