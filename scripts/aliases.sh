@@ -92,6 +92,7 @@ alias help='man'
 
 # jobs aliases
 alias j='jobs -l'
+alias watch='watch -c '
 
 # directory movement
 alias cd~='cd ~'

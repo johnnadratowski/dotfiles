@@ -4,6 +4,28 @@
 # SHELL
 # =====================================
 
+botch () {
+    while true; do
+        local tmp=$(mktemp)
+        (
+            ${@} | while read oLine; do
+                printf "%s\n" "${oLine}"
+            done
+        ) &> $tmp
+        echo -en '\033[H'
+        printf "%s" "$(date)"
+        echo -e '\033[K'
+        echo -e '\033[K'
+        while read -r line; do
+            printf "%s" "$line"
+            echo -e '\033[K' 
+        done < $tmp
+        echo -e '\033[J'
+        sleep ${WAIT:-2}
+    done
+}
+alias botch='botch '
+
 function shell_explain {
 	# base url with first command already injected
 	# $ explain tar
