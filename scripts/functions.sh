@@ -12,7 +12,9 @@ botch () {
                 printf "%s\n" "${oLine}"
             done
         ) &> $tmp
-        echo -en '\033[H'
+		if [[ ${CLEAR:-1} == "1" ]]; then
+			echo -en '\033[H'
+		fi
         printf "%s" "$(date)"
         echo -e '\033[K'
         echo -e '\033[K'
@@ -20,7 +22,11 @@ botch () {
             printf "%s" "$line"
             echo -e '\033[K' 
         done < $tmp
-        echo -e '\033[J'
+		if [[ ${CLEAR:-1} == "1" ]]; then
+			echo -e '\033[J'
+		else
+			echo "#================================================================================#"
+		fi
         sleep ${WAIT:-2}
     done
 }
