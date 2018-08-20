@@ -15,7 +15,9 @@ botch () {
 		if [[ ${CLEAR:-1} == "1" ]]; then
 			echo -en '\033[H'
 		fi
-        printf "%s" "$(date) - ${@}"
+        printf "${shell_COLOR_LIGHT_BLUE}%s " "${@}"
+        echo -e '\033[K'
+        printf "${shell_COLOR_END}%s" "$(date)"
         echo -e '\033[K'
         echo -e '\033[K'
         while read -r line; do
