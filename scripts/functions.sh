@@ -15,7 +15,7 @@ botch () {
 		if [[ ${CLEAR:-1} == "1" ]]; then
 			echo -en '\033[H'
 		fi
-        printf "%s" "$(date)"
+        printf "%s" "$(date) - ${@}"
         echo -e '\033[K'
         echo -e '\033[K'
         while read -r line; do
@@ -30,6 +30,7 @@ botch () {
 			echo
 		fi
         sleep ${WAIT:-2}
+		rm -f "${tmp}"
     done
 }
 alias botch='botch '
