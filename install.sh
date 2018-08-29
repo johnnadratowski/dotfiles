@@ -41,3 +41,6 @@ curl https://cht.sh/:cht.sh > ~/bin/cht.sh
 chmod +x ~/bin/cht.sh
 
 curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
+
+log "link table script to bin"
+ln -s ~/git/dotfiles/lib/bash/table.sh ~/bin/table

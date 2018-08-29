@@ -5,7 +5,7 @@
 # ====================================
 
 readonly PROGNAME="$(basename ${BASH_SOURCE[0]})"
-readonly PROGDIR="$(dirname ${BASH_SOURCE[0]})"
+readonly PROGDIR="$(dirname $(readlink ${BASH_SOURCE[0]}))"
 readonly PROGARGS=("$@")
 readonly PROGUSAGE=$(cat <<- EOF
 
@@ -30,6 +30,7 @@ readonly PROGUSAGE=$(cat <<- EOF
     ENV:
        HORIZ_PADDING=0                spaces to add to front+back of column string
        VERT_PADDING=0                 spaces to add to top+bottom of column string
+       HEADER_COLOR=light_blue        The color of the header
        HORIZ_CHAR                     Horizontal table border char to print
        VERT_CHAR                      Vertical table border char to print
        JOIN_CHAR                      Table border char with 4 corners
@@ -40,6 +41,7 @@ readonly PROGUSAGE=$(cat <<- EOF
        TOP_LEFT_JOIN_CHAR             Table border char on top left corner
        TOP_RIGHT_JOIN_CHAR            Table border char on top right corner
        BOTTOM_LEFT_JOIN_CHAR          Table border char on bottom left corner
+       BOTTOM_RIGHT_JOIN_CHAR         Table border char on bottom right corner
        BOTTOM_RIGHT_JOIN_CHAR         Table border char on bottom right corner
 
 
@@ -58,9 +60,9 @@ EOF
 # IMPORTS
 # ====================================
 
-. ${PROGDIR}/../lib/log.sh
-. ${PROGDIR}/../lib/shell.sh
-. ${PROGDIR}/../lib/strings.sh
+. ${PROGDIR}/log.sh
+. ${PROGDIR}/shell.sh
+. ${PROGDIR}/strings.sh
 
 
 # ====================================
@@ -71,6 +73,7 @@ shell_processParams COLUMN_SPECS
 
 readonly HORIZ_PADDING="${HORIZ_PADDING:-0}"
 readonly VERT_PADDING="${VERT_PADDING:-0}"
+readonly HEADER_COLOR="${HEADER_COLOR:-${shell_COLOR_LIGHT_BLUE}}"
 
 readonly HORIZ_CHAR="${HORIZ_CHAR:-─}"
 readonly VERT_CHAR="${VERT_CHAR:-│}"
@@ -341,8 +344,10 @@ function main () {
             if shell_hasFlag "n" "no-header"; then
                 writeHorizDivider 'top'
             else
+				printf "${HEADER_COLOR}"
                 writeHeader
                 writeHorizDivider
+				printf "${shell_COLOR_END}"
             fi
             headerWritten=true
         else

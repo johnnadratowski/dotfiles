@@ -4,8 +4,8 @@
 # IMPORTS
 # ====================================
 
-. $(dirname ${BASH_SOURCE[0]})/../lib/shell.sh
-. $(dirname ${BASH_SOURCE[0]})/../lib/log.sh
+. $(dirname ${BASH_SOURCE[0]})/shell.sh
+. $(dirname ${BASH_SOURCE[0]})/log.sh
 
 # ====================================
 # CONFIGURATION

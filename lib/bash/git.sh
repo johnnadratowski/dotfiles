@@ -4,7 +4,7 @@
 # IMPORTS
 # ====================================
 
-. $(dirname ${BASH_SOURCE[0]})/../lib/log.sh
+. $(dirname ${BASH_SOURCE[0]})/log.sh
 
 # ====================================
 # FUNCTIONS
