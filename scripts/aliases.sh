@@ -123,6 +123,28 @@ alias px='ps aux'
 alias sur='sudo su -'
 alias rbProf='source ~/.zshrc'
 
+if which diff-so-fancy &> /dev/null; then
+  alias diff='diff-so-fancy '
+fi
+
+if which top &> /dev/null; then
+  alias top='sudo htop '
+fi
+
+if which prettyping &> /dev/null; then
+  alias ping='prettyping '
+fi
+
+if which fzf &> /dev/null; then
+  alias preview="fzf --preview 'bat --color \"always\" {}'"
+  # add support for ctrl+o to open selected file in VS Code
+  export FZF_DEFAULT_OPTS="--bind='ctrl-o:execute(code {})+abort'"
+fi
+
+if which tldr &> /dev/null; then
+  alias help='tldr '
+fi
+
 #MAC stuff
 alias setJdk6='export JAVA_HOME=$(/usr/libexec/java_home -v 1.6)'
 alias setJdk7='export JAVA_HOME=$(/usr/libexec/java_home -v 1.7)'
