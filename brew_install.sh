@@ -24,6 +24,7 @@ brew install          \
   mercurial           \
   ncdu                \
   node                \
+  noti                \
   npm                 \
   prettyping          \
   python3             \
