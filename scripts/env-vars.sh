@@ -47,7 +47,7 @@ export PROJECT_HOME=~/go/src/github.com/Unified/
 
 # Ruby Stuff
 if which ruby >/dev/null && which gem >/dev/null; then
-    export PATH="$(ruby -rubygems -e 'puts Gem.user_dir')/bin:$PATH"
+    export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
 fi
 
 # Node.js Stuff
