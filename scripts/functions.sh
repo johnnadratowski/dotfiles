@@ -289,7 +289,7 @@ function fs_humanBytes () {
     local L_BYTES="${1:-0}"
     local L_PAD="${2:-no}"
     local L_BASE="${3:-1024}"
-    BYTESTOHUMAN_RESULT=$(awk -v bytes="${L_BYTES}" -v pad="${L_PAD}" -v base="${L_BASE}" 'function human(x, pad, base) {
+    echo $(awk -v bytes="${L_BYTES}" -v pad="${L_PAD}" -v base="${L_BASE}" 'function human(x, pad, base) {
          if(base!=1024)base=1000
          basesuf=(base==1024)?"iB":"B"
 
@@ -304,6 +304,7 @@ function fs_humanBytes () {
          return sprintf( (xf " %s\n"), x, s)
       }
       BEGIN{print human(bytes, pad, base)}')
+	
     return $?
 }
 
