@@ -2,11 +2,12 @@ constants = require("constants")
 
 -- Show colorpicker
 hs.hotkey.bind(
-  constants.hyper,
-  "C",
-  function()
-    hs.osascript.applescript(
-      [[
+    constants.hyper,
+    "C",
+    "ColorPicker",
+    function()
+        hs.osascript.applescript(
+            [[
 tell application "System Events"
     set frontApp to name of first application process whose frontmost is true
 end tell
@@ -82,6 +83,6 @@ on normalize(the_number, the_length)
 end normalize
 
 ]]
-    )
-  end
+        )
+    end
 )

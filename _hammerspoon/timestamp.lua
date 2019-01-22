@@ -15,4 +15,4 @@ function timestampToDate()
     end
     hs.alert.show(os.date("%Y-%m-%d %H:%M:%S", ts))
 end
-hs.hotkey.bind(constants.hyper, "t", timestampToDate)
+hs.hotkey.bind(constants.hyper, "t", "Timestamp", timestampToDate)

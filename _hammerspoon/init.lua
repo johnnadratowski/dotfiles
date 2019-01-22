@@ -7,6 +7,7 @@ require("caffiene")
 require("colorpicker")
 local dbug = require("dbug")
 require("mic")
+require("mouse")
 require("ping")
 require("timestamp")
 require("window")
@@ -54,20 +55,24 @@ spoon.Seal.plugins.useractions.actions = {
 hs.hotkey.bind(
     constants.hyper,
     "V",
+    "Force Paste",
     function()
         hs.eventtap.keyStrokes(hs.pasteboard.getContents())
     end
 )
 
 ---- Reload hammerspoon with HYPER+R
-hs.hotkey.bind(constants.hyper, "R", hs.reload)
+hs.hotkey.bind(constants.hyper, "R", "Reload", hs.reload)
 
 ---- Hammerspoon Console
-hs.hotkey.bind(constants.hyper, "`", hs.toggleConsole)
+hs.hotkey.bind(constants.hyper, "`", "Console", hs.toggleConsole)
 hs.preferencesDarkMode(true)
 hs.console.darkMode(true)
 hs.console.outputBackgroundColor {white = 0}
 hs.console.consoleCommandColor {white = 1}
 hs.console.alpha(1)
 
+---- Show hotkeys
+hs.hotkey.alertDuration = 0
+hs.hotkey.showHotkeys(constants.hyper, "K")
 hs.alert.show("Hammerspoon Reloaded")

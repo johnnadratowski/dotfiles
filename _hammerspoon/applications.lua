@@ -88,11 +88,12 @@ end
 
 hs.hints.showTitleThresh = 4
 hs.hints.style = "vimperator"
-hs.hotkey.bind(constants.hyper, "Space", hs.hints.windowHints)
+hs.hotkey.bind(constants.hyper, "Space", "Window Hints", hs.hints.windowHints)
 
 hs.hotkey.bind(
     constants.hyper,
     "0",
+    "Terminal",
     function()
         hs.application.launchOrFocus("Terminal")
     end
@@ -101,6 +102,7 @@ hs.hotkey.bind(
 hs.hotkey.bind(
     constants.hyper,
     "1",
+    "VSCode",
     function()
         hs.application.launchOrFocus("/Applications/Visual Studio Code.app")
     end
@@ -109,6 +111,7 @@ hs.hotkey.bind(
 hs.hotkey.bind(
     constants.hyper,
     "2",
+    "Browser",
     function()
         hs.application.launchOrFocus(constants.defaultBrowser)
     end
@@ -117,24 +120,25 @@ hs.hotkey.bind(
 hs.hotkey.bind(
     constants.hyper,
     "3",
+    "Slack",
     function()
         hs.application.launchOrFocus("Slack")
     end
 )
 
-hs.hotkey.bind(constants.hyper, "4", gmail)
+hs.hotkey.bind(constants.hyper, "4", "GMail", gmail)
 
-hs.hotkey.bind(constants.hyper, "5", gcal)
+hs.hotkey.bind(constants.hyper, "5", "GCal", gcal)
 
 hs.hotkey.bind(
     constants.hyper,
     "D",
+    "DevDocs",
     function()
         hs.application.launchOrFocus("DevDocs")
     end
 )
 
--- hs.hotkey.bind(constants.hyper, 'Space', editor)
-hs.hotkey.bind(constants.hyper, "G", google)
+hs.hotkey.bind(constants.hyper, "G", "Google", google)
 
 return exports
