@@ -4,7 +4,7 @@
 
 # Allow for more file descriptors to be open by the shell.
 # Helpful with node building
-ulimit -n 10000
+# ulimit -n 10000
 
 if [ -d $HOME/bin ]
 then
@@ -46,9 +46,9 @@ export PROJECT_HOME=~/go/src/github.com/Unified/
 export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
 
 # Ruby Stuff
-if which ruby >/dev/null && which gem >/dev/null; then
-    export PATH="$(ruby -rubygems -e 'puts Gem.user_dir')/bin:$PATH"
-fi
+#if which ruby >/dev/null && which gem >/dev/null; then
+    #export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
+#fi
 
 # Node.js Stuff
 export NODE_PATH='/usr/lib/node_modules/'
