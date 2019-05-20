@@ -2,7 +2,7 @@
 " Settings {
 
     " *HOPEFULLY* temporary fix for mac reattach clipboard issue
-    "set clipboard=unnamed
+    set clipboard=unnamed
 
     " Spell Check
     set nospell
