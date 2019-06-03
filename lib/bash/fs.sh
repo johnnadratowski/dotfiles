@@ -145,7 +145,7 @@ function __fs_cleanupOnExit () {
     log_section "${msg}"
 
     if shell_debugParam "skip-cleanup"; then
-        log_warn "Skipping cleanup based on 'skip-cleanup' DL_DEBUG flag"
+        log_warn "Skipping cleanup based on 'skip-cleanup' DEBUG flag"
         return 0
     fi
 

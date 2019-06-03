@@ -32,7 +32,7 @@ function log_info () {
 }
 
 # Write a debug log message. Only
-# if 'verbose' set in DL_DEBUG. Echos to stderr
+# if 'verbose' set in DEBUG. Echos to stderr
 function log_debug () {
     if shell_debugParam "verbose"; then
         log_info "${shell_COLOR_LIGHT_CYAN}[DEBUG]" ${@} "${shell_COLOR_END}"

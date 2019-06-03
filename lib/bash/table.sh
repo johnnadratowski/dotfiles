@@ -183,12 +183,8 @@ function writeColumn () {
     local format="${4}"
 
     local fmtWidth=$(getFmtWidth "${column}" "${width}")
-    local fmt="%${modifiers}${fmtWidth}${format}"
+    local fmt="%${modifiers}${fmtWidth}${format}$(strings_multiply ' ' "${HORIZ_PADDING}")${VERT_CHAR}"
     printf "${fmt}" "${column}"
-
-    strings_multiply ' ' "${HORIZ_PADDING}"
-
-    printf "${VERT_CHAR}"
 }
 
 function writeTruncatedRow () {

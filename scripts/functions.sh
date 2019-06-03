@@ -453,7 +453,7 @@ function mcd() {
 }
 
 function randpass() {
-	echo `</dev/urandom tr -dc A-Za-z0-9 | head -c$1`
+	echo `</dev/urandom LC_ALL=C tr -dc A-Za-z0-9 | head -c$1`
 }
 
 function hs() {

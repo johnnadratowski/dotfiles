@@ -16,13 +16,13 @@ function shell_isMac () {
     [[ "$(uname)" =~ "Darwin" ]]
 }
 
-# Determine if a flag was turned on in DL_DEBUG env var
+# Determine if a flag was turned on in DEBUG env var
 # Or if specific debug param env var was declared like
-# DL_DEBUG_VERBOSE
+# DEBUG_VERBOSE
 function shell_debugParam () {
-    local envVarName="DL_DEBUG_$(strings_varNameify "${1}")"
+    local envVarName="DEBUG_$(strings_varNameify "${1}")"
 
-    # If there is a variable name like DL_DEBUG_*
+    # If there is a variable name like DEBUG_*
     # We return whether or not it's a truthy value
     if shell_isDeclared "${envVarName}"; then
         strings_truthy "${!envVarName}"
@@ -30,11 +30,11 @@ function shell_debugParam () {
     fi
 
     local debugArgs
-    if ! shell_isSet DL_DEBUG; then
+    if ! shell_isSet DEBUG; then
         return 1
     fi
 
-    read -ra debugArgs <<< ${DL_DEBUG:-''}
+    read -ra debugArgs <<< ${DEBUG:-''}
     array_contains "${1}" "${debugArgs[@]}"
 }
 
@@ -223,41 +223,41 @@ function shell_processParams () {
 # ====================================
 
 ## Allow for using aliases in scripts
-#shopt -s expand_aliases
+shopt -s expand_aliases
 
 ## Always make failures exit unless explicitly handled
-#set -e
+set -e
 
 ## If 'disable-error-failure' debug param, disable `set -e`
-#if shell_debugParam 'disable-error-failure'; then
-    #set +e
-#fi
+if shell_debugParam 'disable-error-failure'; then
+    set +e
+fi
 
 ## Disallow using unset variables
-#set -u
+set -u
 
 ## If 'allow-unset' debug param, disable `set -u`
-#if shell_debugParam 'allow-unset'; then
-    #set +u
-#fi
+if shell_debugParam 'allow-unset'; then
+    set +u
+fi
 
 ## Fail jobs in pipeline if any job along the way fails
-#set -o pipefail
+set -o pipefail
 
 ## If 'disable-pipefail' debug param, disable `set -o pipefail`
-#if shell_debugParam 'disable-pipefail'; then
-    #set +o pipefail
-#fi
+if shell_debugParam 'disable-pipefail'; then
+    set +o pipefail
+fi
 
 ## If 'trace' debug param is set, print out all commands
-#if shell_debugParam 'trace'; then
-    #set -x
-#fi
+if shell_debugParam 'trace'; then
+    set -x
+fi
 
 ## If 'force-error' debug param, forcibly exit the script to simulate failure
-#if shell_debugParam 'force-error'; then
-    #exit 1
-#fi
+if shell_debugParam 'force-error'; then
+    exit 1
+fi
 
 if ! shell_isDeclared "shell_PARAMS"; then
     declare -a shell_PARAMS=("")
