@@ -13,7 +13,6 @@ SOURCE_BASE = os.path.abspath(os.path.curdir)
 TARGET_BASE = os.path.expanduser("~")
 
 EXTRA_FILES = {
-    'local-startup': None,
     'scripts': None,
     'zsh-custom/themes/unicandy.zsh-theme': ".oh-my-zsh/themes/unicandy.zsh-theme",
     '_zsh-theme': ".oh-my-zsh/themes/mine.zsh-theme",
