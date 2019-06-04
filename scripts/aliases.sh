@@ -78,8 +78,10 @@ alias gst='git st'
 alias gacp='gadd && gci && gpush'
 alias gacw='gac "WIP"'
 alias gacwip='gacw'
+alias gacwipp='gacpwp && gpush'
 alias gacpwp='gacpm "WIP"'
 alias gacpwip='gacpwp'
+alias gacpwipp='gacpwp && gpush'
 alias gitdot='cdd && gacpwip && cd -'
 
 # networking aliases
