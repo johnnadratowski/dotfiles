@@ -641,3 +641,40 @@ function swap_aws_access_keys () {
 	# log_info "Deleting old access key"
 	# aws iam delete-access-key --access-key-id $oldAccessKey || { log_error "failed"; return 1}
 }
+
+function gen_ssl_cert () {
+	local outPath="${1:-./}"
+	local name="${2:-server}"
+
+	log_info "Generating self-signed ssl cert ${outPath}/${name}"
+
+	if [ ! -d "${outPath}" ] ; then 
+		mkdir -p "${outPath}" || {
+			log_error "Failed to create output path ${outPath}"
+			return 1
+		}
+	fi
+
+	if [ -e ]
+	openssl genrsa -des3 -passout pass:x -out ${outPath}/${name}.pass.key 2048 || {
+		log_error "Failed generating server pass key ${outPath}/${name}.pass.key"
+		return 1
+	}
+
+	openssl rsa -passin pass:x -in ${outPath}/${name}.pass.key -out ${outPath}/${name}.key || {
+		log_error "Failed generating server key ${outPath}/${name}.key"
+		return 1
+	}
+
+	openssl req -new -key ${outPath}/${name}.key -out ${outPath}/${name}.csr || {
+		log_error "Failed generating server csr ${outPath}/${name}.csr"
+		return 1
+	}
+
+	openssl x509 -req -sha256 -days 365 -in ${outPath}/${name}.csr -signkey ${outPath}/${name}.key -out ${outPath}/${name}.crt || {
+		log_error "Failed generating server crt ${outPath}/${name}.crt"
+		return 1
+	}
+
+	log_info "Successfully generated ${outPath}/${name}.crt and ${outPath}/${name}.key."
+}
