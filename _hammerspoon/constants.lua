@@ -1,5 +1,5 @@
 local constants = {}
-constants.hyper = {"alt", "cmd", "shift"}
+constants.hyper = {"alt", "ctrl", "cmd", "shift"}
 --constants.hyper = {"fn"}
 
 constants.loglevel = "debug"
