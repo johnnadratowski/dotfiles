@@ -38,6 +38,7 @@ brew install          \
   vim                 \
   zsh
 brew cask install hammerspoon
+brew cask install macpass
 brew cask install visual-studio-code
 brew cask install karabiner-elements
  > /dev/null
