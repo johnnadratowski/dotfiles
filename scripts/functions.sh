@@ -578,14 +578,18 @@ function git-clone-all() {
 			break
 		fi
 
+		set +m
 		while read -r repo; do
 				(( total += 1 ))
-				set -x
-				git clone ${repo} || {
-					log_error "An error occurred cloning ${repo}"
-				}
-				set +x
+				log_info "Cloning ${repo}"
+				(
+					git clone ${repo} || {
+						log_error "An error occurred cloning ${repo}"
+					}
+				) &
 		done <<< "$list"
+		wait
+		set -m
 
 		(( page += 1 ))
 	done	
