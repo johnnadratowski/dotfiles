@@ -39,6 +39,8 @@ brew install          \
   zsh
 brew cask install hammerspoon
 brew cask install visual-studio-code
+brew cask install karabiner-elements
+ > /dev/null
 set +x
 
 # fzf - To install useful key bindings and fuzzy completion:
