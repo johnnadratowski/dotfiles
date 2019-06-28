@@ -508,6 +508,38 @@ function git-big-files()
 	git gc && git verify-pack -v .git/objects/pack/pack-*.idx | egrep "^\w+ blob\W+[0-9]+ [0-9]+ [0-9]+$" | sort -k 3 -n -r
 }
 
+function git-pull-all() {
+	local dirs
+	dirs=$(\ls -d */) || {
+		log_error "An error occurred getting directories"
+		return 1
+	}
+
+	set +m
+	local dir
+	while read -r dir; do
+		if [ ! -d ${dir}/.git ]; then
+			log_info "${dir} is not a git repo"
+			continue
+		fi
+
+		(
+			log_info "Pulling repo ${dir}"
+			cd ${dir}
+			git fetch --all > /dev/null || {
+				log_error "An error occurred fetching repo ${dir}"
+			}
+
+			git pull > /dev/null || {
+				log_error "An error occurred pulling repo ${dir}"
+			}
+		) &
+	done <<< "$dirs"
+
+	wait
+	set -m
+}
+
 function git-clone-all() {
 	local org="${1}"
 	if [[ ${org} == "" ]]; then
