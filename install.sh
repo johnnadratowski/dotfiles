@@ -42,5 +42,8 @@ chmod +x ~/bin/cht.sh
 
 curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 
+log "install tpm"
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+
 log "link table script to bin"
 ln -s ~/git/dotfiles/lib/bash/table.sh ~/bin/table

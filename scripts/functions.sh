@@ -508,6 +508,59 @@ function git-big-files()
 	git gc && git verify-pack -v .git/objects/pack/pack-*.idx | egrep "^\w+ blob\W+[0-9]+ [0-9]+ [0-9]+$" | sort -k 3 -n -r
 }
 
+function git-clone-all() {
+	local org="${1}"
+	if [[ ${org} == "" ]]; then
+		log_error "Must specify org as parameter #1"
+		return 1
+	fi
+
+	local userType=${2}
+	if [[ ${userType} == "" ]]; then
+		log_error "Must specify type as parameter #2 as either 'orgs' or 'users'"
+		return 1
+	fi
+
+	local cloneType=${3}
+	if [[ ${cloneType} == "" ]]; then
+		log_error "Must specify clone type as parameter #3 as either 'ssh' or 'clone' (clone means use http)"
+		return 1
+	fi
+
+	if ! shell_isSet 'GITHUB_AT'; then
+		log_error "Must set GITHUB_AT"
+		return 1
+	fi
+
+	local page=1
+	local list
+	local total=0
+	while; do
+		log_info "Retrieving page ${page}"
+
+		list="$(curl -s https://$GITHUB_AT:@api.github.com/${userType}/${org}/repos\?per_page\=100\&page\=${page} | jq -r .[].${cloneType}_url)" || {
+			log_error "An error occurred getting github repo list"
+		}
+
+		if (( ${#list} == 0 )); then
+			break
+		fi
+
+		while read -r repo; do
+				(( total += 1 ))
+				set -x
+				git clone ${repo} || {
+					log_error "An error occurred cloning ${repo}"
+				}
+				set +x
+		done <<< "$list"
+
+		(( page += 1 ))
+	done	
+	
+	log_info "Cloned ${total} repos"
+}
+
 function git-purge-files()
 {
 	if [ $# -eq 0 ]; then

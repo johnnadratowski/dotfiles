@@ -1,9 +1,15 @@
-#!/user/bin/bash
-echo "Install xcode"
-xcode-select --install
+#!/usr/bin/env bash
+set -e
 
-echo "Install brew"
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+if ! which xcode-select; then
+	echo "Install xcode"
+	xcode-select --install
+fi
+
+if ! which brew; then
+	echo "Install brew"
+	ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+fi
 
 echo "Update brew"
 brew update
@@ -12,13 +18,11 @@ set -x
 brew install          \
   asciidoctor         \
   awscli              \
-  batch               \
   diff-so-fancy       \
   entr                \
   fd                  \
   fzf                 \
   go                  \
-  hammerspoon         \
   htop                \
   lua                 \
   mercurial           \
@@ -33,7 +37,12 @@ brew install          \
   tmux                \
   vim                 \
   zsh
+brew cask install hammerspoon
+brew cask install visual-studio-code
 set +x
 
 # fzf - To install useful key bindings and fuzzy completion:
 $(brew --prefix)/opt/fzf/install
+
+# Ensure mac does key repeats on key hold
+defaults write -g ApplePressAndHoldEnabled -bool false
