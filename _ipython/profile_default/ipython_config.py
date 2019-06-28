@@ -1,5 +1,75 @@
 # Configuration file for ipython.
 
+import datetime
+import os
+
+c = get_config()
+
+
+###########################
+# Custom Prompt
+###########################
+
+from IPython.terminal.prompts import Prompts, Token
+
+class MyPrompts(Prompts):
+    def in_prompt_tokens(self, cli=None):
+        splits = os.getcwd().split(os.sep)
+        truncdir = splits[-3:]
+
+        self.utc_nano = datetime.datetime.utcnow()
+        #          2017-02-01 13:46:27.260500
+        utc = str(self.utc_nano).split(' ')[1]
+        #          13:46:27.260500
+
+        return [
+            (Token, u''),
+            (Token.Name.Namespace, f'[/..{len(splits) - 3}../{os.sep.join(truncdir)}/]'),
+            (Token.String, f' [{utc}]\n'),
+            (Token.Prompt, u'_i'),
+            (Token.PromptNum, str(self.shell.execution_count)),
+            (Token.Prompt, u' ➜ '),
+            (Token, u' '),
+        ]
+
+    def continuation_prompt_tokens(self, cli=None, width=None):
+        if width is None:
+            width = self._width()
+        return [
+            (Token.Prompt, (' ' * (width - 2)) + u'│ '),
+        ]
+
+    def out_prompt_tokens(self):
+        elapsed = datetime.datetime.utcnow() - self.utc_nano
+        return [
+            (Token.OutPrompt, u'_'),
+            (Token.OutPromptNum, str(self.shell.execution_count)),
+            (Token.OutPrompt, f' [elapsed: {elapsed}]'),
+            (Token, u' \n'),
+        ]
+
+
+c.TerminalInteractiveShell.prompts_class = MyPrompts
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+###########################
+# Default Config
+###########################
+
 #------------------------------------------------------------------------------
 # Configurable configuration
 #------------------------------------------------------------------------------

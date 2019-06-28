@@ -71,15 +71,13 @@ alias mkdir='mkdir -p'
 alias gfp='git fetch --all; git pull'
 alias gfpm='git fetch --all; git checkout master; git pull; git checkout -'
 alias gmm='gfpm; git merge master'
-alias gfpm='git fetch --all; git checkout develop; git pull; git checkout -'
+alias gfpd='git fetch --all; git checkout develop; git pull; git checkout -'
 alias gmd='gfpm; git merge develop'
 alias gcob='gco -b '
 alias gst='git st'
-alias gacp='gadd && gci && gpush'
-alias gacw='gac "WIP"'
-alias gacwip='gacw'
-alias gacpwp='gacpm "WIP"'
-alias gacpwip='gacpwp'
+alias gacp='gadd && gci && git push'
+alias gacwip='gac "WIP"'
+alias gacwipp='gacwip && git push'
 alias gitdot='cdd && gacpwip && cd -'
 
 # networking aliases
@@ -92,6 +90,7 @@ alias help='man'
 
 # jobs aliases
 alias j='jobs -l'
+alias watch='watch -c '
 
 # directory movement
 alias cd~='cd ~'
@@ -121,6 +120,28 @@ alias lns='ln -s'
 alias px='ps aux'
 alias sur='sudo su -'
 alias rbProf='source ~/.zshrc'
+
+if which diff-so-fancy &> /dev/null; then
+  alias diff='diff-so-fancy '
+fi
+
+if which top &> /dev/null; then
+  alias top='sudo htop '
+fi
+
+if which prettyping &> /dev/null; then
+  alias ping='prettyping '
+fi
+
+if which fzf &> /dev/null; then
+  alias preview="fzf --preview 'bat --color \"always\" {}'"
+  # add support for ctrl+o to open selected file in VS Code
+  export FZF_DEFAULT_OPTS="--bind='ctrl-o:execute(code {})+abort'"
+fi
+
+if which tldr &> /dev/null; then
+  alias help='tldr '
+fi
 
 #MAC stuff
 alias setJdk6='export JAVA_HOME=$(/usr/libexec/java_home -v 1.6)'

@@ -5,3 +5,6 @@
 [submodule "python_lib"]
 	path = python_lib
 	url = https://github.com/johnnadratowski/python_lib.git
+[submodule "/Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/k"]
+	path = /Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/k
+	url = https://github.com/supercrabtree/k

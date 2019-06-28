@@ -13,3 +13,5 @@ history.sqlite
 apps/build
 .vscode/
 node_modules
+_ipython/profile_default/db/
+local-startup/*

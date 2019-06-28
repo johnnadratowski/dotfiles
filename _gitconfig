@@ -1,6 +1,6 @@
 [user]
 	name = johnnadratowski
-	email = john@unifiedsocial.com
+	email = john@unified.com
 
 [color]
     diff = auto
@@ -12,8 +12,15 @@
     default = matching
 
 [core]
-    editor = vim
+    editor = code
     pager = less -R
+
+[pager]
+    diff = diff-so-fancy | less --tabs=1,5 -RFX
+    show = diff-so-fancy | less --tabs=1,5 -RFX
+
+[credential]
+	helper = store
 
 [alias]
     ds = diff --staged      # git ds - diff your staged changes == review before committing.
@@ -52,5 +59,3 @@
     lba = !git lb --all 
     h = !git --no-pager log --graph -n 15
     a = !git --no-pager la -n 15
-[credential]
-	helper = store

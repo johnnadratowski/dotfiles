@@ -33,7 +33,8 @@ COMPLETION_WAITING_DOTS="true"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(aws history-substring-search archlinux bower celery dirhistory docker django env-vars fabric functions git git-extras git-flow hub jsontools lein mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant virtualenv virtualenvwrapper web-search wd)
+plugins=(aws history-substring-search dirhistory docker git git-extras jsontools mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant web-search wd)
+#virtualenv virtualenvwrapper 
 #encode64 vi-mode python pip django debian
 #golang heroku sprunge supervisor taskwarrior jira node npm redis-cli
 #urltools aliases functions env-vars)
@@ -45,6 +46,9 @@ autoload zmv
 setopt HIST_IGNORE_ALL_DUPS
 bindkey -M emacs '^P' history-substring-search-up
 bindkey -M emacs '^N' history-substring-search-down
+
+# Setup custom plugin location
+fpath=(~/scripts/zsh/plugins $fpath)
 
 export ZSH_CUSTOM=$HOME/git/dotfiles/zsh_custom
 
@@ -59,12 +63,9 @@ then
     source aws_zsh_completer.sh
 fi
 
-if [ "$TMUX" = "" ]; then exec tmux -2; fi
-#if $(ps -e | grep -q tmux); then
-#else
-#tmux -2
-#fi
-
+if [ "$TMUX" = "" ]; then exec tmux -2 new-session -A -s main; fi
 
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

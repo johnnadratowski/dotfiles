@@ -1,20 +1,48 @@
-#!/user/bin/bash
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+#!/usr/bin/env bash
+set -e
+
+if ! which xcode-select; then
+	echo "Install xcode"
+	xcode-select --install
+fi
+
+if ! which brew; then
+	echo "Install brew"
+	ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+fi
+
+echo "Update brew"
 brew update
-brew install git mercurial zsh tmux vim python3 hammerspoon node npm
 
-pip3 install -r ./requirements.txt
-# Install Hub
-cd ~/git/
-git clone https://github.com/github/hub.git
-cd hub
-sudo rake install prefix=/usr/local
+set -x
+brew install          \
+  asciidoctor         \
+  awscli              \
+  diff-so-fancy       \
+  entr                \
+  fd                  \
+  fzf                 \
+  go                  \
+  htop                \
+  lua                 \
+  mercurial           \
+  ncdu                \
+  node                \
+  noti                \
+  npm                 \
+  prettyping          \
+  python3             \
+  the_silver_searcher \
+  tldr                \
+  tmux                \
+  vim                 \
+  zsh
+brew cask install hammerspoon
+brew cask install visual-studio-code
+set +x
 
-# Install NVM
-curl https://raw.githubusercontent.com/creationix/nvm/v0.19.0/install.sh | bash
+# fzf - To install useful key bindings and fuzzy completion:
+$(brew --prefix)/opt/fzf/install
 
-# Install native node apps
-npm install -g nativefier
-
-# Install custom electron apps
-./apps/run.sh
+# Ensure mac does key repeats on key hold
+defaults write -g ApplePressAndHoldEnabled -bool false

@@ -51,7 +51,6 @@ if unavailable:
     print()
 
 
-
 ###########################
 # Magic Defaults
 ###########################
@@ -121,7 +120,7 @@ def query_db(sql, con, index_col=None, coerce_float=True, params=None, parse_dat
                              chunksize=chunksize)
 
 
-def DB(name=None):
+def __GetDB(name=None):
     if not name:
         for k, v in _dbs.items():
             print("%s: %s" % (k, json.dumps(v.info, sort_keys=True, indent=2)))

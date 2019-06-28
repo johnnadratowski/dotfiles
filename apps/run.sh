@@ -1,3 +1,4 @@
+set -xe
 cd devdocs
 ./run.sh
 cd ..

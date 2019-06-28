@@ -1,6 +1,6 @@
 /* HIDE SIDEBAR */
 
-body>div>div.nH>div.nH>div.nH>div.no>:first-child {
+/* body>div>div.nH>div.nH>div.nH>div.no>:first-child {
   -webkit-transform: translateX(-160px);
   -webkit-transition: -webkit-transform 250ms ease 1s;
 }
@@ -21,19 +21,10 @@ body>div>div.nH>div.nH>div.nH>div.no>:first-child:focus+*>:first-child,
 body>div>div.nH>div.nH>div.nH>div.no>:first-child:target+*>:first-child {
   margin-left: 0px;
   -webkit-transition-delay: 0s;
-}
-
-
-
-
-
-
-
-
-
+} */
 
 /* SHOW REFRESH */
 
-.aqL div div .J-J5-Ji:first-child + .J-J5-Ji + .J-J5-Ji + .J-J5-Ji {
+/* .aqL div div .J-J5-Ji:first-child+.J-J5-Ji+.J-J5-Ji+.J-J5-Ji {
   display: inline-block !important;
-}
+} */
