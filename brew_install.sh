@@ -37,6 +37,7 @@ brew install          \
   tmux                \
   vim                 \
   zsh
+brew cask install copyq
 brew cask install hammerspoon
 brew cask install macpass
 brew cask install visual-studio-code
