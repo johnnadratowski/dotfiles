@@ -468,6 +468,10 @@ function pgr() {
 # Dev utilities:
 #-------------------------------------------------------------
 
+function lorem() { 
+	curl http://metaphorpsum.com/sentences/${1:-5} 2> /dev/null | pbcopy
+}
+
 function git-fullreset() {
 	git reset --hard; git clean -df
 }

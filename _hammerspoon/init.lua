@@ -5,7 +5,9 @@ require("hs.crash")
 require("applications")
 require("caffiene")
 require("colorpicker")
+local dialog = require("dialog")
 local dbug = require("dbug")
+local logger = require("log")
 require("mic")
 require("mouse")
 require("ping")
@@ -75,4 +77,29 @@ hs.console.alpha(1)
 ---- Show hotkeys
 hs.hotkey.alertDuration = 0
 hs.hotkey.showHotkeys(constants.hyper, "K")
+
+---- Reload hammerspoon with HYPER+R
 hs.alert.show("Hammerspoon Reloaded")
+
+---- Lorem Ipsum Generator
+
+hs.hotkey.bind(
+    constants.hyper,
+    "L",
+    "Lorem Ipsum",
+    function()
+        input = dialog("Lorem Ipsum Number of sentences", "error", "5")
+        if input == "" or tonumber(input) == nil then
+            hs.alert.show(string.format("Invalid Input: %s", input))
+            return
+        end
+        code, output, headers = hs.http.doRequest(string.format("http://metaphorpsum.com/sentences/%s", input), "GET")
+        if code ~= 200 then
+            hs.alert.show(string.format("Lorem Ipsum Error Response code: %d", code))
+            logger.ef("Error response for lorem ipsum: %s", output)
+        else
+            hs.alert.show("Lorem Ipsum copied to clipboard")
+            hs.pasteboard.setContents(output)
+        end
+    end
+)
