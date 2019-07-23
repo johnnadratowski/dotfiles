@@ -50,3 +50,6 @@ $(brew --prefix)/opt/fzf/install
 
 # Ensure mac does key repeats on key hold
 defaults write -g ApplePressAndHoldEnabled -bool false
+
+# Update magic mouse sensitivity to be higher than normal maximum
+defaults write -g com.apple.mouse.scaling  5.0
