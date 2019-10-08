@@ -571,7 +571,7 @@ function git-clone-all() {
 	local page=1
 	local list
 	local total=0
-	while; do
+	while 1; do
 		log_info "Retrieving page ${page}"
 
 		list="$(curl -s https://$GITHUB_AT:@api.github.com/${userType}/${org}/repos\?per_page\=100\&page\=${page} | jq -r .[].${cloneType}_url)" || {
@@ -596,7 +596,7 @@ function git-clone-all() {
 		set -m
 
 		(( page += 1 ))
-	done	
+	done
 	
 	log_info "Cloned ${total} repos"
 }
@@ -748,7 +748,6 @@ function gen_ssl_cert () {
 		}
 	fi
 
-	if [ -e ]
 	openssl genrsa -des3 -passout pass:x -out ${outPath}/${name}.pass.key 2048 || {
 		log_error "Failed generating server pass key ${outPath}/${name}.pass.key"
 		return 1
