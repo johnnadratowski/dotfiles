@@ -40,10 +40,10 @@ alias botch='botch '
 function bentr () {
 	local builder="${1}"
 	shift
-	local name="${2}"
+	local name="${1}"
 	shift
 	echo "Starting watcher for '${builder}' with name '${name}' (Press Space to force rerun, q to quit)"
-	entr ${@} -s "echo \"Triggered\"; time ${builder} && terminal-notifier -title '${name}' -message 'Success' ||  terminal-notifier -title '${name}' -message 'Failure'"
+	entr ${@} -s "echo \"Triggered\"; time ${builder} && terminal-notifier -title \"${name}\" -message 'Success' ||  terminal-notifier -title \"${name}\" -message 'Failure'"
 }
 
 function shell_explain {
