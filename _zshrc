@@ -69,3 +69,6 @@ if [ "$TMUX" = "" ]; then exec tmux -2 new-session -A -s main; fi
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+[ -f ~/.ghcup/env ] && source ~/.ghcup/env
+
