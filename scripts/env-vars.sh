@@ -57,3 +57,14 @@ export NVM_DIR="$HOME/.nvm"
 
 # Java stuff
 export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+
+if which rbenv > /dev/null; then eval "$(rbenv init -)"; fi
+
+# added by travis gem
+[ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+[ -f ~/.ghcup/env ] && source ~/.ghcup/env
+
+
