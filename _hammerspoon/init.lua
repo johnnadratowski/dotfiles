@@ -11,6 +11,7 @@ local logger = require("log")
 require("mic")
 require("mouse")
 require("ping")
+local snippets = require("snippets")
 require("timestamp")
 require("window")
 
@@ -23,7 +24,7 @@ math.randomseed(os.time())
 -- DEBUGGING
 
 hs.crash.crashLogToNSLog = false
-configFileWatcher = hs.pathwatcher.new(os.getenv("HOME") .. "/.hammerspoon/", dbug.reloadConfig)
+configFileWatcher = hs.pathwatcher.new(constants.home, dbug.reloadConfig)
 --debug.sethook(debug.lineTraceHook, "l")
 --configFileWatcher:start()
 
@@ -34,18 +35,18 @@ hs.loadSpoon("Emojis")
 spoon.Emojis:bindHotkeys({toggle = {constants.hyper, "E"}})
 
 ---- SEAL SPOONS
-hs.loadSpoon("Seal")
-spoon.Seal:loadPlugins({"apps", "vpn", "screencapture", "safari_bookmarks", "calc", "useractions"})
-spoon.Seal:bindHotkeys({show = {constants.hyper, ";"}})
-spoon.Seal:start()
-spoon.Seal.plugins.useractions.actions = {
-    ["Red Hat Bugzilla"] = {
-        url = "https://bugzilla.redhat.com/show_bug.cgi?id=${query}",
-        icon = "favicon",
-        keyword = "bz"
-    },
-    ["Launchpad Bugs"] = {url = "https://launchpad.net/bugs/${query}", icon = "favicon", keyword = "lp"}
-}
+-- hs.loadSpoon("Seal")
+-- spoon.Seal:loadPlugins({"apps", "vpn", "screencapture", "safari_bookmarks", "calc", "useractions"})
+-- spoon.Seal:bindHotkeys({show = {constants.hyper, ";"}})
+-- spoon.Seal:start()
+-- spoon.Seal.plugins.useractions.actions = {
+--     ["Red Hat Bugzilla"] = {
+--         url = "https://bugzilla.redhat.com/show_bug.cgi?id=${query}",
+--         icon = "favicon",
+--         keyword = "bz"
+--     },
+--     ["Launchpad Bugs"] = {url = "https://launchpad.net/bugs/${query}", icon = "favicon", keyword = "lp"}
+-- }
 
 -- WINDOW
 
@@ -103,3 +104,6 @@ hs.hotkey.bind(
         end
     end
 )
+
+---- Snippets
+hs.hotkey.bind(constants.hyper, "J", "Snippets", snippets.snippets)

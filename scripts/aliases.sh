@@ -112,6 +112,9 @@ alias ..7='cd ../../../../../../../'
 alias ..8='cd ../../../../../../../../'
 alias ..9='cd ../../../../../../../../../'
 
+# cht.sh
+alias c="cht.sh "
+
 #command admin util aliases
 alias du='du -kh'       # Makes a more readable output.
 alias df='df -kTh'

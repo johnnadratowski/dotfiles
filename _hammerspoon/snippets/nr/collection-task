@@ -1,0 +1,17 @@
+SELECT 
+	taskJobInstanceId, 
+	taskStatus, 
+	taskJobType, 
+	url, 
+	httpResponseCode, 
+	httpResponseData 
+FROM 
+	Transaction
+WHERE 
+	appName='DC Executor prod nodes' AND 
+	taskNetwork='groundtruth' AND 
+	taskJobType = 'GROUNDTRUTH_ACCOUNT_V1' AND 
+	taskJobId=4101 AND 
+	taskStatus = 'FAILED'
+SINCE '2019-12-26 10:00:00'
+UNTIL '2019-12-26 16:24:00'

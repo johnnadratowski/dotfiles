@@ -2,6 +2,8 @@ local constants = {}
 constants.hyper = {"alt", "ctrl", "cmd", "shift"}
 --constants.hyper = {"fn"}
 
+constants.home = os.getenv("HOME") .. "/.hammerspoon/"
+
 constants.loglevel = "debug"
 
 constants.defaultBrowser = "Google Chrome"
@@ -29,4 +31,5 @@ constants.editors = {
     "/Applications/GoLand 1.0 EAP.app"
 }
 constants.editor = 0
+
 return constants
