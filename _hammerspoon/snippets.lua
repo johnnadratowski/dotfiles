@@ -63,14 +63,14 @@ function mod.snippets()
   local chooser =
     hs.chooser.new(
     function(chosen)
-      if chosen == nil then
-        return
-      end
       if copy then
         copy:delete()
       end
       if tab then
         tab:delete()
+      end
+      if chosen == nil then
+        return
       end
       current:activate()
       -- hs.eventtap.keyStrokes(chosen.data)
@@ -158,7 +158,7 @@ function mod.snippets()
           matches = get_matches(file .. " " .. data, queries)
         end
 
-        if no_queries or matches > 0 then
+        if no_queries or matches >= (#queries - 1) then
           table.insert(
             choices,
             {
@@ -175,7 +175,7 @@ function mod.snippets()
     table.sort(
       choices,
       function(x, y)
-        return x.matches == nil or x.matches < y.matches
+        return x.matches == nil or x.matches > y.matches
       end
     )
 
