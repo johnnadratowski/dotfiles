@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+#  GET ALL DEPENDENCIES OF ALL GIT REPOS IN THIS FOLDER
+
 . ./utils.sh
 MIT="$(remove_non_alpha "$(to_lower "$(clean_license_text 'Permission is hereby granted, free of charge, to any person obtaining a copy of ')")")"
 ISC="$(remove_non_alpha "$(to_lower "$(clean_license_text 'Permission to use, copy, modify, and/or distribute this software for any purpose ')")")"
