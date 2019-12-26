@@ -1,0 +1,12 @@
+# Notes Index
+John Nadratowski <john@unified.com>
+:description: !!Missing Description!!
+:revdate: !!Missing Revdate!!
+:keywords: !!Missing Keywords!!
+:docinfodir: ../../docinfo
+:docinfo: shared,private
+:toc: preamble
+:icons: font
+:sectnums:
+
+index::doit[]

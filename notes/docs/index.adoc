@@ -1,0 +1,9 @@
+= Documentation Index
+:docinfodir: ../docinfo
+:docinfo: shared
+
+* BI Tool Eval
+** link:./BI_tool_eval/QlikSense/qlik-sense.html[Qlik Sense Eval]
+
+* Sisense
+** link:./Sisense/automated-dashboards.html[Sisense Automated Dashboards]

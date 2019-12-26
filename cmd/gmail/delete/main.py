@@ -59,7 +59,7 @@ def execute(req):
             time.sleep(2)
             retry += 1
             return None
-    
+
     ret = None
     while retry < 50 and ret is None:
         ret = run()

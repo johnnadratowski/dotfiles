@@ -1,0 +1,18 @@
+# Notes
+John Nadratowski <john@unified.com>
+:description: !!Missing Description!!
+:revdate: !!Missing Revdate!!
+:keywords: !!Missing Keywords!!
+:docinfodir: ../../docinfo
+:docinfo: shared,private
+:toc: preamble
+:icons: font
+:sectnums:
+
+sql::Prod_Jobs[query="SELECT id, network, collection_type, collector, duration, comments FROM jobs WHERE job_status = 'ONGOING' order by network, collection_type, collector, duration",title="Ongoing Jobs"]
+// sql::Prod_RDS[query="SELECT 1 as a, 'asdf' as b, NULL as c, 2.32222 as d"]
+
+[%header,format=csv]
+|===
+include::table.csv[]
+|===

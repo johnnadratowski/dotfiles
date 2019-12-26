@@ -1,0 +1,118 @@
+<html>
+  <head>
+    <script
+      src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+      integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8="
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.panzoom/3.2.3/jquery.panzoom.js"></script>
+    <style>
+      #content {
+        height: 98%;
+        width: 98%;
+        position: fixed;
+      }
+
+      #content > img {
+        resize: both;
+        overflow: auto;
+        width: 30%;
+        height: auto;
+        display: block;
+        position: absolute;
+        top: 0px;
+        left: 0px;
+        z-index: 0;
+      }
+
+      .selected {
+        border: 3px solid cyan;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="content"></div>
+
+    <script type="text/javascript">
+      let content = $("#content");
+      let selected;
+      let topZ = 0;
+
+      window.onkeydown = e => {
+        switch (e.key) {
+          case "Backspace":
+            removeSelected();
+            break;
+        }
+      };
+
+      window.ondragover = e => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+
+      window.ondrop = e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer.files.length) {
+          for (const f of e.dataTransfer.files) {
+            readImage(f);
+          }
+        } else {
+          for (const i of e.dataTransfer.items) {
+            if (i.type === "text/uri-list") {
+              i.getAsString(newImage);
+            }
+          }
+        }
+      };
+
+      const readImage = f => {
+        let reader = new FileReader();
+        reader.onload = function(event) {
+          newImage(event.target.result);
+        };
+        reader.readAsDataURL(f);
+      };
+
+      const newImage = src => {
+        const img = $(`<img src="${src}" onclick="select(event.target)"/>`);
+        content.append(img);
+        moveToTop(img);
+        img.panzoom({
+          increment: 0.02,
+          minScale: 0.5,
+          maxScale: 5,
+          duration: 50
+        });
+        img.on("mousewheel.focal", function(e) {
+          e.preventDefault();
+          var delta = e.delta || e.originalEvent.wheelDelta;
+          var zoomOut = delta ? delta < 0 : e.originalEvent.deltaY > 0;
+          img.panzoom("zoom", zoomOut, {
+            increment: 0.02,
+            focal: e
+          });
+        });
+      };
+
+      const removeSelected = () => {
+        if (!selected) return;
+        selected.remove();
+      };
+
+      const select = el => {
+        selected = $(el);
+        $("img").removeClass("selected");
+        selected.addClass("selected");
+        moveToTop(selected);
+      };
+
+      const moveToTop = el => {
+        topZ += 1;
+        el.css("z-index", topZ);
+      };
+    </script>
+  </body>
+</html>

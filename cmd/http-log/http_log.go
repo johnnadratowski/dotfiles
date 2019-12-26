@@ -18,6 +18,8 @@ type Response struct {
 	Body    string            `json:"body"`
 }
 
+// Run a proxy server and log incoming requests. set proxy with PROXY=
+// and local address with ADDR=
 func main() {
 
 	cnt := 0

@@ -1,0 +1,5 @@
+= 404
+:docinfodir: ../docinfo
+:docinfo: shared
+
+The requested resource could not be found. link:./index.html[Go back to the index page]
