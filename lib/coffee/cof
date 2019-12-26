@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-coffee -r $DOTFILES/lib/js/all.coffee "$@"
+coffee -r $DOTFILES/lib/coffee/all.coffee "$@"
