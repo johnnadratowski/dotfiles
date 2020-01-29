@@ -58,7 +58,12 @@ export NVM_DIR="$HOME/.nvm"
 # Java stuff
 export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
 
+# Ruby stuff
 if which rbenv > /dev/null; then eval "$(rbenv init -)"; fi
+
+# Deno stuff
+export DENO_INSTALL="/Users/johnnadratowski/.local"
+export PATH="$DENO_INSTALL/bin:$PATH"
 
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
