@@ -1,1 +1,0 @@
-./_ipython/profile_default/startup/startup.py
