@@ -35,3 +35,6 @@
 [submodule "_vim/pack/john/start/tsuquyomi"]
 	path = _vim/pack/john/start/tsuquyomi
 	url = git@github.com:Quramy/tsuquyomi.git
+[submodule "_vim/pack/john/start/tsuquyomi-vue"]
+	path = _vim/pack/john/start/tsuquyomi-vue
+	url = git@github.com:Quramy/tsuquyomi-vue.git
