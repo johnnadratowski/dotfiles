@@ -1,4 +1,0 @@
-pyicloud
-geopy
-requests
-googlemaps
