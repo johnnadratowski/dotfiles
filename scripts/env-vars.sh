@@ -72,4 +72,6 @@ export PATH="$DENO_INSTALL/bin:$PATH"
 
 [ -f ~/.ghcup/env ] && source ~/.ghcup/env
 
+[ -f /usr/local/bin/virtualenvwrapper.sh ] && source /usr/local/bin/virtualenvwrapper.sh
+
 
