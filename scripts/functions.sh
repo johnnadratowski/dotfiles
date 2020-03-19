@@ -37,6 +37,15 @@ botch () {
 }
 alias botch='botch '
 
+function bentr () {
+	local builder="${1}"
+	shift
+	local name="${1}"
+	shift
+	echo "Starting watcher for '${builder}' with name '${name}' (Press Space to force rerun, q to quit)"
+	entr ${@} -s "echo \"Triggered\"; time ${builder} && terminal-notifier -title \"${name}\" -message 'Success' ||  terminal-notifier -title \"${name}\" -message 'Failure'"
+}
+
 function shell_explain {
 	# base url with first command already injected
 	# $ explain tar
@@ -468,6 +477,10 @@ function pgr() {
 # Dev utilities:
 #-------------------------------------------------------------
 
+function lorem() { 
+	curl http://metaphorpsum.com/sentences/${1:-5} 2> /dev/null | pbcopy
+}
+
 function git-fullreset() {
 	git reset --hard; git clean -df
 }
@@ -540,4 +553,130 @@ function git-pull-all() {
 	set -m
 }
 
+function git-clone-all() {
+	local org="${1}"
+	if [[ ${org} == "" ]]; then
+		log_error "Must specify org as parameter #1"
+		return 1
+	fi
 
+	local userType=${2}
+	if [[ ${userType} == "" ]]; then
+		log_error "Must specify type as parameter #2 as either 'orgs' or 'users'"
+		return 1
+	fi
+
+	local cloneType=${3}
+	if [[ ${cloneType} == "" ]]; then
+		log_error "Must specify clone type as parameter #3 as either 'ssh' or 'clone' (clone means use http)"
+		return 1
+	fi
+
+	if ! shell_isSet 'GITHUB_AT'; then
+		log_error "Must set GITHUB_AT"
+		return 1
+	fi
+
+	local page=1
+	local list
+	local total=0
+	while 1; do
+		log_info "Retrieving page ${page}"
+
+		list="$(curl -s https://$GITHUB_AT:@api.github.com/${userType}/${org}/repos\?per_page\=100\&page\=${page} | jq -r .[].${cloneType}_url)" || {
+			log_error "An error occurred getting github repo list"
+		}
+
+		if (( ${#list} == 0 )); then
+			break
+		fi
+
+		set +m
+		while read -r repo; do
+				(( total += 1 ))
+				log_info "Cloning ${repo}"
+				(
+					git clone ${repo} || {
+						log_error "An error occurred cloning ${repo}"
+					}
+				) &
+		done <<< "$list"
+		wait
+		set -m
+
+		(( page += 1 ))
+	done
+	
+	log_info "Cloned ${total} repos"
+}
+
+function swap_py2()
+{
+	sudo rm /usr/bin/python
+	sudo ln -s /usr/bin/python2 /usr/bin/python
+}
+
+function swap_py3()
+{
+	sudo rm -f /usr/bin/python
+	sudo ln -s /usr/bin/python3 /usr/bin/python
+}
+
+function jsonfmt() {
+	python -m json.tool "$1"
+}
+
+function cloneHTMLDocs() {
+	if [[ $1 == "" ]]; then
+		echo "No website specified"
+		return
+	fi
+
+	wget --no-parent --recursive --page-requisites --html-extension --convert-links $1
+}
+
+function vimdo() {
+	local CMD=$1
+	shift
+
+	for f
+	do
+		vim -N -u NONE -n -c "set nomore" -c ":execute \"norm! $CMD\"" -cwq! $f
+	done
+}
+
+function gen_ssl_cert () {
+	local outPath="${1:-./}"
+	local name="${2:-server}"
+
+	log_info "Generating self-signed ssl cert ${outPath}/${name}"
+
+	if [ ! -d "${outPath}" ] ; then 
+		mkdir -p "${outPath}" || {
+			log_error "Failed to create output path ${outPath}"
+			return 1
+		}
+	fi
+
+	openssl genrsa -des3 -passout pass:x -out ${outPath}/${name}.pass.key 2048 || {
+		log_error "Failed generating server pass key ${outPath}/${name}.pass.key"
+		return 1
+	}
+
+	openssl rsa -passin pass:x -in ${outPath}/${name}.pass.key -out ${outPath}/${name}.key || {
+		log_error "Failed generating server key ${outPath}/${name}.key"
+		return 1
+	}
+
+	openssl req -new -key ${outPath}/${name}.key -out ${outPath}/${name}.csr || {
+		log_error "Failed generating server csr ${outPath}/${name}.csr"
+		return 1
+	}
+
+	openssl x509 -req -sha256 -days 365 -in ${outPath}/${name}.csr -signkey ${outPath}/${name}.key -out ${outPath}/${name}.crt || {
+		log_error "Failed generating server crt ${outPath}/${name}.crt"
+		return 1
+	}
+
+	log_info "Successfully generated ${outPath}/${name}.crt and ${outPath}/${name}.key."
+}

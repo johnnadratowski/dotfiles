@@ -28,7 +28,7 @@ alias _='please'
 #-------------------------------------------------------------
 ## The 'ls' family (this assumes you use a recent GNU ls)
 ##-------------------------------------------------------------
-alias ls='ls -hFG --color=auto' # add colors for filetype recognition
+alias ls='ls -hFG' # add colors for filetype recognition
 alias ll="ls -l"
 alias l="ll"
 alias ldot='ls -ld .*'    # show only hidden files
@@ -99,6 +99,7 @@ alias cdsop='cd ~/git/sop/unified_platform/'
 alias cdgo='cd ~/go/src/github.com/Unified'
 alias cds='cd ~/scripts/'
 alias cdg='cd ~/git/'
+alias cdgp='cd ~/pgit/'
 alias cdd='cd ~/git/dotfiles/'
 alias cdb='cd ~/bin/'
 alias ..='cd ..'
@@ -110,6 +111,9 @@ alias ..6='cd ../../../../../../'
 alias ..7='cd ../../../../../../../'
 alias ..8='cd ../../../../../../../../'
 alias ..9='cd ../../../../../../../../../'
+
+# cht.sh
+alias c="cht.sh "
 
 #command admin util aliases
 alias du='du -kh'       # Makes a more readable output.
