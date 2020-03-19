@@ -62,3 +62,6 @@
 [submodule "_vim/pack/john/start/molokai"]
 	path = _vim/pack/john/start/molokai
 	url = git@github.com:tomasr/molokai.git
+[submodule "_vim/pack/john/start/LeaderF"]
+	path = _vim/pack/john/start/LeaderF
+	url = git@github.com:Yggdroot/LeaderF.git

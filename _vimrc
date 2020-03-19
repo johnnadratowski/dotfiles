@@ -3,7 +3,7 @@
 " ==========================================================
 
 set nocompatible              " Don't be compatible with vi
-let mapleader=" "             " Map leader key to space
+let mapleader=","             " Map leader key to space
 
 syntax on                     " syntax highlighing
 filetype on                   " try to detect filetypes
@@ -65,18 +65,14 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 """" Display
 if has("gui_running")
     colorscheme molokai
-    set guifont=Inconsolata\ Bold\ 12
+    set guifont=Roboto\ Mono\ Light\ for\ Powerline
     "colorscheme desert
     " Remove menu bar
     "set guioptions-=m
 
     " Remove toolbar
     " set guioptions-=T
-else
-    colorscheme molokai
-    set guifont=Inconsolata\ Bold\ 8
 endif
-
 
 """" Persistent Undo
 " Keep undo history across sessions, by storing in file.
@@ -105,9 +101,10 @@ source ~/.vim/vimrc/coc.vim
 source ~/.vim/vimrc/nerdtree.vim
 
 
-""" CtrlP
-
-map <leader>f :CtrlP<CR>
+""" Leaderf
+let g:Lf_FollowLinks = 1
+let g:Lf_PreviewInPopup = 1
+map <leader>f :Leaderf file --popup<CR>
 
 
 """ Search
