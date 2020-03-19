@@ -32,3 +32,6 @@
 [submodule "_vim/pack/john/start/vim-emacs-bindings"]
 	path = _vim/pack/john/start/vim-emacs-bindings
 	url = git@github.com:maxbrunsfeld/vim-emacs-bindings.git
+[submodule "_vim/pack/john/start/tsuquyomi"]
+	path = _vim/pack/john/start/tsuquyomi
+	url = git@github.com:Quramy/tsuquyomi.git

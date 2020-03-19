@@ -2,7 +2,7 @@
 set -e
 
 function main() {
-  git submodule update --recursive --remote --merge && git commit
+  git submodule update --recursive --remote --merge
 }
 
 main "$@"
