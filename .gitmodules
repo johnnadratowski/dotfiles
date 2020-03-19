@@ -2,12 +2,6 @@
 	path = _oh-my-zsh
 	url = git://github.com/robbyrussell/oh-my-zsh.git
     ignore = dirty
-[submodule "python_lib"]
-	path = python_lib
-	url = https://github.com/johnnadratowski/python_lib.git
-[submodule "/Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/k"]
-	path = /Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/k
-	url = https://github.com/supercrabtree/k
 [submodule "vim/pack/john/start/ctrlp.vim"]
 	path = vim/pack/john/start/ctrlp.vim
 	url = git@github.com:kien/ctrlp.vim.git
