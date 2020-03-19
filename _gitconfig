@@ -59,3 +59,8 @@
     lba = !git lb --all 
     h = !git --no-pager log --graph -n 15
     a = !git --no-pager la -n 15
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
