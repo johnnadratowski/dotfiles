@@ -64,3 +64,4 @@ then
 fi
 
 if [ "$TMUX" = "" ]; then exec tmux -2 new-session -A -s main; fi
+

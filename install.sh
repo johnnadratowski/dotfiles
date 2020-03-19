@@ -27,15 +27,6 @@ log "Install NVM"
 mkdir -p ~/.nvm
 curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
 
-log "Install native node apps"
-npm install -g nativefier
-
-log "Install custom electron apps"
-(
-  cd ./apps/
-  ./run.sh
-)
-
 log "Install Cheat Sheet"
 curl https://cht.sh/:cht.sh > ~/bin/cht.sh
 chmod +x ~/bin/cht.sh
@@ -44,6 +35,3 @@ curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 
 log "install tpm"
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-
-log "link table script to bin"
-ln -s ~/git/dotfiles/lib/bash/table.sh ~/bin/table

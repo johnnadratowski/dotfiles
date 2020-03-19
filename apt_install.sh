@@ -1,10 +1,9 @@
-#!/user/bin/bash
-sudo apt-get install zsh rake locate vim tmux vim-gtk python2.7 python2.7-dev python-pip git pgadmin3 guake meld python-pip virtualbox
+#!/usr/bin/env bash
+sudo add-apt-repository universe
+sudo apt-get install --yes zsh rake locate vim tmux vim-gtk python git meld virtualbox nodejs npm tree silversearcher-ag
 sudo pip install virtualenv virtualenvwrapper watchdog fabric django ipython uwsgi fabtools fabuild shutter nodejs
 
-cd ~/git/
-git clone https://github.com/github/hub.git
-cd hub
-sudo rake install prefix=/usr/local
+sudo npm install -g diff-so-fancy
 
-curl https://raw.githubusercontent.com/creationix/nvm/v0.19.0/install.sh | bash
+echo "Setting up powerline fonts for WSL: https://devpro.media/install-powerline-windows/#edit-your-powerline-configuration"
+

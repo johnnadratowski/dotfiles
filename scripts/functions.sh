@@ -610,37 +610,6 @@ function git-clone-all() {
 	log_info "Cloned ${total} repos"
 }
 
-function git-purge-files()
-{
-	if [ $# -eq 0 ]; then
-		echo "missing file args"
-		exit 0
-	fi
-
-	# make sure we're at the root of git repo
-	if [ ! -d .git ]; then
-		echo "Error: must run this script from the root of a git repository"
-		exit 1
-	fi
-
-	# remove all paths passed as arguments from the history of the repo
-	local files=$@
-	git filter-branch --index-filter "git rm -rf --cached --ignore-unmatch $files" HEAD
-
-	# remove the temporary history git-filter-branch otherwise leaves behind for a long time
-	rm -rf .git/refs/original/ && git reflog expire --all &&  git gc --aggressive --prune
-}
-
-function git-truncate-history()
-{
-	[[ $1 != "" ]] || echo "Must pass branch"; exit 1
-	git checkout --orphan temp $1
-	git commit --allow-empty -m "Truncated history"
-	git rebase --onto temp $1 master
-	git branch -D temp
-	git gc --prune
-}
-
 function swap_py2()
 {
 	sudo rm /usr/bin/python
@@ -674,74 +643,6 @@ function vimdo() {
 	do
 		vim -N -u NONE -n -c "set nomore" -c ":execute \"norm! $CMD\"" -cwq! $f
 	done
-}
-
-# Swap out AWS Access Keys and delete the old ones
-function swap_aws_access_keys () {
-	local backupAwsKey=$(mktemp)
-	log_info "Making backup of Aws Credentials"
-	cp -f ~/.aws/credentials $backupAwsKey
-	log_info "Made backup of aws keys: $backupAwsKey"
-	local oldAccessKey
-	oldAccessKey=$(cat ~/.aws/credentials | grep aws_access_key_id | cut -d' ' -f3) || { 
-		log_error "failed"
-		return 1 
-	}
-
-	log_info "Old Access Key: $oldAccessKey"
-	local filename="$(mktemp)"
-	log_info "Getting new Access Key. Temp New Cred File: $filename"
-	aws iam create-access-key > $filename || { 
-		log_error "failed"
-		return 1
-	}
-
-	log_info "New Creds:$(cat $filename)"
-	local accessKeyID
-	accessKeyID=$(cat $filename | jq -r .AccessKey.AccessKeyId) || { 
-		log_error "failed"
-		return 1
-	}
-
-	log_info "New Access Key ID: $accessKeyID"
-	local accessKeySecret
-	accessKeySecret=$(cat $filename | jq -r .AccessKey.SecretAccessKey) || { 
-		log_error "failed"
-		return 1
-	}
-
-	log_info "New Access Key Secret: $accessKeySecret"
-	local tmpCreds=$(mktemp)
-	log_info "Replacing credentials file. Old file:\n\n$(cat ~/.aws/credentials)\n\n"
-	sed "s/^aws_access_key_id = .*$/aws_access_key_id = $accessKeyID/" ~/.aws/credentials > $tmpCreds || { 
-		log_error "failed"
-		return 1
-	}
-
-	mv -f $tmpCreds ~/.aws/credentials || { 
-		log_error "failed"
-		return 1
-	}
-
-	sed "s|^aws_secret_access_key = .*$|aws_secret_access_key = $accessKeySecret|g" ~/.aws/credentials > $tmpCreds || { 
-		log_error "failed"
-		return 1
-	}
-
-	mv -f $tmpCreds ~/.aws/credentials || { 
-		log_error "failed"
-		return 1
-	}
-
-	log_info "New credentials file:\n\n$(cat ~/.aws/credentials)\n\n"
-
-	log_info "Process completed successfully. Now run:\n\naws iam delete-access-key --access-key-id $oldAccessKey || { echo \"failed to delete key\" }"
-	# log_info "Checking credentials worked"
-
-	# aws sts get-caller-identity || { log_error "failed"; return 1}
-
-	# log_info "Deleting old access key"
-	# aws iam delete-access-key --access-key-id $oldAccessKey || { log_error "failed"; return 1}
 }
 
 function gen_ssl_cert () {

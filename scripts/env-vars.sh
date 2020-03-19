@@ -56,7 +56,10 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
 
 # Java stuff
-export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+if [ -f /usr/libexec/java_home ]
+then
+    export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+fi
 
 # Ruby stuff
 if which rbenv > /dev/null; then eval "$(rbenv init -)"; fi
@@ -65,13 +68,19 @@ if which rbenv > /dev/null; then eval "$(rbenv init -)"; fi
 export DENO_INSTALL="/Users/johnnadratowski/.local"
 export PATH="$DENO_INSTALL/bin:$PATH"
 
-# added by travis gem
-[ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
-
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 [ -f ~/.ghcup/env ] && source ~/.ghcup/env
 
 [ -f /usr/local/bin/virtualenvwrapper.sh ] && source /usr/local/bin/virtualenvwrapper.sh
 
+# added by travis gem
+[ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
+
+if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
+    powerline-daemon -q
+    POWERLINE_BASH_CONTINUATION=1
+    POWERLINE_BASH_SELECT=1
+    source /usr/share/powerline/bindings/bash/powerline.sh
+fi
 
