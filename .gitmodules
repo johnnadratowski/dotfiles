@@ -32,9 +32,12 @@
 [submodule "_vim/pack/john/start/vim-emacs-bindings"]
 	path = _vim/pack/john/start/vim-emacs-bindings
 	url = git@github.com:maxbrunsfeld/vim-emacs-bindings.git
-[submodule "_vim/pack/john/start/tsuquyomi"]
-	path = _vim/pack/john/start/tsuquyomi
-	url = git@github.com:Quramy/tsuquyomi.git
-[submodule "_vim/pack/john/start/tsuquyomi-vue"]
-	path = _vim/pack/john/start/tsuquyomi-vue
-	url = git@github.com:Quramy/tsuquyomi-vue.git
+[submodule "_vim/pack/john/start/vim-pug"]
+	path = _vim/pack/john/start/vim-pug
+	url = git@github.com:digitaltoad/vim-pug.git
+[submodule "_vim/pack/john/start/vim-vue"]
+	path = _vim/pack/john/start/vim-vue
+	url = git@github.com:posva/vim-vue.git
+[submodule "_vim/pack/john/start/typescript-vim"]
+	path = _vim/pack/john/start/typescript-vim
+	url = git@github.com:leafgarland/typescript-vim.git
