@@ -130,6 +130,7 @@ set background=dark           " We are using dark background in vim
 set wildmode=full             " <Tab> cycles between all matching choices.
 set mouse=a
 set mousehide
+set clipboard=unnamed
 
 " don't bell or blink
 set noerrorbells
