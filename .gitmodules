@@ -29,3 +29,6 @@
 [submodule "vim/pack/john/start/vim-tmux-navigator"]
 	path = vim/pack/john/start/vim-tmux-navigator
 	url = git@github.com:christoomey/vim-tmux-navigator.git
+[submodule "_vim/pack/john/start/vim-emacs-bindings"]
+	path = _vim/pack/john/start/vim-emacs-bindings
+	url = git@github.com:maxbrunsfeld/vim-emacs-bindings.git
