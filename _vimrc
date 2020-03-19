@@ -3,13 +3,13 @@
 " ==========================================================
 
 set nocompatible              " Don't be compatible with vi
-let mapleader=","             " change the leader to be a comma vs slash
+let mapleader=" "             " Map leader key to space
 
 syntax on                     " syntax highlighing
 filetype on                   " try to detect filetypes
 filetype plugin indent on     " enable loading indent file for filetype
 
-set autoreload                " Automatically reload files changes outside vim
+set autoread                " Automatically reload files changes outside vim
 set autoindent                " same indentation as previous line
 set backspace=indent,eol,start  "Allow backspace in insert mode
 set background=dark           " We are using dark background in vim
@@ -39,7 +39,7 @@ set noerrorbells            " No bell on error
 set nostartofline           " Avoid moving cursor to BOL when jumping around
 set noswapfile              " No swap file
 set nowrap                  " No text wrapping by default
-set wb                      " Make a write backup for write errors
+set nowb                      " Make a write backup for write errors
 set number                  " Show line numbers
 set report=0                " : commands always print changed line count.
 set shiftround              " rounds indent to a multiple of shiftwidth
@@ -64,7 +64,7 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 
 """" Display
 if has("gui_running")
-    colorscheme vividchalk
+    colorscheme molokai
     set guifont=Inconsolata\ Bold\ 12
     "colorscheme desert
     " Remove menu bar
@@ -82,8 +82,8 @@ endif
 " Keep undo history across sessions, by storing in file.
 " Only works all the time.
 if has('persistent_undo')
-  silent !mkdir ~/.vim/backups > /dev/null 2>&1
-  set undodir=~/.vim/backups
+  silent !mkdir -p ~/tmp/backups > /dev/null 2>&1
+  set undodir=~/tmp/backups
   set undofile
 endif
 
@@ -182,11 +182,8 @@ map <leader>= <c-w>=
 map <leader>- <c-w>s
 map <leader>\| <c-w>v
 
-map <leader>T :tabnew<CR>
-map <leader>W :tabclose<CR>
-
-map <leader>x :clo<CR>
-map <leader>w :bd<CR>
+map <leader>x :bd<CR>
+map <leader>w :clo<CR>
 
 " Paste/copy from/to system clipboard
 map <leader>p "+p
@@ -205,7 +202,7 @@ nnoremap <leader>S :%s/\s\+$//<cr>:let @/=''<CR>
 " Set working directory
 nnoremap <leader>. :lcd %:p:h<CR>
 
-noremap <silent> <Leader>w :call ToggleWrap()<CR>
+noremap <silent> <Leader>W :call ToggleWrap()<CR>
 
 
 
