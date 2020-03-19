@@ -7,8 +7,6 @@ from subprocess import call
 import platform
 import shutil
 
-from lib.python import shell
-
 SOURCE_BASE = os.path.abspath(os.path.curdir)
 TARGET_BASE = os.path.expanduser("~")
 
@@ -41,19 +39,19 @@ def link_file(name, target_name=None):
         if not os.path.islink(target) or os.path.abspath(
                 os.readlink(target)) != os.path.abspath(source):
             bak_file = target + ".dotfiles.bak"
-            shell.warning(
-                "Target exists. Backing up {target} to {bak_file}",
+            print(
+                "Target exists. Backing up {target} to {bak_file}".format(
                 target=target,
-                bak_file=bak_file)
+                bak_file=bak_file))
             shutil.move(target, bak_file)
         else:
-            shell.info(
-                "Source {source} already linked from target {target}",
+            print(
+                "Source {source} already linked from target {target}".format(
                 source=source,
-                target=target)
+                target=target))
             return
 
-    shell.info("Linking {source} to {target}", source=source, target=target)
+    print("Linking {source} to {target}".format(source=source, target=target))
 
     if not os.path.exists(os.path.dirname(target)):
         os.makedirs(os.path.dirname(target))
@@ -75,8 +73,8 @@ def unlink_file(name, target_name=None):
 
         bak_file = target + ".dotfiles.bak"
         if os.path.exists(bak_file):
-            shell.warning(
-                "Recovering backup file {bak_file}", bak_file=bak_file)
+            print(
+                "Recovering backup file {bak_file}".format(bak_file=bak_file))
             shutil.move(bak_file, target)
 
 
@@ -91,7 +89,7 @@ def run_files(fn, **extra):
 
 def update_submodules():
     if not find_executable('git'):
-        shell.error("Git not installed - unable to update submodules")
+        print("Git not installed - unable to update submodules")
         return
     call(["git", "submodule", "update", "--init", "--recursive"])
     call([
@@ -104,7 +102,7 @@ def make_dirs(dirs):
     for dir_ in dirs:
         dir_ = os.path.abspath(os.path.expanduser(dir_))
         if not os.path.exists(dir_):
-            shell.info("Creating directory {dir}", dir=dir_)
+            print("Creating directory {dir}".format(dir=dir_))
             os.makedirs(dir_)
 
 

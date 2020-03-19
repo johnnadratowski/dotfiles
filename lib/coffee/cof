@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-coffee -r $DOTFILES/lib/coffee/all.coffee "$@"
