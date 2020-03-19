@@ -2,33 +2,36 @@
 	path = _oh-my-zsh
 	url = git://github.com/robbyrussell/oh-my-zsh.git
     ignore = dirty
-[submodule "vim/pack/john/start/ctrlp.vim"]
-	path = vim/pack/john/start/ctrlp.vim
+[submodule "_vim/pack/john/start/ctrlp.vim"]
+	path = _vim/pack/john/start/ctrlp.vim
 	url = git@github.com:kien/ctrlp.vim.git
-[submodule "vim/pack/john/start/vim-ags"]
-	path = vim/pack/john/start/vim-ags
+[submodule "_vim/pack/john/start/vim-ags"]
+	path = _vim/pack/john/start/vim-ags
 	url = git@github.com:gabesoft/vim-ags.git
-[submodule "vim/pack/john/start/gundo.vim"]
-	path = vim/pack/john/start/gundo.vim
+[submodule "_vim/pack/john/start/gundo.vim"]
+	path = _vim/pack/john/start/gundo.vim
 	url = git@github.com:sjl/gundo.vim.git
-[submodule "vim/pack/john/start/nerdtree"]
-	path = vim/pack/john/start/nerdtree
+[submodule "_vim/pack/john/start/nerdtree"]
+	path = _vim/pack/john/start/nerdtree
 	url = git@github.com:preservim/nerdtree.git
-[submodule "vim/pack/john/start/vim-abolish"]
-	path = vim/pack/john/start/vim-abolish
+[submodule "_vim/pack/john/start/vim-abolish"]
+	path = _vim/pack/john/start/vim-abolish
 	url = git@github.com:tpope/vim-abolish.git
-[submodule "vim/pack/john/start/vim-sensible"]
-	path = vim/pack/john/start/vim-sensible
+[submodule "_vim/pack/john/start/vim-sensible"]
+	path = _vim/pack/john/start/vim-sensible
 	url = git@github.com:tpope/vim-sensible.git
-[submodule "vim/pack/john/start/vim-surround"]
-	path = vim/pack/john/start/vim-surround
+[submodule "_vim/pack/john/start/vim-surround"]
+	path = _vim/pack/john/start/vim-surround
 	url = git@github.com:tpope/vim-surround.git
-[submodule "vim/pack/john/start/vim-vividchalk"]
-	path = vim/pack/john/start/vim-vividchalk
+[submodule "_vim/pack/john/start/vim-vividchalk"]
+	path = _vim/pack/john/start/vim-vividchalk
 	url = git@github.com:tpope/vim-vividchalk.git
-[submodule "vim/pack/john/start/vim-tmux-navigator"]
-	path = vim/pack/john/start/vim-tmux-navigator
+[submodule "_vim/pack/john/start/vim-tmux-navigator"]
+	path = _vim/pack/john/start/vim-tmux-navigator
 	url = git@github.com:christoomey/vim-tmux-navigator.git
 [submodule "_vim/pack/john/start/vim-emacs-bindings"]
 	path = _vim/pack/john/start/vim-emacs-bindings
 	url = git@github.com:maxbrunsfeld/vim-emacs-bindings.git
+[submodule "_vim/pack/john/start/tsuquyomi"]
+	path = _vim/pack/john/start/tsuquyomi
+	url = git@github.com:Quramy/tsuquyomi.git
