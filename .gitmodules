@@ -44,3 +44,6 @@
 [submodule "_vim/pack/john/start/vim-go"]
 	path = _vim/pack/john/start/vim-go
 	url = git@github.com:fatih/vim-go.git
+[submodule "_vim/pack/john/start/editorconfig-vim"]
+	path = _vim/pack/john/start/editorconfig-vim
+	url = git@github.com:editorconfig/editorconfig-vim.git
