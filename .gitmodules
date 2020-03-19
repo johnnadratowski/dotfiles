@@ -41,3 +41,6 @@
 [submodule "_vim/pack/john/start/typescript-vim"]
 	path = _vim/pack/john/start/typescript-vim
 	url = git@github.com:leafgarland/typescript-vim.git
+[submodule "_vim/pack/john/start/vim-go"]
+	path = _vim/pack/john/start/vim-go
+	url = git@github.com:fatih/vim-go.git
