@@ -63,8 +63,10 @@ set wildignore+=*/vendor/**              " Ignore vendor sources
 set wildmode=full             " <Tab> cycles between all matching choices.
 
 """" Display
+
+colorscheme molokai
+
 if has("gui_running")
-    colorscheme molokai
     set guifont=Roboto\ Mono\ Light\ for\ Powerline
     "colorscheme desert
     " Remove menu bar
