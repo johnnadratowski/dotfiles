@@ -47,3 +47,21 @@
 [submodule "_vim/pack/john/start/editorconfig-vim"]
 	path = _vim/pack/john/start/editorconfig-vim
 	url = git@github.com:editorconfig/editorconfig-vim.git
+[submodule "_vim/pack/john/start/undotree"]
+	path = _vim/pack/john/start/undotree
+	url = git@github.com:mbbill/undotree.git
+[submodule "_vim/pack/john/start/tender.vim"]
+	path = _vim/pack/john/start/tender.vim
+	url = git@github.com:jacoborus/tender.vim.git
+[submodule "_vim/pack/john/start/gruvbox"]
+	path = _vim/pack/john/start/gruvbox
+	url = git@github.com:morhetz/gruvbox.git
+[submodule "_vim/pack/john/start/vim-startify"]
+	path = _vim/pack/john/start/vim-startify
+	url = git@github.com:mhinz/vim-startify.git
+[submodule "_vim/pack/john/start/molokai"]
+	path = _vim/pack/john/start/molokai
+	url = git@github.com:tomasr/molokai.git
+[submodule "_vim/pack/john/start/vim"]
+	path = _vim/pack/john/start/vim
+	url = git@github.com:dracula/vim.git
