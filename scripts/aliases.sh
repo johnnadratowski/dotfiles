@@ -28,7 +28,7 @@ alias _='please'
 #-------------------------------------------------------------
 ## The 'ls' family (this assumes you use a recent GNU ls)
 ##-------------------------------------------------------------
-alias ls='ls -hFG --color=auto' # add colors for filetype recognition
+alias ls='ls -hFG' # add colors for filetype recognition
 alias ll="ls -l"
 alias l="ll"
 alias ldot='ls -ld .*'    # show only hidden files
