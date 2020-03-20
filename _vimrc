@@ -98,6 +98,9 @@ endif
 " Plugin Settings + Keymaps
 " ==========================================================
 
+""" vim-prettier
+let g:prettier#autoformat = 1
+let g:prettier#autoformat_require_pragma = 0
 
 """ vim-commentary
 autocmd FileType vim setlocal commentstring=\"\ %s
