@@ -98,6 +98,12 @@ endif
 " Plugin Settings + Keymaps
 " ==========================================================
 
+
+""" vim-commentary
+autocmd FileType vim setlocal commentstring=\"\ %s
+autocmd FileType vimrc setlocal commentstring=\"\ %s
+autocmd FileType vue setlocal commentstring=//\ %s
+
 """ vim-workspace
 nnoremap <leader>` :ToggleWorkspace<CR>
 
