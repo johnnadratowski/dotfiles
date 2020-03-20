@@ -65,3 +65,6 @@
 [submodule "_vim/pack/john/start/LeaderF"]
 	path = _vim/pack/john/start/LeaderF
 	url = git@github.com:Yggdroot/LeaderF.git
+[submodule "_vim/pack/john/start/vim-vinegar"]
+	path = _vim/pack/john/start/vim-vinegar
+	url = git@github.com:tpope/vim-vinegar.git
