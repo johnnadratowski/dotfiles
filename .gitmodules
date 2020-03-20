@@ -83,12 +83,6 @@
 [submodule "_vim/pack/john/start/iceberg.vim"]
 	path = _vim/pack/john/start/iceberg.vim
 	url = git@github.com:cocopon/iceberg.vim.git
-[submodule "_vim/pack/john/start/vim-reload"]
-	path = _vim/pack/john/start/vim-reload
-	url = git@github.com:xolox/vim-reload.git
-[submodule "_vim/pack/john/start/vim-misc"]
-	path = _vim/pack/john/start/vim-misc
-	url = git@github.com:xolox/vim-misc.git
 [submodule "_vim/pack/john/start/badcat"]
 	path = _vim/pack/john/start/badcat
 	url = git@github.com:emanuelrosa/badcat.git
