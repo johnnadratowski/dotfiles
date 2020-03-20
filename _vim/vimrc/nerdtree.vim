@@ -1,6 +1,7 @@
 let NERDTreeShowBookmarks=1
 let NERDTreeQuitOnOpen=1
 let NERDTreeMouseMode=2
+let NERDTreeChDirMode=2
 let NERDTreeAutoDeleteBuffer = 1
 let NERDTreeShowHidden=1
 let NERDTreeMinimalUI = 1
@@ -21,19 +22,31 @@ function! NERDTreeSessionRoot()
   endif
 
   let l:root = GetSessionRoot(l:curFile)
-  execute 'NERDTree' l:root
+  if ! l:root
+    let l:root = GetGitRoot(l:curFile)
+  endif
+  if string(l:root) != "0"
+    execute 'NERDTree' l:root
+  endif
 endfunction
 
-function! GetSessionRoot(path)
+function! GetRoot(path, suffix)
   if a:path == '/'
     return 0
   endif
 
-  let l:files = split(globpath(a:path, '*'), '\n')
-  call filter(l:files, { idx, val -> val ==? a:path . "/Session.vim" })
+  let l:files = split(globpath(a:path, a:suffix), '\n')
   if len(l:files) > 0
     return a:path
   endif
- return GetSessionRoot(fnamemodify(a:path, ':h'))
+ return GetRoot(fnamemodify(a:path, ':h'), a:suffix)
+endfunction
+
+function! GetSessionRoot(path)
+  return GetRoot(a:path, "Session.vim")
+endfunction
+
+function! GetGitRoot(path)
+  return GetRoot(a:path, ".git/")
 endfunction
 
