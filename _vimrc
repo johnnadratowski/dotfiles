@@ -12,7 +12,6 @@ filetype plugin indent on     " enable loading indent file for filetype
 set autoread                " Automatically reload files changes outside vim
 set autoindent                " same indentation as previous line
 set backspace=indent,eol,start  "Allow backspace in insert mode
-set background=dark           " We are using dark background in vim
 set clipboard=unnamed        " Use system clipboard
 set colorcolumn=80          " The right hand gutter
 set confirm                 " Y-N-C prompt if closing with unsaved changes.
@@ -65,7 +64,8 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 
 """" Display
 
-colorscheme molokai
+set background=dark           " We are using dark background in vim
+colorscheme hyper
 
 if (has("nvim"))
   "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
