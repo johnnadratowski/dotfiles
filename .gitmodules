@@ -74,3 +74,6 @@
 [submodule "_vim/pack/john/start/vim-commentary"]
 	path = _vim/pack/john/start/vim-commentary
 	url = git@github.com:tpope/vim-commentary.git
+[submodule "_vim/pack/john/start/vim-prettier"]
+	path = _vim/pack/john/start/vim-prettier
+	url = git@github.com:prettier/vim-prettier.git
