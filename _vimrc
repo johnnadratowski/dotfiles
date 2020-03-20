@@ -3,7 +3,7 @@
 " ==========================================================
 
 set nocompatible              " Don't be compatible with vi
-let mapleader=","             " Map leader key to space
+let mapleader=" "             " Map leader key to space
 
 syntax on                     " syntax highlighing
 filetype on                   " try to detect filetypes
@@ -98,6 +98,8 @@ endif
 " Plugin Settings + Keymaps
 " ==========================================================
 
+""" vim-workspace
+nnoremap <leader>` :ToggleWorkspace<CR>
 
 """ CoC
 
