@@ -71,6 +71,3 @@
 [submodule "_vim/pack/john/start/vim-indentguides"]
 	path = _vim/pack/john/start/vim-indentguides
 	url = git@github.com:thaerkh/vim-indentguides.git
-[submodule "_vim/pack/john/start/vim-commentary"]
-	path = _vim/pack/john/start/vim-commentary
-	url = git@github.com:tpope/vim-commentary.git
