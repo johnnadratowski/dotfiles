@@ -9,6 +9,7 @@ let NERDTreeIgnore=['\.pyc','\~$','\.swo$','\.swp$','\.git','\.hg','\.svn','\.bz
 let NERDTreeKeepTreeInNewTab=1
 let g:nerdtree_tabs_open_on_gui_startup=0
 
+nnoremap <C-e> :NERDTreeToggle<CR>
 map <leader>n :NERDTreeToggle<CR>
 map - :NERDTree %<CR>
 map ~ :call NERDTreeSessionRoot()<CR>

@@ -133,11 +133,13 @@ map <leader>f :Leaderf file --popup<CR>
 
 """ Search
 
-"Search for the word under cursor
+" Search for the word under cursor
 nnoremap <Leader>s :Ags<Space><C-R>=expand('<cword>')<CR><CR>
 " Search for the visually selected text
+vnoremap <C-f> y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
 vnoremap <Leader>s y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
 " Run Ags
+nnoremap <C-f> :Ags<Space>
 nnoremap <Leader>a :Ags<Space>
 " Quit Ags
 nnoremap <Leader><Leader>a :AgsQuit<CR>
@@ -200,15 +202,12 @@ map <leader>L <c-w>L
 map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
+
 map <leader>- <c-w>s
 map <leader>\| <c-w>v
 
 map <leader>x :bd<CR>
 map <leader>w :clo<CR>
-
-" Paste/copy from/to system clipboard
-map <leader>p "+p
-map <leader>y "+y
 
 " Quit window on <leader>q
 nnoremap <leader>q :q<CR>
