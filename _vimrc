@@ -98,6 +98,11 @@ endif
 " Plugin Settings + Keymaps
 " ==========================================================
 
+""" vim-go
+" disable vim-go :GoDef short cut (gd)
+" this is handled by LanguageClient [LC]
+let g:go_def_mapping_enabled = 0
+
 """ vim-prettier
 let g:prettier#autoformat = 1
 let g:prettier#autoformat_require_pragma = 0
