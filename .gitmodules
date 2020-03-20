@@ -71,3 +71,6 @@
 [submodule "_vim/pack/john/start/vim-indentguides"]
 	path = _vim/pack/john/start/vim-indentguides
 	url = git@github.com:thaerkh/vim-indentguides.git
+[submodule "_vim/pack/john/start/nerdcommenter"]
+	path = _vim/pack/john/start/nerdcommenter
+	url = git@github.com:preservim/nerdcommenter.git
