@@ -89,3 +89,6 @@
 [submodule "_vim/pack/john/start/vim-misc"]
 	path = _vim/pack/john/start/vim-misc
 	url = git@github.com:xolox/vim-misc.git
+[submodule "_vim/pack/john/start/badcat"]
+	path = _vim/pack/john/start/badcat
+	url = git@github.com:emanuelrosa/badcat.git
