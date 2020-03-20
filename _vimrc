@@ -273,7 +273,7 @@ fu! SplitScroll()
     :set scrollbind
 endfu
 
-function ToggleWrap()
+function! ToggleWrap()
   if &wrap
     echo "Wrap OFF"
     setlocal nowrap
