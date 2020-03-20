@@ -77,3 +77,6 @@
 [submodule "_vim/pack/john/start/vim-prettier"]
 	path = _vim/pack/john/start/vim-prettier
 	url = git@github.com:prettier/vim-prettier.git
+[submodule "_vim/pack/john/start/vim-yaml"]
+	path = _vim/pack/john/start/vim-yaml
+	url = git@github.com:stephpy/vim-yaml.git
