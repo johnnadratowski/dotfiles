@@ -80,3 +80,6 @@
 [submodule "_vim/pack/john/start/vim-yaml"]
 	path = _vim/pack/john/start/vim-yaml
 	url = git@github.com:stephpy/vim-yaml.git
+[submodule "_vim/pack/john/start/iceberg.vim"]
+	path = _vim/pack/john/start/iceberg.vim
+	url = git@github.com:cocopon/iceberg.vim.git
