@@ -44,9 +44,14 @@ function! NERDTreeSessionRoot()
     let l:curFile = getcwd()
   endif
 
-  let l:root = GetSessionRoot(l:curFile)
-  if ! l:root
-    let l:root = GetGitRoot(l:curFile)
+  if !exists("g:NERDTreeOriginalRoot")
+    let l:root = GetSessionRoot(l:curFile)
+
+    if ! l:root
+      let l:root = GetGitRoot(l:curFile)
+    endif
+  else
+    let l:root = g:NERDTreeOriginalRoot
   endif
   if string(l:root) != "0"
     execute 'NERDTree' l:root
@@ -72,4 +77,9 @@ endfunction
 function! GetGitRoot(path)
   return GetRoot(a:path, ".git/")
 endfunction
+
+let s:files = split(globpath(getcwd(), "Session.vim"), '\n')
+if len(s:files) > 0
+  let g:NERDTreeOriginalRoot = getcwd()
+endif
 
