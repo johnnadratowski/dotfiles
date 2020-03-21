@@ -138,7 +138,7 @@ source ~/.vim/vimrc/nerdtree.vim
 """ Leaderf
 let g:Lf_FollowLinks = 1
 let g:Lf_PreviewInPopup = 1
-map <leader>f :Leaderf file --popup<CR>
+nnoremap <silent> <expr> <leader>f (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
 
 
 """ Search
