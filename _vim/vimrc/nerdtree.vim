@@ -39,6 +39,17 @@ autocmd BufEnter * if bufname('#') =~# "^NERD_tree_" && winnr('$') > 1 | b# | en
 " Functions
 """""""""""""""""
 function! NERDTreeSessionRoot()
+  let l:root = GetRoot()
+  if string(l:root) != "0"
+    execute 'NERDTree' l:root
+  endif
+endfunction
+
+function! CDRoot()
+  execute "cd " . GetRoot()
+endfunction
+
+function! GetRoot()
   let l:curFile = expand('%:p')
   if l:curFile == ""
     let l:curFile = getcwd()
@@ -53,12 +64,11 @@ function! NERDTreeSessionRoot()
   else
     let l:root = g:NERDTreeOriginalRoot
   endif
-  if string(l:root) != "0"
-    execute 'NERDTree' l:root
-  endif
+
+  return l:root
 endfunction
 
-function! GetRoot(path, suffix)
+function! s:getRoot(path, suffix)
   if a:path == '/'
     return 0
   endif
@@ -67,15 +77,15 @@ function! GetRoot(path, suffix)
   if len(l:files) > 0
     return a:path
   endif
- return GetRoot(fnamemodify(a:path, ':h'), a:suffix)
+ return s:getRoot(fnamemodify(a:path, ':h'), a:suffix)
 endfunction
 
 function! GetSessionRoot(path)
-  return GetRoot(a:path, "Session.vim")
+  return s:getRoot(a:path, "Session.vim")
 endfunction
 
 function! GetGitRoot(path)
-  return GetRoot(a:path, ".git/")
+  return s:getRoot(a:path, ".git/")
 endfunction
 
 let s:files = split(globpath(getcwd(), "Session.vim"), '\n')

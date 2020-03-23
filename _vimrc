@@ -18,6 +18,7 @@ set confirm                 " Y-N-C prompt if closing with unsaved changes.
 set cursorline              " have a line indicate the cursor location
 set expandtab               " Use spaces, not tabs, for autoindent/tab key.
 set ffs=unix,dos,mac        " Try recognizing dos, unix, and mac line endings.
+set foldcolumn=0            " space of folds to be shown in sidebar
 set foldlevel=99            " don't fold by default
 set foldmethod=indent       " allow us to fold on indents
 set grepprg=ag              " replace the default grep program with ag
@@ -25,6 +26,7 @@ set history=1000            " Command history
 set hlsearch                " Highlight searches by default.
 set ignorecase              " Default to using case insensitive searches,
 set laststatus=2            " Always show statusline, even if only 1 window.
+set lazyredraw              " Don't redraw screen in middle of macro
 set linebreak               " don't wrap textin the middle of a word
 set list
 set ls=2                    " allways show status line
@@ -163,6 +165,8 @@ nnoremap <leader>. :lcd %:p:h<CR>
 " Toggle word wrap
 noremap <silent> <Leader>W :call ToggleWrap()<CR>
 
+" Use capital Q to replay last macro
+nnoremap Q @@
 
 
 
@@ -204,9 +208,9 @@ source ~/.vim/vimrc/nerdtree.vim
 """ Leaderf
 let g:Lf_FollowLinks = 1
 let g:Lf_PreviewInPopup = 1
-nnoremap <silent> <expr> <leader>f (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
-nnoremap <silent> <expr> <C-p> (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
-" nnoremap <silent> <C-p> <ESC>:normal _<CR> <bar> <expr> (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
+nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
+nmap <silent> <leader>f <Plug>(leaderf-nerd)
+nmap <silent> <expr> <C-p> ":call CDRoot()\<CR>".":Leaderf file --popup\<CR>"
 
 
 
@@ -221,7 +225,7 @@ vnoremap <Leader>s y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR
 nnoremap <C-f> :Ags<Space>
 nnoremap <Leader>a :Ags<Space>
 " Quit Ags
-nnoremap <Leader><Leader>a :AgsQuit<CR>
+"nnoremap <Leader><Leader>a :AgsQuit<CR>
 
 
 
