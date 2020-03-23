@@ -105,79 +105,6 @@ endif
 
 
 " ==========================================================
-" Plugin Settings + Keymaps
-" ==========================================================
-
-""" vim-go
-" disable vim-go :GoDef short cut (gd)
-" this is handled by LanguageClient [LC]
-let g:go_def_mapping_enabled = 0
-
-""" vim-prettier
-let g:prettier#autoformat = 1
-let g:prettier#autoformat_require_pragma = 0
-
-""" vim-commentary
-autocmd FileType vim setlocal commentstring=\"\ %s
-autocmd FileType vimrc setlocal commentstring=\"\ %s
-autocmd FileType vue setlocal commentstring=//\ %s
-
-""" vim-workspace
-nnoremap <leader>` :ToggleWorkspace<CR>
-
-""" CoC
-
-source ~/.vim/vimrc/coc.vim
-
-
-""" NERDTree
-
-source ~/.vim/vimrc/nerdtree.vim
-
-
-""" Leaderf
-let g:Lf_FollowLinks = 1
-let g:Lf_PreviewInPopup = 1
-nnoremap <silent> <expr> <leader>f (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
-nnoremap <silent> <expr> <C-p> (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
-
-
-""" Search
-
-" Search for the word under cursor
-nnoremap <Leader>s :Ags<Space><C-R>=expand('<cword>')<CR><CR>
-" Search for the visually selected text
-vnoremap <C-f> y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
-vnoremap <Leader>s y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
-" Run Ags
-nnoremap <C-f> :Ags<Space>
-nnoremap <Leader>a :Ags<Space>
-" Quit Ags
-nnoremap <Leader><Leader>a :AgsQuit<CR>
-
-
-
-""" Undotree
-
-map <leader>g :UndotreeToggle<CR>
-
-
-
-
-" ==========================================================
-" Language Settings
-" ==========================================================
-
-
-" Vim
-
-au FileType vim noremap <silent><buffer> <F9> :exec 'source '.bufname('%')<CR>
-
-
-
-
-
-" ==========================================================
 " Keymaps
 " ==========================================================
 
@@ -233,7 +160,89 @@ nnoremap <leader><space> :nohlsearch<cr>
 " Set working directory
 nnoremap <leader>. :lcd %:p:h<CR>
 
+" Toggle word wrap
 noremap <silent> <Leader>W :call ToggleWrap()<CR>
+
+
+
+
+" ==========================================================
+" Language Settings
+" ==========================================================
+
+
+" Vim
+
+au FileType vim noremap <silent><buffer> <F8> <ESC>:w<CR> <bar> :exec 'source '.bufname('%')<CR> <bar> :echom "Reloaded File"<CR>
+au FileType vim noremap <silent><buffer> <F9> <ESC>:w<CR> <bar> :exec 'source '.bufname('%')<CR> <bar> :echom "Reloaded File"<CR> <bar> :normal! @:<CR>
+au FileType vim noremap <silent><buffer> <F10> <ESC>:w<CR> <bar> :exec 'source '.bufname('%')<CR> <bar> :echom "Reloaded File"<CR> <bar> :call JNTest()<CR>
+
+
+
+
+
+
+
+
+" ==========================================================
+" Plugin Settings + Keymaps
+" ==========================================================
+
+""" vim-go
+" disable vim-go :GoDef short cut (gd)
+" this is handled by LanguageClient [LC]
+let g:go_def_mapping_enabled = 0
+
+""" vim-prettier
+let g:prettier#autoformat = 1
+let g:prettier#autoformat_require_pragma = 0
+
+""" vim-commentary
+autocmd FileType vim setlocal commentstring=\"\ %s
+autocmd FileType vimrc setlocal commentstring=\"\ %s
+autocmd FileType vue setlocal commentstring=//\ %s
+
+""" vim-workspace
+nnoremap <leader>` :ToggleWorkspace<CR>
+
+""" CoC
+
+source ~/.vim/vimrc/coc.vim
+
+
+""" NERDTree
+
+source ~/.vim/vimrc/nerdtree.vim
+
+
+""" Leaderf
+let g:Lf_FollowLinks = 1
+let g:Lf_PreviewInPopup = 1
+nnoremap <silent> <expr> <leader>f (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
+nnoremap <silent> <expr> <C-p> (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
+" nnoremap <silent> <C-p> <ESC>:normal _<CR> <bar> <expr> (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
+
+
+
+""" Search
+
+" Search for the word under cursor
+nnoremap <Leader>s :Ags<Space><C-R>=expand('<cword>')<CR><CR>
+" Search for the visually selected text
+vnoremap <C-f> y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
+vnoremap <Leader>s y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
+" Run Ags
+nnoremap <C-f> :Ags<Space>
+nnoremap <Leader>a :Ags<Space>
+" Quit Ags
+nnoremap <Leader><Leader>a :AgsQuit<CR>
+
+
+
+""" Undotree
+
+map <leader>g :UndotreeToggle<CR>
+
 
 
 
