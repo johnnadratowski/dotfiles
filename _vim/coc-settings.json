@@ -5,5 +5,10 @@
       "rootPatterns": ["go.mod", ".vim/", ".git/", ".hg/"],
       "filetypes": ["go"]
     }
-  }
+  },
+  "list.source.files.excludePatterns": [
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/vendor/**"
+  ]
 }

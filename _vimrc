@@ -211,21 +211,18 @@ let g:Lf_PreviewInPopup = 1
 nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
 nmap <silent> <leader>f <Plug>(leaderf-nerd)
 nmap <silent> <expr> <C-p> ":call CDRoot()\<CR>".":Leaderf file --popup\<CR>"
-
+let g:Lf_WildIgnore = {
+        \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache'],
+        \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]']
+        \}
 
 
 """ Search
 
-" Search for the word under cursor
-nnoremap <Leader>s :Ags<Space><C-R>=expand('<cword>')<CR><CR>
 " Search for the visually selected text
-vnoremap <C-f> y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
-vnoremap <Leader>s y:Ags<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
+vnoremap <C-f> y:Ags<Space>-f<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
 " Run Ags
-nnoremap <C-f> :Ags<Space>
-nnoremap <Leader>a :Ags<Space>
-" Quit Ags
-"nnoremap <Leader><Leader>a :AgsQuit<CR>
+nnoremap <C-f> :Ags<Space>-f<Space>
 
 
 

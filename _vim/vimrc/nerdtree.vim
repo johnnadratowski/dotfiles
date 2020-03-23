@@ -19,7 +19,7 @@ let g:nerdtree_tabs_open_on_gui_startup=0
 """""""""""""""""
 nnoremap <C-e> :NERDTreeToggle<CR>
 map <leader>n :NERDTreeToggle<CR>
-map - :NERDTree %<CR>
+map - :NERDTreeFind<CR>
 map _ :call NERDTreeSessionRoot()<CR>
 
 
@@ -46,7 +46,10 @@ function! NERDTreeSessionRoot()
 endfunction
 
 function! CDRoot()
-  execute "cd " . GetRoot()
+  let l:root = GetRoot()
+  if l:root
+    execute "cd " . 
+  endif
 endfunction
 
 function! GetRoot()

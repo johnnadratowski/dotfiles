@@ -138,3 +138,7 @@ nnoremap <silent> <space>j  :<C-u>CocNext<CR>
 nnoremap <silent> <space>k  :<C-u>CocPrev<CR>
 " Resume latest coc list.
 nnoremap <silent> <space>p  :<C-u>CocListResume<CR>
+
+
+" My Maps for COC
+nnoremap <silent> <C-t> :<C-u>CocList -I symbols<cr>
