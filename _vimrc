@@ -167,26 +167,12 @@ noremap <silent> <Leader>W :call ToggleWrap()<CR>
 
 
 " ==========================================================
-" Language Settings
-" ==========================================================
-
-
-" Vim
-
-au FileType vim noremap <silent><buffer> <F8> <ESC>:w<CR> <bar> :exec 'source '.bufname('%')<CR> <bar> :echom "Reloaded File"<CR>
-au FileType vim noremap <silent><buffer> <F9> <ESC>:w<CR> <bar> :exec 'source '.bufname('%')<CR> <bar> :echom "Reloaded File"<CR> <bar> :normal! @:<CR>
-au FileType vim noremap <silent><buffer> <F10> <ESC>:w<CR> <bar> :exec 'source '.bufname('%')<CR> <bar> :echom "Reloaded File"<CR> <bar> :call JNTest()<CR>
-
-
-
-
-
-
-
-
-" ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
+
+""" Renamer
+source ~/.vim/vimrc/renamer.vim
+
 
 """ vim-go
 " disable vim-go :GoDef short cut (gd)

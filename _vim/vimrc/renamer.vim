@@ -4,14 +4,25 @@
 
 function! s:buildPart(part)
   let l:output = ""
-  for i in range(1, strlen(a:part))
-    echo strpart(a:part, i, 1)
+  for i in range(1, strchars(a:part))
+    let l:char = strcharpart(a:part, i-1, 1)
+    if i == 0 || matchstr(l:char, '^\l$') == ""
+      if i != 0
+        let l:output ..= "{,-,_, }"
+      endif
+      let l:output ..= "{" .. tolower(l:char) .. "," .. toupper(l:char) .. "}"
+    else 
+      let l:output ..= l:char
+      continue
+    endif
   endfor
+  return l:output
 endfunction
 
 function! s:command(cmd,bad,good,flags)
-  echom printf("%s %s %s %s", a:cmd, a:bad, a:good, a:flags)
-  s:buildPart(a:bad)
+  let bad = s:buildPart(a:bad)
+  let good = s:buildPart(a:good)
+  return a:cmd .. "/" .. l:bad .. "/" .. l:good .. "/" .. a:flags
 endfunction
 
 function! s:rename(bang,line1,line2,count,args)
@@ -33,15 +44,17 @@ function! s:rename(bang,line1,line2,count,args)
   else
     let cmd = a:line1.",".a:line2."Subvert"
   endif
+  if a:bang
+    let cmd .= "!"
+  endif
   return s:command(cmd,bad,good,flags)
 endfunction
 
 command! -nargs=1 -bang -bar -range=0 Rename
       \ :exec s:rename(<bang>0,<line1>,<line2>,<count>,[<f-args>])
 
-function! JNTest()
-  s:buildPart('foo')
-endfunction
-
-
+if exists(':R') != 2
+  command -nargs=1 -bang -bar -range=0 R
+        \ :exec s:rename(<bang>0,<line1>,<line2>,<count>,[<f-args>])
+endif
 
