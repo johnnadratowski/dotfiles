@@ -139,6 +139,7 @@ source ~/.vim/vimrc/nerdtree.vim
 let g:Lf_FollowLinks = 1
 let g:Lf_PreviewInPopup = 1
 nnoremap <silent> <expr> <leader>f (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
+nnoremap <silent> <expr> <C-p> (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
 
 
 """ Search
@@ -169,6 +170,8 @@ map <leader>g :UndotreeToggle<CR>
 
 
 " Vim
+
+au FileType vim noremap <silent><buffer> <F9> :exec 'source '.bufname('%')<CR>
 
 
 
@@ -212,10 +215,11 @@ map <leader>L <c-w>L
 map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
-
+" Window Splits
 map <leader>- <c-w>s
 map <leader>\| <c-w>v
 
+" Close Window
 map <leader>x :bd<CR>
 map <leader>w :clo<CR>
 
@@ -226,18 +230,10 @@ nnoremap <leader>Q :qa<CR>
 " hide matches on <leader>space
 nnoremap <leader><space> :nohlsearch<cr>
 
-" Remove trailing whitespace on <leader>S
-nnoremap <leader>S :%s/\s\+$//<cr>:let @/=''<CR>
-
 " Set working directory
 nnoremap <leader>. :lcd %:p:h<CR>
 
 noremap <silent> <Leader>W :call ToggleWrap()<CR>
-
-
-
-
-
 
 
 
