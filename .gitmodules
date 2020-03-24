@@ -101,3 +101,9 @@
 [submodule "_vim/pack/john/start/landscape.vim"]
 	path = _vim/pack/john/start/landscape.vim
 	url = git@github.com:itchyny/landscape.vim.git
+[submodule "_vim/pack/john/start/lightline.vim"]
+	path = _vim/pack/john/start/lightline.vim
+	url = git@github.com:itchyny/lightline.vim.git
+[submodule "_vim/pack/john/start/vim-deus"]
+	path = _vim/pack/john/start/vim-deus
+	url = git@github.com:ajmwagar/vim-deus.git

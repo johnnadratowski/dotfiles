@@ -39,6 +39,7 @@ set mouse=a                 " Allow mouse
 set mousehide               " Hid emouse when typing
 set nobackup                " No backup file
 set noerrorbells            " No bell on error
+set noshowmode              " Do not show the current mode, as we use lightline
 set nostartofline           " Avoid moving cursor to BOL when jumping around
 set noswapfile              " No swap file
 set nowritebackup           " CoC - some servers might have problesmw ith backup
@@ -51,7 +52,6 @@ set shiftwidth=2            " but an indent level is 2 spaces wide.
 set shortmess+=a            " Use [+]/[RO]/[w] for modified/readonly/written.
 set shortmess+=c            " CoC - Don't pass messages to |ins-completion-menu|. 
 set showcmd                 " Show incomplete normal mode commands as I type.
-set showmode                " Show the current mode down below
 set showmatch               " Briefly jump to a paren once it's balanced
 set signcolumn=yes          " CoC - Always show the signcolumn
 set smartcase               " unless uppercase letters are used in the regex.
@@ -72,8 +72,15 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 
 """" Display
 
-set background=dark           " We are using dark background in vim
-colorscheme landscape
+set background=dark    " Setting dark mode
+
+" For True Color colorschemes
+let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+
+colorscheme deus
+let g:deus_termcolors=256
+
 
 if (has("nvim"))
   "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
@@ -183,7 +190,7 @@ nnoremap Q @@
 
 " vim-lightline
 let g:lightline = {
-      \ 'colorscheme': 'landscape',
+      \ 'colorscheme': 'deus',
       \ }
 
 """ Renamer
