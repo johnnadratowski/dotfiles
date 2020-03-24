@@ -175,6 +175,14 @@ nnoremap Q @@
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" easyalign
+
+" Start interactive EasyAlign in visual mode (e.g. vipga)
+xmap ga <Plug>(EasyAlign)
+" Start interactive EasyAlign for a motion/text object (e.g. gaip)
+nmap ga <Plug>(EasyAlign)
+
+
 " gitgutter
 set statusline+=%{GitStatus()}
 

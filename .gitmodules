@@ -113,3 +113,6 @@
 [submodule "_vim/pack/john/start/vim-gitbranch"]
 	path = _vim/pack/john/start/vim-gitbranch
 	url = git@github.com:itchyny/vim-gitbranch.git
+[submodule "_vim/pack/john/start/vim-easy-align"]
+	path = _vim/pack/john/start/vim-easy-align
+	url = git@github.com:junegunn/vim-easy-align.git
