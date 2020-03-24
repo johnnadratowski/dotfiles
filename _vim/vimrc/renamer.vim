@@ -4,10 +4,11 @@
 
 function! s:buildPart(part)
   let l:output = ""
+  let l:prevWasCap = 0
   for i in range(1, strchars(a:part))
     let l:char = strcharpart(a:part, i-1, 1)
-    if i == 0 || matchstr(l:char, '^\l$') == ""
-      if i != 0
+    if i == 1 || matchstr(l:char, '^\l$') == ""
+      if i != 1
         let l:output ..= "{,-,_, }"
       endif
       let l:output ..= "{" .. tolower(l:char) .. "," .. toupper(l:char) .. "}"
