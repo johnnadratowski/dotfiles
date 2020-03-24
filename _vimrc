@@ -175,6 +175,9 @@ nnoremap Q @@
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" rainbow parens
+let g:rainbow_active = 1
+
 " easyalign
 
 " Start interactive EasyAlign in visual mode (e.g. vipga)

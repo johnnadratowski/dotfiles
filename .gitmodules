@@ -116,3 +116,9 @@
 [submodule "_vim/pack/john/start/vim-easy-align"]
 	path = _vim/pack/john/start/vim-easy-align
 	url = git@github.com:junegunn/vim-easy-align.git
+[submodule "_vim/pack/john/start/rainbow"]
+	path = _vim/pack/john/start/rainbow
+	url = git@github.com:luochen1990/rainbow.git
+[submodule "_vim/pack/john/start/vim-sneak"]
+	path = _vim/pack/john/start/vim-sneak
+	url = git@github.com:justinmk/vim-sneak.git
