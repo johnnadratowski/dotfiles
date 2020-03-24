@@ -107,3 +107,9 @@
 [submodule "_vim/pack/john/start/vim-deus"]
 	path = _vim/pack/john/start/vim-deus
 	url = git@github.com:ajmwagar/vim-deus.git
+[submodule "_vim/pack/john/start/vim-gitgutter"]
+	path = _vim/pack/john/start/vim-gitgutter
+	url = git@github.com:airblade/vim-gitgutter.git
+[submodule "_vim/pack/john/start/vim-gitbranch"]
+	path = _vim/pack/john/start/vim-gitbranch
+	url = git@github.com:itchyny/vim-gitbranch.git
