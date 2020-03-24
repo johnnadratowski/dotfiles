@@ -15,6 +15,7 @@ set backspace=indent,eol,start  "Allow backspace in insert mode
 set clipboard=unnamed        " Use system clipboard
 set colorcolumn=80          " The right hand gutter
 set confirm                 " Y-N-C prompt if closing with unsaved changes.
+set cmdheight=2             " CoC - Give more space for displaying messages.
 set cursorline              " have a line indicate the cursor location
 set expandtab               " Use spaces, not tabs, for autoindent/tab key.
 set ffs=unix,dos,mac        " Try recognizing dos, unix, and mac line endings.
@@ -22,13 +23,14 @@ set foldcolumn=0            " space of folds to be shown in sidebar
 set foldlevel=99            " don't fold by default
 set foldmethod=indent       " allow us to fold on indents
 set grepprg=ag              " replace the default grep program with ag
+set hidden                  " CoC - TextEdit might fail if hidden is not set.
 set history=1000            " Command history
 set hlsearch                " Highlight searches by default.
 set ignorecase              " Default to using case insensitive searches,
 set laststatus=2            " Always show statusline, even if only 1 window.
 set lazyredraw              " Don't redraw screen in middle of macro
 set linebreak               " don't wrap textin the middle of a word
-set list
+set list                    " Show Whitespaces
 set ls=2                    " allways show status line
 set matchpairs+=<:>         " show matching <> (html mainly) as well
 set modeline                " Allow vim options to be embedded in files;
@@ -39,21 +41,25 @@ set nobackup                " No backup file
 set noerrorbells            " No bell on error
 set nostartofline           " Avoid moving cursor to BOL when jumping around
 set noswapfile              " No swap file
+set nowritebackup           " CoC - some servers might have problesmw ith backup
 set nowrap                  " No text wrapping by default
-set nowb                      " Make a write backup for write errors
+set nowb                    " Make a write backup for write errors
 set number                  " Show line numbers
 set report=0                " : commands always print changed line count.
 set shiftround              " rounds indent to a multiple of shiftwidth
 set shiftwidth=2            " but an indent level is 2 spaces wide.
 set shortmess+=a            " Use [+]/[RO]/[w] for modified/readonly/written.
+set shortmess+=c            " CoC - Don't pass messages to |ins-completion-menu|. 
 set showcmd                 " Show incomplete normal mode commands as I type.
 set showmode                " Show the current mode down below
 set showmatch               " Briefly jump to a paren once it's balanced
+set signcolumn=yes          " CoC - Always show the signcolumn
 set smartcase               " unless uppercase letters are used in the regex.
-set smarttab               " unless uppercase letters are used in the regex.
+set smarttab                " unless uppercase letters are used in the regex.
 set smartindent             " use smart indent if there is no indent file
 set softtabstop=2           " <BS> over an autoindent deletes both spaces.
 set tabstop=2               " <tab> inserts 2 spaces
+set updatetime=300          " CoC - user experience
 set visualbell              " Allow visual bells
 set virtualedit=block       " Let cursor move past the last char in <C-v> mode
 set wildignore+=*.egg-info/**,eggs/**    " Ignore python egg folders
@@ -67,7 +73,7 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 """" Display
 
 set background=dark           " We are using dark background in vim
-colorscheme hyper
+colorscheme landscape
 
 if (has("nvim"))
   "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
@@ -82,9 +88,10 @@ endif
 
 
 if has("gui_running")
-    set guifont=Roboto\ Mono\ Light\ for\ Powerline
+   set guifont=Roboto\ Mono\ Light\ for\ Powerline
+else
+   set t_Co=256
 endif
-
 
 
 """" Persistent Undo
@@ -173,6 +180,11 @@ nnoremap Q @@
 " ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
+
+" vim-lightline
+let g:lightline = {
+      \ 'colorscheme': 'landscape',
+      \ }
 
 """ Renamer
 source ~/.vim/vimrc/renamer.vim

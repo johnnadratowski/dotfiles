@@ -92,3 +92,18 @@
 [submodule "_vim/pack/john/start/moonlight.vim"]
 	path = _vim/pack/john/start/moonlight.vim
 	url = git@github.com:lewis6991/moonlight.vim.git
+[submodule "_vim/pack/john/start/https:/github.com/editorconfig/editorconfig-vim.git"]
+	path = _vim/pack/john/start/https:/github.com/editorconfig/editorconfig-vim.git
+	url = https://github.com/editorconfig/editorconfig-vim.git
+[submodule "_vim/pack/john/start/jellybeans.vim"]
+	path = _vim/pack/john/start/jellybeans.vim
+	url = git@github.com:nanotech/jellybeans.vim.git
+[submodule "_vim/pack/john/start/vim-wombat-scheme"]
+	path = _vim/pack/john/start/vim-wombat-scheme
+	url = git@github.com:sheerun/vim-wombat-scheme.git
+[submodule "_vim/pack/john/start/landscape.vim"]
+	path = _vim/pack/john/start/landscape.vim
+	url = git@github.com:itchyny/landscape.vim.git
+[submodule "_vim/pack/john/start/https:/github.com/itchyny/lightline.vim"]
+	path = _vim/pack/john/start/https:/github.com/itchyny/lightline.vim
+	url = https://github.com/itchyny/lightline.vim
