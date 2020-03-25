@@ -2,6 +2,9 @@
 " Basic Settings
 " ==========================================================
 
+" Allow control characters to pass to vim for shortcuts
+silent !stty -ixon > /dev/null 2>/dev/null
+
 set nocompatible              " Don't be compatible with vi
 let mapleader=" "             " Map leader key to space
 
@@ -153,10 +156,6 @@ map <leader>\| <c-w>v
 map <leader>x :bd<CR>
 map <leader>w :clo<CR>
 
-" Quit window on <leader>q
-nnoremap <leader>q :q<CR>
-nnoremap <leader>Q :qa<CR>
-
 " hide matches on <leader>space
 nnoremap <leader><space> :nohlsearch<cr>
 
@@ -169,6 +168,14 @@ noremap <silent> <Leader>W :call ToggleWrap()<CR>
 " Use capital Q to replay last macro
 nnoremap Q @@
 
+" Close all non-buffer windows
+nnoremap <silent> <Plug>(close-side-windows) :cclo \| :NERDTreeClose \| :VimuxCloseRunner<CR>
+nmap <C-m> <Plug>(close-side-windows)
+
+
+" Quit window on <leader>q
+nnoremap <leader>Q :qa<CR>
+nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
 
 " ==========================================================
