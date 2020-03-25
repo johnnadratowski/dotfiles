@@ -7,9 +7,6 @@ function log () {
   echo -e "${GREEN}\n======== $1\n${END}"
 }
 
-log "Install spf-13 vim"
-sh <(curl https://j.mp/spf13-vim3 -L)
-
 log "Install powerline fonts"
 (
   tmp="$(mktemp -d)"
@@ -35,3 +32,6 @@ curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 
 log "install tpm"
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+
+log "Install vim leaderf c extension"
+./_vim/pack/john/start/LeaderF/install.sh
