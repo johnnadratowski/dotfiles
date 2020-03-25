@@ -125,3 +125,6 @@
 [submodule "_vim/pack/john/start/vim-test"]
 	path = _vim/pack/john/start/vim-test
 	url = git@github.com:janko/vim-test.git
+[submodule "_vim/pack/john/start/vimux"]
+	path = _vim/pack/john/start/vimux
+	url = git@github.com:benmills/vimux.git
