@@ -7,7 +7,7 @@ function main() {
     local p="_vim/pack/john/start"
     local fp="${p}/${1}"
     
-    git submodule deinit $fp
+    git submodule deinit -f $fp
     git rm -rf $fp
     rm -Rf .git/modules/$fp
 }
