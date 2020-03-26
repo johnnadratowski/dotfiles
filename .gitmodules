@@ -131,3 +131,9 @@
 [submodule "_vim/pack/john/start/sideways.vim"]
 	path = _vim/pack/john/start/sideways.vim
 	url = git@github.com:AndrewRadev/sideways.vim.git
+[submodule "_vim/pack/john/start/dracula"]
+	path = _vim/pack/john/start/dracula
+	url = git@github.com:dracula/vim.git
+[submodule "_vim/pack/john/start/onedark.vim"]
+	path = _vim/pack/john/start/onedark.vim
+	url = git@github.com:joshdick/onedark.vim.git

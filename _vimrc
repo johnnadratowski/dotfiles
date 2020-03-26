@@ -76,8 +76,14 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 """" Display
 
 set background=dark    " Setting dark mode
-colorscheme deus
-let g:deus_termcolors=256
+packadd! dracula
+packadd! onedark.vim
+packadd! yowish
+colorscheme yowish
+" colorscheme molokai
+" colorscheme dracula
+" colorscheme deus
+" let g:deus_termcolors=256
 
 if (has("nvim"))
   "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
@@ -217,7 +223,7 @@ set statusline+=%{GitStatus()}
 
 " vim-lightline
 let g:lightline = {
-      \ 'colorscheme': 'deus',
+      \ 'colorscheme': 'onedark',
       \ 'active': {
       \   'left': [ [ 'mode', 'paste' ],
       \             [ 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
