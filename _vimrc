@@ -182,6 +182,14 @@ nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" vim-sideways
+nmap ( :SidewaysLeft<CR>
+nmap ) :SidewaysRight<CR>
+omap aa <Plug>SidewaysArgumentTextobjA
+xmap aa <Plug>SidewaysArgumentTextobjA
+omap ia <Plug>SidewaysArgumentTextobjI
+xmap ia <Plug>SidewaysArgumentTextobjI
+
 " vim-test
 let test#strategy = 'vimux'
 nmap <silent> t<C-n> :let test#project_root=GetGitRoot(expand('%')) \| TestNearest<CR>
