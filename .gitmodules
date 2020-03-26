@@ -140,3 +140,6 @@
 [submodule "_vim/pack/john/start/yowish"]
 	path = _vim/pack/john/start/yowish
 	url = git@github.com:KabbAmine/yowish.vim
+[submodule "_vim/pack/john/start/vim-stylus"]
+	path = _vim/pack/john/start/vim-stylus
+	url = git@github.com:iloginow/vim-stylus.git
