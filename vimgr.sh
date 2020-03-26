@@ -3,19 +3,24 @@ set -e
 
 ProgName=$(basename $0)
   
-sub_help(){
+function sub_help(){
     echo "Usage: $ProgName <subcommand> [options]\n"
     echo "Subcommands:"
     echo "    add    - Add plugins"
     echo "    remove - Remove Plugins"
+    echo "    ls     - List Plugins"
     echo ""
     echo "For help with each subcommand run:"
     echo "$ProgName <subcommand> -h|--help"
     echo ""
 }
   
-sub_add(){
-    [[ -v $1 ]] && echo 'Must provide clone url' && exit 1
+function sub_ls(){
+  tree -L ${1:-1} ./_vim/pack/john/start
+}
+  
+function sub_add(){
+    [[ "$1" == "" ]] && echo 'Must provide clone url' && exit 1
 
     local repoName
     repoName="$(echo $1 | sed -E 's/^git\@github\.com\:[^\/]+\/(.*)\.git$/\1/g')"
@@ -27,8 +32,8 @@ sub_add(){
     git add .gitmodules "_vim/pack/john/start/${plugin}"
 }
   
-sub_remove(){
-    [[ -v $1 ]] && echo 'Must provide plugin name' && exit 1
+function sub_remove(){
+    [[ $1 == "" ]] && echo 'Must provide plugin name' && exit 1
 
     local p="_vim/pack/john/start"
     local fp="${p}/${1}"
