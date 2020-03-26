@@ -137,3 +137,6 @@
 [submodule "_vim/pack/john/start/onedark.vim"]
 	path = _vim/pack/john/start/onedark.vim
 	url = git@github.com:joshdick/onedark.vim.git
+[submodule "_vim/pack/john/start/yowish"]
+	path = _vim/pack/john/start/yowish
+	url = git@github.com:KabbAmine/yowish.vim
