@@ -485,6 +485,11 @@ function git-fullreset() {
 	git reset --hard; git clean -df
 }
 
+function gmm()
+{
+  gco ${1:-master} && gfp && gco - && git merge - -m "UIP-dev merged ${1:-master}"
+}
+
 function gac()
 {
 	git add .; git commit -m "$@"

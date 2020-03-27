@@ -69,12 +69,6 @@ alias mkdir='mkdir -p'
 
 # git aliases
 alias gfp='git fetch --all; git pull'
-alias gfpm='git fetch --all; git checkout master; git pull; git checkout -'
-alias gmm='gfpm; git merge master'
-alias gfpd='git fetch --all; git checkout develop; git pull; git checkout -'
-alias gmd='gfpm; git merge develop'
-alias gcob='gco -b '
-alias gst='git st'
 alias gacp='gadd && gci && git push'
 alias gacwip='gac "WIP"'
 alias gacwipp='gacwip && git push'
