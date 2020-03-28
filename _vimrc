@@ -274,15 +274,7 @@ source ~/.vim/vimrc/nerdtree.vim
 
 
 """ Leaderf
-let g:Lf_FollowLinks = 0
-let g:Lf_PreviewInPopup = 1
-nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file --popup\<CR>"
-nmap <silent> <leader>f <Plug>(leaderf-nerd)
-nmap <silent> <expr> <C-p> ":call CDRoot()\<CR>"."<Space>f"
-let g:Lf_WildIgnore = {
-        \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache'],
-        \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]']
-        \}
+source ~/.vim/vimrc/leaderf.vim
 
 
 """ Search
