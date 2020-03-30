@@ -84,3 +84,4 @@ if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
     source /usr/share/powerline/bindings/bash/powerline.sh
 fi
 
+which pyenv 2>&1 > /dev/null && eval "$(pyenv init -)"
