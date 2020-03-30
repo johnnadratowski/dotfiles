@@ -143,3 +143,6 @@
 [submodule "_vim/pack/john/start/vim-stylus"]
 	path = _vim/pack/john/start/vim-stylus
 	url = git@github.com:iloginow/vim-stylus.git
+[submodule "_vim/pack/john/start/grep"]
+	path = _vim/pack/john/start/grep
+	url = git@github.com:yegappan/grep.git
