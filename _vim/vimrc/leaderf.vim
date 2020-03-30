@@ -9,9 +9,9 @@ let g:Lf_PreviewInPopup = 0
 let g:Lf_CommandMap = {'<C-K>': ['<C-p>'], '<C-J>': ['<C-n>']}
 
 nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file\<CR>"
-nnoremap <silent> <expr> <Plug>(leaderf-nerd-mru) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf mru\<CR>"
+nnoremap <silent> <expr> <Plug>(leaderf-nerd-buffer) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf buffer\<CR>"
 nmap <silent> <leader>f <Plug>(leaderf-nerd)
-nmap <silent> <leader>m <Plug>(leaderf-nerd-mru)
+nmap <silent> <leader>m <Plug>(leaderf-nerd-buffer)
 nmap <silent> <expr> <C-p> ":call CDRoot()\<CR>"."<Space>f"
 nmap <silent> <expr> p  ":call CDRoot()\<CR>"."<Space>m"
 
