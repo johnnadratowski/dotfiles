@@ -182,8 +182,9 @@ nnoremap <leader>Q :qa<CR>
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
 " Map alt-j and alt-k to next/prev buffer
-map ê :bn<CR>
-map ë :bp<CR>
+" NOTE: I had to map these as escape seq in iterm2 -> prefs > profile > keys
+map [1;3C :bn<CR>
+map [1;4C :bp<CR>
 
 " ==========================================================
 " Plugin Settings + Keymaps
