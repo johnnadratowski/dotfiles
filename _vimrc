@@ -23,7 +23,8 @@ set cursorline              " have a line indicate the cursor location
 set expandtab               " Use spaces, not tabs, for autoindent/tab key.
 set ffs=unix,dos,mac        " Try recognizing dos, unix, and mac line endings.
 set foldcolumn=0            " space of folds to be shown in sidebar
-set foldlevel=2             " fold to 2nd level by default
+set foldlevel=2             " fold to 2nd level
+set foldlevelstart=99       " Do not fold at start
 set foldmethod=indent       " allow us to fold on indents
 set grepprg=ag              " replace the default grep program with ag
 set hidden                  " CoC - TextEdit might fail if hidden is not set.

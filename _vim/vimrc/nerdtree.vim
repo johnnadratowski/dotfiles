@@ -19,9 +19,8 @@ let g:nerdtree_tabs_open_on_gui_startup=0
 """""""""""""""""
 nnoremap <C-e> :NERDTreeToggle<CR>
 map <leader>n :NERDTreeToggle<CR>
-map - :NERDTreeFind<CR>
+map - :call DeselectNERDTree() <bar> :NERDTreeFind<CR>
 map _ :call NERDTreeSessionRoot()<CR>
-
 
 """""""""""""""""
 " Autocmds
@@ -40,6 +39,12 @@ autocmd BufEnter * if bufname('#') =~# "^NERD_tree_" && winnr('$') > 1 | b# | en
 """""""""""""""""
 " Functions
 """""""""""""""""
+function! DeselectNERDTree() 
+  if (expand('%') =~ 'NERD_tree') 
+    wincmd w
+  endif
+endfunction
+
 function! NERDTreeSessionRoot()
   let l:root = GetRoot()
   if string(l:root) != "0"
