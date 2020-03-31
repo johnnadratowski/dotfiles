@@ -14,6 +14,7 @@ nmap <silent> <leader>f <Plug>(leaderf-nerd)
 nmap <silent> <leader>m <Plug>(leaderf-nerd-buffer)
 nmap <silent> <expr> <C-p> ":call CDRoot()\<CR>"."<Space>f"
 nmap <silent> <expr> p  ":call CDRoot()\<CR>"."<Space>m"
+nmap <silent> <expr> ð ":call CDRoot()\<CR>"."<Space>m"
 
 let g:Lf_WildIgnore = {
         \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache'],

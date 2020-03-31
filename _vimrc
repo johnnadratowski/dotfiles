@@ -132,6 +132,8 @@ nmap <leader>bd :call WipeoutBuffers()<CR>
 
 nmap <leader>sb :call SplitScroll()<CR>
 
+" Fix weird behavior of Y
+map Y y$
 
 " Edit VimRC
 map <silent> <leader>v :e ~/.vimrc<CR>
@@ -146,17 +148,6 @@ nmap <leader>C :cclose<CR>
 " for when we forget to use sudo to open/edit a file
 cmap w!! w !sudo tee % >/dev/null
 cmap W! w !sudo tee % >/dev/null
-
-" Window Maps
-map <leader>j <c-w>j
-map <leader>k <c-w>k
-map <leader>h <c-w>h
-map <leader>l <c-w>l
-
-map <leader>J <c-w>J
-map <leader>K <c-w>K
-map <leader>H <c-w>H
-map <leader>L <c-w>L
 
 " Maximize/minimize
 map <leader>^ <c-w>_<c-w>\|
@@ -186,11 +177,13 @@ nnoremap Q @@
 nnoremap <silent> <Plug>(close-side-windows) :cclo \| :NERDTreeClose \| :VimuxCloseRunner<CR>
 nmap <C-m> <Plug>(close-side-windows)
 
-
 " Quit window on <leader>q
 nnoremap <leader>Q :qa<CR>
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
+" Map alt-j and alt-k to next/prev buffer
+map ê :bn<CR>
+map ë :bp<CR>
 
 " ==========================================================
 " Plugin Settings + Keymaps
