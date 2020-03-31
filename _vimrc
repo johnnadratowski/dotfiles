@@ -240,11 +240,11 @@ let g:lightline = {
 """ Renamer
 source ~/.vim/vimrc/renamer.vim
 
-
 """ vim-go
 " disable vim-go :GoDef short cut (gd)
 " this is handled by LanguageClient [LC]
 let g:go_def_mapping_enabled = 0
+au BufWritePost *.go :GoImports
 
 """ vim-prettier
 let g:prettier#autoformat = 1
@@ -259,12 +259,10 @@ autocmd FileType vue setlocal commentstring=//\ %s
 nnoremap <leader>` :ToggleWorkspace<CR>
 
 """ CoC
-
 source ~/.vim/vimrc/coc.vim
 
 
 """ NERDTree
-
 source ~/.vim/vimrc/nerdtree.vim
 
 
@@ -272,18 +270,11 @@ source ~/.vim/vimrc/nerdtree.vim
 source ~/.vim/vimrc/leaderf.vim
 
 
-""" Search
-
-" Search for the visually selected text
-" vnoremap <C-f> y:Ags<Space>-f<Space><C-R>='"' . escape(@", '"*?()[]{}.') . '"'<CR><CR>
-" Run Ags
-" nnoremap <C-f> :Ags<Space>-f<Space>
+""" vim-grep
 nnoremap <C-f> :Rg<Space>
 
 
-
 """ Undotree
-
 map <leader>g :UndotreeToggle<CR>
 
 
