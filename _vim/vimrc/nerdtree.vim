@@ -54,8 +54,8 @@ endfunction
 
 function! CDRoot()
   let l:root = GetRoot()
-  if l:root
-    execute "cd " . 
+  if string(l:root) != "0"
+    execute 'cd' l:root
   endif
 endfunction
 

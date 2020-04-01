@@ -269,11 +269,6 @@ source ~/.vim/vimrc/nerdtree.vim
 """ Leaderf
 source ~/.vim/vimrc/leaderf.vim
 
-
-""" vim-grep
-nnoremap <C-f> :Rg<Space>
-
-
 """ Undotree
 map <leader>g :UndotreeToggle<CR>
 
