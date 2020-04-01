@@ -7,6 +7,22 @@ function log () {
   echo -e "${GREEN}\n======== $1\n${END}"
 }
 
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+	if which apt-get; then
+		./apt_install.sh
+	elif which pacman; then
+		./pac_install.sh
+	else
+		echo "UNKNOWN PACKAGE MANAGER"
+		exit 1
+	fi
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+	./brew_install.sh
+else
+	echo "UNKNOWN OS $OSTYPE"
+	exit 1
+fi
+
 log "Install powerline fonts"
 (
   tmp="$(mktemp -d)"
@@ -33,5 +49,7 @@ curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 log "install tpm"
 git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
-log "Install vim leaderf c extension"
-./_vim/pack/john/start/LeaderF/install.sh
+git config --global user.email "john.nadratowski@gmail.com"
+git config --global user.name "John Nadratowski"
+
+./install.py
