@@ -15,3 +15,4 @@ apps/build
 node_modules
 _ipython/profile_default/db/
 local-startup/*
+.undodir/

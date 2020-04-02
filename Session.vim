@@ -29,15 +29,17 @@ setlocal fdl=2
 setlocal fml=1
 setlocal fdn=20
 setlocal fen
-let s:l = 359 - ((41 * winheight(0) + 24) / 48)
+let s:l = 37 - ((10 * winheight(0) + 11) / 22)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-359
-normal! 05|
+37
+normal! 0
 tabnext 1
+badd +18 .gitignore
+badd +39 ~/local-startup/env-vars.sh
+badd +1 _vimrc
 badd +12 _vim/vimrc/leaderf.vim
-badd +37 _vimrc
 badd +1 _vim/pack/john/start/vim-vue/test/vimrc
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0
   silent exe 'bwipe ' . s:wipebuf
@@ -50,6 +52,7 @@ if file_readable(s:sx)
   exe "source " . fnameescape(s:sx)
 endif
 let &so = s:so_save | let &siso = s:siso_save
+nohlsearch
 doautoall SessionLoadPost
 unlet SessionLoad
 " vim: set ft=vim :
