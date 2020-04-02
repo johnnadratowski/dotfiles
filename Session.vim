@@ -11,7 +11,7 @@ endif
 set shortmess=aoO
 argglobal
 %argdel
-edit _vim/vimrc/leaderf.vim
+edit _vimrc
 set splitbelow splitright
 set nosplitbelow
 set nosplitright
@@ -29,15 +29,16 @@ setlocal fdl=2
 setlocal fml=1
 setlocal fdn=20
 setlocal fen
-let s:l = 11 - ((10 * winheight(0) + 24) / 48)
+let s:l = 359 - ((41 * winheight(0) + 24) / 48)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-11
-normal! 02|
+359
+normal! 05|
 tabnext 1
-badd +0 _vim/vimrc/leaderf.vim
+badd +12 _vim/vimrc/leaderf.vim
 badd +37 _vimrc
+badd +1 _vim/pack/john/start/vim-vue/test/vimrc
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0
   silent exe 'bwipe ' . s:wipebuf
 endif
@@ -49,7 +50,6 @@ if file_readable(s:sx)
   exe "source " . fnameescape(s:sx)
 endif
 let &so = s:so_save | let &siso = s:siso_save
-nohlsearch
 doautoall SessionLoadPost
 unlet SessionLoad
 " vim: set ft=vim :

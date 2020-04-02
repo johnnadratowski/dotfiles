@@ -113,6 +113,13 @@ if exists('+termguicolors')
 endif
 
 
+" Cursor vert bar in insert mode
+let &t_SI = "\e[6 q"
+let &t_EI = "\e[2 q"
+augroup myCmds
+au!
+autocmd VimEnter * silent !echo -ne "\e[2 q"
+augroup END
 
 """" Persistent Undo
 
@@ -182,10 +189,9 @@ nmap <C-m> <Plug>(close-side-windows)
 nnoremap <leader>Q :qa<CR>
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
-" Map alt-j and alt-k to next/prev buffer
-" NOTE: I had to map these as escape seq in iterm2 -> prefs > profile > keys
-map [1;3C :bn<CR>
-map [1;4C :bp<CR>
+
+
+
 
 " ==========================================================
 " Plugin Settings + Keymaps
@@ -354,4 +360,3 @@ function! GitStatus()
   let [a,m,r] = GitGutterGetHunkSummary()
   return printf('+%d ~%d -%d', a, m, r)
 endfunction
-

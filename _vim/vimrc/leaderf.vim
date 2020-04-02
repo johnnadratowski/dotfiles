@@ -10,6 +10,7 @@ let g:Lf_CommandMap = {'<C-K>': ['<C-p>'], '<C-J>': ['<C-n>']}
 
 nnoremap <C-p> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :Leaderf file --popup<CR>
 nnoremap <C-n> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :Leaderf buffer --popup<CR>
+nnoremap <leader>f :call CDRoot()<CR> <bar> :call DeselectNERDTree() <bar> :Leaderf rg
 nnoremap <C-f> :call CDRoot()<CR> <bar> :call DeselectNERDTree() <bar> :Leaderf rg<CR>
 
 " nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file\<CR>"
