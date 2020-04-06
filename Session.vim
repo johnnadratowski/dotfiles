@@ -11,7 +11,7 @@ endif
 set shortmess=aoO
 argglobal
 %argdel
-edit _vimrc
+edit _hammerspoon/window.lua
 set splitbelow splitright
 set nosplitbelow
 set nosplitright
@@ -25,22 +25,27 @@ setlocal fdm=indent
 setlocal fde=0
 setlocal fmr={{{,}}}
 setlocal fdi=#
-setlocal fdl=2
+setlocal fdl=99
 setlocal fml=1
 setlocal fdn=20
 setlocal fen
-let s:l = 37 - ((10 * winheight(0) + 11) / 22)
+let s:l = 1 - ((0 * winheight(0) + 24) / 48)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-37
+1
 normal! 0
 tabnext 1
-badd +18 .gitignore
-badd +39 ~/local-startup/env-vars.sh
-badd +1 _vimrc
 badd +12 _vim/vimrc/leaderf.vim
+badd +195 _vimrc
 badd +1 _vim/pack/john/start/vim-vue/test/vimrc
+badd +23 _hammerspoon/window.lua
+badd +26 _hammerspoon/init.lua
+badd +1 _hammerspoon/browser.lua
+badd +22 _hammerspoon/applications.lua
+badd +3 _hammerspoon/timestamp.lua
+badd +126 _hammerspoon/snippets.lua
+badd +5 _hammerspoon/anycomplete.lua
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0
   silent exe 'bwipe ' . s:wipebuf
 endif
@@ -52,7 +57,6 @@ if file_readable(s:sx)
   exe "source " . fnameescape(s:sx)
 endif
 let &so = s:so_save | let &siso = s:siso_save
-nohlsearch
 doautoall SessionLoadPost
 unlet SessionLoad
 " vim: set ft=vim :

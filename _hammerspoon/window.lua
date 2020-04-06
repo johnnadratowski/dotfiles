@@ -42,14 +42,19 @@ function move_window(direction)
         elseif direction == "up" then
             if win:isMinimized() then
                 win:unminimize()
-            elseif f.y == max.y and f.h == max.h / 2 then
+            elseif f.y == max.y and f.h < max.h then
+                f.y = max.y
+                f.h = max.h
+            elseif f.y == max.y and f.h == max.h and f.w == max.w then
+                f.y = max.y
+                f.h = max.h
+                f.x = max.x
+                f.w = max.w / 2
+            elseif f.y == max.y and f.h == max.h then
                 f.y = max.y
                 f.h = max.h
                 f.x = max.x
                 f.w = max.w
-            elseif f.y == max.y + (max.h / 2) and f.h == max.h / 2 then
-                f.y = max.y
-                f.h = max.h
             else
                 f.y = max.y
                 f.h = max.h / 2

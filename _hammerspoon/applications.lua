@@ -5,15 +5,15 @@ log = require("log")
 hs.application.enableSpotlightForNameSearches(true)
 
 -- Application quick switching
-local ctrlTab =
-    hs.hotkey.new(
-    {"ctrl"},
-    "tab",
-    nil,
-    function()
-        hs.eventtap.keyStroke({"alt"}, "w")
-    end
-)
+-- local ctrlTab =
+--     hs.hotkey.new(
+--     {"ctrl"},
+--     "tab",
+--     nil,
+--     function()
+--         hs.eventtap.keyStroke({"alt"}, "w")
+--     end
+-- )
 
 function ensureOpen(appName, timeout, delay)
     local app = hs.application.open(appName, timeout, timeout > 0)
@@ -35,16 +35,6 @@ end
 
 function google()
     ensureOpen(constants.defaultBrowser, 3, 100000):selectMenuItem("New Tab")
-end
-
-function gmail()
-    ensureOpen(constants.defaultBrowser, 3, 100000)
-    hs.eventtap.keyStroke({"cmd"}, "1")
-end
-
-function gcal()
-    ensureOpen(constants.defaultBrowser, 3, 100000)
-    hs.eventtap.keyStroke({"cmd"}, "2")
 end
 
 local curEditor = -1
@@ -86,31 +76,31 @@ exports.print_running = function()
     end
 end
 
-hs.hints.showTitleThresh = 4
-hs.hints.style = "vimperator"
-hs.hotkey.bind(constants.hyper, "Space", "Window Hints", hs.hints.windowHints)
+-- hs.hints.showTitleThresh = 4
+-- hs.hints.style = "vimperator"
+-- hs.hotkey.bind(constants.hyper, "Space", "Window Hints", hs.hints.windowHints)
 
 hs.hotkey.bind(
     constants.hyper,
     "0",
     "Terminal",
     function()
-        hs.application.launchOrFocus("Terminal")
+        hs.application.launchOrFocus("iTerm")
     end
 )
+
+-- hs.hotkey.bind(
+--     constants.hyper,
+--     "1",
+--     "VSCode",
+--     function()
+--         hs.application.launchOrFocus("/Applications/Visual Studio Code.app")
+--     end
+-- )
 
 hs.hotkey.bind(
     constants.hyper,
     "1",
-    "VSCode",
-    function()
-        hs.application.launchOrFocus("/Applications/Visual Studio Code.app")
-    end
-)
-
-hs.hotkey.bind(
-    constants.hyper,
-    "2",
     "Browser",
     function()
         hs.application.launchOrFocus(constants.defaultBrowser)
@@ -119,16 +109,12 @@ hs.hotkey.bind(
 
 hs.hotkey.bind(
     constants.hyper,
-    "3",
+    "2",
     "Slack",
     function()
         hs.application.launchOrFocus("Slack")
     end
 )
-
-hs.hotkey.bind(constants.hyper, "4", "GMail", gmail)
-
-hs.hotkey.bind(constants.hyper, "5", "GCal", gcal)
 
 hs.hotkey.bind(
     constants.hyper,
