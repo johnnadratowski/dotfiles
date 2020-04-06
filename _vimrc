@@ -246,6 +246,9 @@ let g:lightline = {
 """ Renamer
 source ~/.vim/vimrc/renamer.vim
 
+""" pgsql.vim
+let g:sql_type_default = 'pgsql'
+
 """ vim-go
 " disable vim-go :GoDef short cut (gd)
 " this is handled by LanguageClient [LC]
