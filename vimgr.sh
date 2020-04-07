@@ -43,6 +43,10 @@ function sub_remove(){
     rm -Rf .git/modules/$fp
 }
   
+function sub_rm(){
+  sub_remove $@
+}
+
 subcommand=$1
 case $subcommand in
     "" | "-h" | "--help")
