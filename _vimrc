@@ -202,8 +202,6 @@ command! -nargs=* -bang -range -complete=filetype NN
             \ :<line1>,<line2> call nrrwrgn#NrrwRgn('',<q-bang>)
             \ | set filetype=<args>
 
-nmap <leader>nn :NN 
-
 " vim-sideways
 nmap ( :SidewaysLeft<CR>
 nmap ) :SidewaysRight<CR>
