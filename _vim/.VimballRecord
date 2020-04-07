@@ -1,0 +1,1 @@
+NrrwRgn.vmb: call delete('/Users/johnnadratowski/.vim/plugin/NrrwRgn.vim')|call delete('/Users/johnnadratowski/.vim/autoload/nrrwrgn.vim')|call delete('/Users/johnnadratowski/.vim/doc/NarrowRegion.txt')

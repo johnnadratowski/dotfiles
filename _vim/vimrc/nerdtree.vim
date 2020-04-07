@@ -18,7 +18,6 @@ let g:nerdtree_tabs_open_on_gui_startup=0
 " Key Maps
 """""""""""""""""
 nnoremap <C-e> :NERDTreeToggle<CR>
-map <leader>n :NERDTreeToggle<CR>
 map - :call DeselectNERDTree() <bar> :NERDTreeFind<CR>
 map _ :call NERDTreeSessionRoot()<CR>
 

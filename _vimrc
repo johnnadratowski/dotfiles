@@ -197,6 +197,12 @@ nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" NrrwRng
+command! -nargs=* -bang -range -complete=filetype NN
+            \ :<line1>,<line2> call nrrwrgn#NrrwRgn('',<q-bang>)
+            \ | set filetype=<args>
+nmap <leader>nn :NN 
+
 " vim-sideways
 nmap ( :SidewaysLeft<CR>
 nmap ) :SidewaysRight<CR>
@@ -245,9 +251,6 @@ let g:lightline = {
 
 """ Renamer
 source ~/.vim/vimrc/renamer.vim
-
-""" pgsql.vim
-let g:sql_type_default = 'pgsql'
 
 """ vim-go
 " disable vim-go :GoDef short cut (gd)
@@ -362,4 +365,30 @@ endfunction
 function! GitStatus()
   let [a,m,r] = GitGutterGetHunkSummary()
   return printf('+%d ~%d -%d', a, m, r)
+endfunction
+
+" from http://vim.wikia.com/wiki/VimTip857
+function! TextEnableCodeSnip(filetype, start, end, textSnipHl)
+  let ft=toupper(a:filetype)
+  let group='textGroup'.ft
+  if exists('b:current_syntax')
+    let s:current_syntax=b:current_syntax
+    " Remove current syntax definition, as some syntax files (e.g. cpp.vim)
+    " do nothing if b:current_syntax is defined.
+    unlet b:current_syntax
+  endif
+  execute 'syntax include @'.group.' syntax/'.a:filetype.'.vim'
+  try
+    execute 'syntax include @'.group.' after/syntax/'.a:filetype.'.vim'
+  catch
+  endtry
+  if exists('s:current_syntax')
+    let b:current_syntax=s:current_syntax
+  else
+    unlet b:current_syntax
+  endif
+  execute 'syntax region textSnip'.ft.'
+        \ matchgroup='.a:textSnipHl.'
+        \ start="'.a:start.'" end="'.a:end.'"
+        \ contains=@'.group
 endfunction
