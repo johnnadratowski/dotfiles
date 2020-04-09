@@ -8,10 +8,13 @@ let g:Lf_IgnoreCurrentBufferName = 1
 let g:Lf_PreviewInPopup = 0
 let g:Lf_CommandMap = {'<C-K>': ['<C-p>'], '<C-J>': ['<C-n>']}
 
+command! -bang -nargs=* -complete=file LeaderfRg exec printf("Leaderf<bang> --stayOpen rg %s", escape('<args>', '\\'))
 nnoremap <C-p> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :Leaderf file --popup<CR>
 nnoremap <C-n> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :Leaderf buffer --popup<CR>
-nnoremap <leader>f :call CDRoot()<CR> <bar> :call DeselectNERDTree() <bar> :Leaderf rg 
-nnoremap <C-f> :call CDRoot()<CR> <bar> :call DeselectNERDTree() <bar> :Leaderf rg<CR>
+nnoremap <leader>f :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :LeaderfRg 
+nnoremap <C-f> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :LeaderfRg<CR>
+xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! -F -e %s ", leaderf#Rg#visual())<CR>
+noremap go :<C-U>Leaderf! rg --recall<CR>
 
 " nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file\<CR>"
 " nnoremap <silent> <expr> <Plug>(leaderf-nerd-buffer) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf buffer\<CR>"
