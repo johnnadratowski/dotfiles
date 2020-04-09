@@ -177,6 +177,7 @@ map _ :call ExploreSessionRoot()<CR>
 augroup netrw_mapping
     autocmd!
     autocmd filetype netrw call NetrwMapping()
+    autocmd FileType netrw setl bufhidden=wipe " delete netrw buffer when hidden
 augroup END
 
 function! NetrwMapping()
