@@ -391,3 +391,56 @@ function! TextEnableCodeSnip(filetype, start, end, textSnipHl)
         \ start="'.a:start.'" end="'.a:end.'"
         \ contains=@'.group
 endfunction
+
+function! CDRoot()
+  let l:root = GetRoot()
+  if string(l:root) != "0"
+    execute 'cd' l:root
+  endif
+endfunction
+
+function! GetRoot()
+  let l:curFile = expand('%:p')
+  if l:curFile == ""
+    let l:curFile = getcwd()
+  endif
+
+  if !exists("g:TreeOriginalRoot")
+    let l:root = GetSessionRoot(l:curFile)
+
+    if ! l:root
+      let l:root = GetGitRoot(l:curFile)
+    endif
+  else
+    let l:root = g:TreeOriginalRoot
+  endif
+
+  return l:root
+endfunction
+
+function! s:getRoot(path, suffix)
+  if a:path == '/'
+    return 0
+  endif
+
+  let l:files = split(globpath(a:path, a:suffix), '\n')
+  if len(l:files) > 0
+    return a:path
+  endif
+ return s:getRoot(fnamemodify(a:path, ':h'), a:suffix)
+endfunction
+
+function! GetSessionRoot(path)
+  return s:getRoot(a:path, "Session.vim")
+endfunction
+
+function! GetGitRoot(path)
+  return s:getRoot(a:path, ".git/")
+endfunction
+
+let s:files = split(globpath(getcwd(), "Session.vim"), '\n')
+if len(s:files) > 0
+  let g:TreeOriginalRoot = getcwd()
+endif
+
+
