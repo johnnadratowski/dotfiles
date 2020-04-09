@@ -9,22 +9,12 @@ let g:Lf_PreviewInPopup = 0
 let g:Lf_CommandMap = {'<C-K>': ['<C-p>'], '<C-J>': ['<C-n>']}
 
 command! -bang -nargs=* -complete=file LeaderfRg exec printf("Leaderf<bang> --stayOpen rg %s", escape('<args>', '\\'))
-nnoremap <C-p> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :Leaderf file --popup<CR>
-nnoremap <C-n> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :Leaderf buffer --popup<CR>
-nnoremap <leader>f :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :LeaderfRg 
-nnoremap <C-f> :call CDRoot()<CR> <bar> :call DeselectNERDTree()<CR> <bar> :LeaderfRg<CR>
+nnoremap <C-p> :call CDRoot()<CR> <bar> :Leaderf file --popup<CR>
+nnoremap <C-n> :call CDRoot()<CR> <bar> :Leaderf buffer --popup<CR>
+nnoremap <leader>f :call CDRoot()<CR> <bar> :LeaderfRg 
+nnoremap <C-f> :call CDRoot()<CR> <bar> :LeaderfRg<CR>
 xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! -F -e %s ", leaderf#Rg#visual())<CR>
 noremap go :<C-U>Leaderf! rg --recall<CR>
-
-" nnoremap <silent> <expr> <Plug>(leaderf-nerd) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf file\<CR>"
-" nnoremap <silent> <expr> <Plug>(leaderf-nerd-buffer) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf buffer\<CR>"
-" nnoremap <silent> <expr> <Plug>(leaderf-nerd-rg) (expand('%') =~ 'NERD_tree' ? "\<c-w>\<c-w>" : '').":Leaderf rg\<CR>"
-" nmap <silent> <leader>f <Plug>(leaderf-nerd)
-" nmap <silent> <leader>m <Plug>(leaderf-nerd-buffer)
-" nmap <silent> <leader>h <Plug>(leaderf-nerd-rg)
-" nmap <silent> <expr> <C-p> ":call CDRoot()\<CR>"."<Space>f"
-" nmap <silent> <expr> p  ":call CDRoot()\<CR>"."<Space>m"
-" nmap <silent> <C-f> :call DeselectNERDTree() <bar> :Leaderf rg<CR>
 
 let g:Lf_WildIgnore = {
         \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache'],

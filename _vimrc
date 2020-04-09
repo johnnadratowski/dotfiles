@@ -143,15 +143,8 @@ nmap <leader>sb :call SplitScroll()<CR>
 " Fix weird behavior of Y
 map Y y$
 
-" Edit VimRC
-map <silent> <leader>v :e ~/.vimrc<CR>
-
 " Reload Vimrc
 map <silent> <leader>V :source ~/.vimrc<CR>:filetype detect<CR>:exe ":echo 'vimrc reloaded'"<CR>
-
-" open/close the quickfix window
-nmap <leader>c :copen<CR>
-nmap <leader>C :cclose<CR>
 
 " for when we forget to use sudo to open/edit a file
 cmap w!! w !sudo tee % >/dev/null
@@ -161,10 +154,6 @@ cmap W! w !sudo tee % >/dev/null
 map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
-" Window Splits
-map <leader>- <c-w>s
-map <leader>\| <c-w>v
-
 " Close Window
 map <leader>x :bd<CR>
 map <leader>w :clo<CR>
@@ -172,25 +161,29 @@ map <leader>w :clo<CR>
 " hide matches on <leader>space
 nnoremap <leader><space> :nohlsearch<cr>
 
-" Set working directory
-nnoremap <leader>. :lcd %:p:h<CR>
-
 " Toggle word wrap
 noremap <silent> <Leader>W :call ToggleWrap()<CR>
 
-" Use capital Q to replay last macro
-nnoremap Q @@
-
 " Close all non-buffer windows
-nnoremap <silent> <Plug>(close-side-windows) :cclo \| :NERDTreeClose \| :VimuxCloseRunner<CR>
+nnoremap <silent> <Plug>(close-side-windows) :cclo <bar> :VimuxCloseRunner<CR>
 nmap <C-m> <Plug>(close-side-windows)
 
-" Quit window on <leader>q
-nnoremap <leader>Q :qa<CR>
+" Quit window
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
+" Explore current buffer
+map - :Explore<CR>
+map _ :call ExploreSessionRoot()<CR>
 
+" Netrw
+augroup netrw_mapping
+    autocmd!
+    autocmd filetype netrw call NetrwMapping()
+augroup END
 
+function! NetrwMapping()
+    nmap <buffer> <C-[> :bd<CR>
+endfunction
 
 
 " ==========================================================
@@ -271,10 +264,6 @@ nnoremap <leader>` :ToggleWorkspace<CR>
 
 """ CoC
 source ~/.vim/vimrc/coc.vim
-
-
-""" NERDTree
-source ~/.vim/vimrc/nerdtree.vim
 
 
 """ Leaderf
@@ -443,4 +432,9 @@ if len(s:files) > 0
   let g:TreeOriginalRoot = getcwd()
 endif
 
-
+function! ExploreSessionRoot()
+  let l:root = GetRoot()
+  if string(l:root) != "0"
+    execute 'Explore' l:root
+  endif
+endfunction

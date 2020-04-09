@@ -11,9 +11,6 @@
 [submodule "_vim/pack/john/start/gundo.vim"]
 	path = _vim/pack/john/start/gundo.vim
 	url = git@github.com:sjl/gundo.vim.git
-[submodule "_vim/pack/john/start/nerdtree"]
-	path = _vim/pack/john/start/nerdtree
-	url = git@github.com:preservim/nerdtree.git
 [submodule "_vim/pack/john/start/vim-abolish"]
 	path = _vim/pack/john/start/vim-abolish
 	url = git@github.com:tpope/vim-abolish.git
@@ -146,3 +143,6 @@
 [submodule "_vim/pack/john/start/NrrwRgn"]
 	path = _vim/pack/john/start/NrrwRgn
 	url = git@github.com:chrisbra/NrrwRgn.git
+[submodule "_vim/pack/john/start/vim-vinegar"]
+	path = _vim/pack/john/start/vim-vinegar
+	url = git@github.com:tpope/vim-vinegar.git
