@@ -116,9 +116,9 @@ endif
 " Cursor vert bar in insert mode
 let &t_SI = "\e[6 q"
 let &t_EI = "\e[2 q"
-augroup myCmds
-au!
-autocmd VimEnter * silent !echo -ne "\e[2 q"
+augroup visuals
+  au!
+  autocmd VimEnter * silent !echo -ne "\e[2 q"
 augroup END
 
 """" Persistent Undo
@@ -142,9 +142,6 @@ nmap <leader>sb :call SplitScroll()<CR>
 
 " Fix weird behavior of Y
 map Y y$
-
-" Reload Vimrc
-map <silent> <leader>V :source ~/.vimrc<CR>:filetype detect<CR>:exe ":echo 'vimrc reloaded'"<CR>
 
 " for when we forget to use sudo to open/edit a file
 cmap w!! w !sudo tee % >/dev/null
@@ -174,7 +171,7 @@ nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 " Netrw
 map _ :call ExploreSessionRoot()<CR>
 
-augroup netrw_mapping
+augroup netrw
     autocmd!
     autocmd filetype netrw call NetrwMapping()
     autocmd FileType netrw setl bufhidden=wipe " delete netrw buffer when hidden
@@ -185,6 +182,13 @@ function! NetrwMapping()
     nmap <buffer> <C-[> <c-^>
 endfunction
 
+
+" Reload Vimrc
+map <silent> <leader>V :source ~/.vimrc<CR>:filetype detect<CR>:exe ":echo 'vimrc reloaded'"<CR>
+augroup myvimrc
+  au!
+  au BufWritePost .vimrc,_vimrc,vimrc,*/_vim/*,*/.vim/*.gvimrc,_gvimrc,gvimrc so $MYVIMRC | if has('gui_running') | so $MYGVIMRC | endif | echo "vimrc reloaded"
+augroup END
 
 " ==========================================================
 " Plugin Settings + Keymaps
@@ -211,8 +215,10 @@ nmap <silent> t<C-s> :let test#project_root=GetGitRoot(expand('%')) \| TestSuite
 nmap <silent> t<C-l> :let test#project_root=GetGitRoot(expand('%')) \| TestLast<CR>
 nmap <silent> t<C-g> :let test#project_root=GetGitRoot(expand('%')) \| TestVisit<CR>
 
-au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
-au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
+augroup golang_test
+  au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
+  au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
+augroup END
 
 " rainbow parens
 let g:rainbow_active = 1
@@ -248,16 +254,20 @@ source ~/.vim/vimrc/renamer.vim
 " disable vim-go :GoDef short cut (gd)
 " this is handled by LanguageClient [LC]
 let g:go_def_mapping_enabled = 0
-au BufWritePost *.go :GoImports
+augroup golang
+  au BufWritePost *.go :GoImports
+augroup END
 
 """ vim-prettier
 let g:prettier#autoformat = 1
 let g:prettier#autoformat_require_pragma = 0
 
 """ vim-commentary
-autocmd FileType vim setlocal commentstring=\"\ %s
-autocmd FileType vimrc setlocal commentstring=\"\ %s
-autocmd FileType vue setlocal commentstring=//\ %s
+augroup vim_commentary
+  autocmd FileType vim setlocal commentstring=\"\ %s
+  autocmd FileType vimrc setlocal commentstring=\"\ %s
+  autocmd FileType vue setlocal commentstring=//\ %s
+augroup END
 
 """ vim-workspace
 nnoremap <leader>` :ToggleWorkspace<CR>
