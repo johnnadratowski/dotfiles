@@ -182,6 +182,7 @@ augroup netrw_mapping
 augroup END
 
 function! NetrwMapping()
+    nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
     nmap <buffer> <C-[> :bd<CR>
 endfunction
 
