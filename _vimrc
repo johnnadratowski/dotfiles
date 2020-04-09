@@ -170,6 +170,7 @@ nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
 " Netrw
 map _ :call ExploreSessionRoot()<CR>
+map <c-e> -
 
 augroup netrw
     autocmd!
@@ -179,7 +180,7 @@ augroup END
 
 function! NetrwMapping()
     nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
-    nmap <buffer> <C-[> <c-^>
+    nmap <buffer> <C-[> <c-o>
 endfunction
 
 
