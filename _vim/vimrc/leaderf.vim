@@ -11,7 +11,8 @@ let g:Lf_CommandMap = {'<C-K>': ['<C-p>'], '<C-J>': ['<C-n>']}
 command! -bang -nargs=* -complete=file LeaderfRg exec printf("Leaderf<bang> rg %s", escape('<args>', '\\'))
 nnoremap <C-p> :call CDRoot()<CR> <bar> :Leaderf file --popup<CR>
 nnoremap <C-n> :call CDRoot()<CR> <bar> :Leaderf buffer --popup<CR>
-nnoremap <leader>f :call CDRoot()<CR> <bar> :LeaderfRg --stayOpen 
+nnoremap <leader>f :call CDGitRoot()<CR> <bar> :Leaderf --stayOpen rg 
+nnoremap <leader>F :call CDRoot()<CR> <bar> :LeaderfRg --stayOpen 
 nnoremap <C-f> :call CDRoot()<CR> <bar> :LeaderfRg --popup<CR>
 xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! --stayOpen -F -e %s ", leaderf#Rg#visual())<CR>
 noremap go :<C-U>Leaderf! rg --recall<CR>

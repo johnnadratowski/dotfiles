@@ -22,9 +22,9 @@ set cmdheight=2             " CoC - Give more space for displaying messages.
 set cursorline              " have a line indicate the cursor location
 set expandtab               " Use spaces, not tabs, for autoindent/tab key.
 set ffs=unix,dos,mac        " Try recognizing dos, unix, and mac line endings.
+set nofoldenable            " DO NOT enable folds by default
 set foldcolumn=0            " space of folds to be shown in sidebar
 set foldlevel=2             " fold to 2nd level
-set foldlevelstart=99       " Do not fold at start
 set foldmethod=indent       " allow us to fold on indents
 set grepprg=ag              " replace the default grep program with ag
 set hidden                  " CoC - TextEdit might fail if hidden is not set.
@@ -136,6 +136,19 @@ endif
 " Keymaps
 " ==========================================================
 
+" Save buffer
+nmap <c-s> :w<CR>
+
+" Toggle folds
+nmap <c-i> zi
+
+" Scratch buffer creation
+command! -nargs=* -bang -range -complete=filetype Scratch
+            \ :call ScratchBuffer()
+            \ | set filetype=<args>
+nmap <leader>t :Scratch<CR>
+nmap <leader>T :Scratch 
+
 nmap <leader>bd :call WipeoutBuffers()<CR>
 
 nmap <leader>sb :call SplitScroll()<CR>
@@ -159,7 +172,7 @@ map <leader>w :clo<CR>
 nnoremap <leader><space> :nohlsearch<cr>
 
 " Toggle word wrap
-noremap <silent> <Leader>W :call ToggleWrap()<CR>
+noremap <silent> <c-w> :call ToggleWrap()<CR>
 
 " Close all non-buffer windows
 nnoremap <silent> <Plug>(close-side-windows) :cclo <bar> :VimuxCloseRunner<CR>
@@ -170,6 +183,7 @@ nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
 " Netrw
 map _ :call ExploreSessionRoot()<CR>
+map <c--> :call ExploreGitRoot()<CR>
 map <c-e> -
 
 augroup netrw
@@ -272,6 +286,7 @@ augroup END
 
 """ vim-workspace
 nnoremap <leader>` :ToggleWorkspace<CR>
+let g:workspace_autosave = 0
 
 """ CoC
 source ~/.vim/vimrc/coc.vim
@@ -392,18 +407,45 @@ function! TextEnableCodeSnip(filetype, start, end, textSnipHl)
         \ contains=@'.group
 endfunction
 
+function! GetCurFile()
+  try
+    let l:curFile = expand('%:p')
+  catch /.*/
+    echo "Error getting current file: " . v:exception
+  endtry
+  if l:curFile == ""
+    let l:curFile = getcwd()
+  endif
+  return l:curFile
+endfunction
+
+function! CDGitRoot()
+  let l:curFile = GetCurFile()
+  try
+    let l:root = GetGitRoot(l:curFile)
+  catch /.*/
+    echo "Error getting git root: " . v:exception
+    return
+  endtry
+  if string(l:root) != "0"
+    execute 'cd' l:root
+  endif
+endfunction
+
 function! CDRoot()
-  let l:root = GetRoot()
+  try
+    let l:root = GetRoot()
+  catch /.*/
+    echo "Error getting root: " . v:exception
+    return
+  endtry
   if string(l:root) != "0"
     execute 'cd' l:root
   endif
 endfunction
 
 function! GetRoot()
-  let l:curFile = expand('%:p')
-  if l:curFile == ""
-    let l:curFile = getcwd()
-  endif
+  let l:curFile = GetCurFile()
 
   if !exists("g:TreeOriginalRoot")
     let l:root = GetSessionRoot(l:curFile)
@@ -448,4 +490,26 @@ function! ExploreSessionRoot()
   if string(l:root) != "0"
     execute 'Explore' l:root
   endif
+endfunction
+
+function! ExploreGitRoot()
+  let l:curFile = GetCurFile()
+  try
+    let l:root = GetGitRoot(l:curFile)
+  catch /.*/
+    echo "Error getting root: " . v:exception
+    return
+  endtry
+  if string(l:root) != "0"
+    execute 'Explore' l:root
+  endif
+endfunction
+
+function! ScratchBuffer()
+    split
+    noswapfile hide enew
+    setlocal buftype=nofile
+    setlocal bufhidden=hide
+    "setlocal nobuflisted
+    "file scratch
 endfunction
