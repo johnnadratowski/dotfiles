@@ -139,9 +139,6 @@ endif
 " Save buffer
 nmap <c-s> :w<CR>
 
-" Toggle folds
-nmap <c-i> zi
-
 " Scratch buffer creation
 command! -nargs=* -bang -range -complete=filetype Scratch
             \ :call ScratchBuffer()
@@ -172,7 +169,7 @@ map <leader>w :clo<CR>
 nnoremap <leader><space> :nohlsearch<cr>
 
 " Toggle word wrap
-noremap <silent> <c-w> :call ToggleWrap()<CR>
+noremap <silent> <leader>W :call ToggleWrap()<CR>
 
 " Close all non-buffer windows
 nnoremap <silent> <Plug>(close-side-windows) :cclo <bar> :VimuxCloseRunner<CR>
@@ -183,8 +180,7 @@ nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
 " Netrw
 map _ :call ExploreSessionRoot()<CR>
-map <c--> :call ExploreGitRoot()<CR>
-map <c-e> -
+map <c-e> :call ExploreGitRoot()<CR>
 
 augroup netrw
     autocmd!
@@ -194,7 +190,7 @@ augroup END
 
 function! NetrwMapping()
     nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
-    nmap <buffer> <C-[> <c-o>
+    nmap <buffer> <C-[> :bn<CR>
 endfunction
 
 
