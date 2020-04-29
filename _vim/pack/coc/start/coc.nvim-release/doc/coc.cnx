@@ -11,7 +11,6 @@
 安装					|coc-installation|
 设置 					|coc-configuration|
 补全   					|coc-completion|
-语言服务 				|coc-languageserver|
 接口					|coc-interface|
   快捷键 				  |coc-key-mappings|
   变量					  |coc-variables|
@@ -71,7 +70,7 @@ coc.nvim 使用 coc-settings.json 文件进行配置，该文件格式与工作�
 
 ==============================================================================
 
-安装						*coc-install*
+安装						*coc-installation*
 
 推荐使用 https://github.com/junegunn/vim-plug 添加
 >
@@ -460,7 +459,8 @@ g:coc_node_path 				*g:coc_node_path*
 
 			let g:coc_node_path = '/usr/local/opt/node@10/bin/node'
 <
-			该配置仅在手工编译代码时生效。
+			该配置仅在手工编译代码时生效, 路径支持包含 `~` 以及 `$`
+			开头的环境变量
 
 g:coc_node_args 				*g:coc_node_args*
 
@@ -714,6 +714,14 @@ CocRequestAsync({id}, {method}, [{params}, [{callback}]])
 
 	{callback} 在请求完成后被调用，第一个参数总是 {error},
 	第二个参数为响应结果。
+
+						*CocNotify()*
+
+CocNotify({id}, {params})
+
+	向指定 language server 发送通知。
+>
+	call CocNotify('ccls', '$ccls/reload')
 
 						*CocLocations()*
 CocLocations({id}, {method}, [{params}, {openCommand}])
@@ -1323,7 +1331,7 @@ Coc 列表支持以下特性：
 
 LIST COMMAND 					*coc-list-command*
 
-:CocList [{...options}] [{source}] [{...args}] 		*CocList*
+:CocList [{...options}] [{source}] [{...args}] 		*:CocList*
 
 		打开名称为 {source} 的列表, 例如: >
 
@@ -1337,18 +1345,18 @@ LIST COMMAND 					*coc-list-command*
 
 		{source} 为空时，打开列表源的列表。
 
-:CocListResume 						*CocListResume*
+:CocListResume 						*:CocListResume*
 
 		重新打开上一次的列表，输入字符和鼠标位置等信息将自动
 		复原。
 
-:CocPrev 						*CocPrev*
+:CocPrev 						*:CocPrev*
 
 		对之前列表的上一个选项执行默认操作。
 
 		该操作不会打开之前列表。
 
-:CocNext 						*CocNext*
+:CocNext 						*:CocNext*
 
 		对之前列表的下一个选项执行默认操作。
 
@@ -1442,6 +1450,7 @@ LIST MAPPINGS 					*coc-list-mappings*
 
 <Esc>       - 退出当前列表。
 <C-c>       - 结束后台任务。
+<C-v>       - 从系统粘贴板插入文本。
 <C-l>       - 重载当前列表。
 <C-o>       - 切换到正常模式。
 <Down>      - 选择下一项。
