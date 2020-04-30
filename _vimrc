@@ -75,6 +75,7 @@ set wildmode=full             " <Tab> cycles between all matching choices.
 
 
 """" Display
+set encoding=UTF-8
 
 set background=dark    " Setting dark mode
 " colorscheme deus
@@ -377,32 +378,6 @@ function! GitStatus()
   return printf('+%d ~%d -%d', a, m, r)
 endfunction
 
-" from http://vim.wikia.com/wiki/VimTip857
-function! TextEnableCodeSnip(filetype, start, end, textSnipHl)
-  let ft=toupper(a:filetype)
-  let group='textGroup'.ft
-  if exists('b:current_syntax')
-    let s:current_syntax=b:current_syntax
-    " Remove current syntax definition, as some syntax files (e.g. cpp.vim)
-    " do nothing if b:current_syntax is defined.
-    unlet b:current_syntax
-  endif
-  execute 'syntax include @'.group.' syntax/'.a:filetype.'.vim'
-  try
-    execute 'syntax include @'.group.' after/syntax/'.a:filetype.'.vim'
-  catch
-  endtry
-  if exists('s:current_syntax')
-    let b:current_syntax=s:current_syntax
-  else
-    unlet b:current_syntax
-  endif
-  execute 'syntax region textSnip'.ft.'
-        \ matchgroup='.a:textSnipHl.'
-        \ start="'.a:start.'" end="'.a:end.'"
-        \ contains=@'.group
-endfunction
-
 function! GetCurFile()
   try
     let l:curFile = expand('%:p')
@@ -489,9 +464,8 @@ function! ExploreSessionRoot()
 endfunction
 
 function! ExploreGitRoot()
-  let l:curFile = GetCurFile()
   try
-    let l:root = GetGitRoot(l:curFile)
+    let l:root = GetGitRoot(GetCurFile())
   catch /.*/
     echo "Error getting root: " . v:exception
     return
@@ -502,10 +476,31 @@ function! ExploreGitRoot()
 endfunction
 
 function! ScratchBuffer()
-    split
+    vsplit
     noswapfile hide enew
     setlocal buftype=nofile
     setlocal bufhidden=hide
     "setlocal nobuflisted
     "file scratch
 endfunction
+
+function! CheatSheet()
+  let old_reg = getreg("a")          " save the current content of register a
+  let old_reg_type = getregtype("a") " save the type of the register as well
+try
+  let @b = join(readfile($HOME . "/.vim/doc/cheatsheet.txt"), "\n")
+  let @b .= "\n\n\n KeyMaps:\n=========\n"
+  redir @a                           " redirect output to register a
+  " Get the list of all key mappings silently, satisfy "Press ENTER to continue"
+  silent map | call feedkeys("\<CR>")
+  redir END                          " end output redirection
+  call ScratchBuffer()               " new buffer in window
+  put b
+  put a                              " put content of register
+  normal gg
+finally                              " Execute even if exception is raised
+  call setreg("a", old_reg, old_reg_type) " restore register a
+endtry
+endfunction
+
+com! Cht call CheatSheet()      " Enable :CheatSheet to call the function
