@@ -244,7 +244,10 @@ nmap ga <Plug>(EasyAlign)
 
 
 " gitgutter
-set statusline+=%{GitStatus()}
+if !exists("g:jn_statusline_updated")
+  set statusline+=%{GitStatus()}
+endif
+let g:jn_statusline_updated = 1
 
 " vim-lightline
 let g:lightline = {
@@ -273,6 +276,8 @@ augroup END
 """ vim-prettier
 let g:prettier#autoformat = 1
 let g:prettier#autoformat_require_pragma = 0
+let g:prettier#autoformat_config_present = 1
+let g:prettier#config#arrow_parens = 'always'
 
 """ vim-commentary
 augroup vim_commentary
@@ -410,25 +415,32 @@ function! CDRoot()
     echo "Error getting root: " . v:exception
     return
   endtry
-  if string(l:root) != "0"
-    execute 'cd' l:root
-  endif
+  try
+    if string(l:root) != "0"
+      execute 'cd' l:root
+    endif
+  catch /.*/
+    echo "Error setting root: ". l:root . "Error: " . v:exception
+    return
+  endtry
+  return 1
 endfunction
 
 function! GetRoot()
-  let l:curFile = GetCurFile()
-
   if !exists("g:TreeOriginalRoot")
+    let l:curFile = GetCurFile()
+
     let l:root = GetSessionRoot(l:curFile)
 
     if ! l:root
       let l:root = GetGitRoot(l:curFile)
+      if l:root 
+        return l:root
+      endif
     endif
   else
-    let l:root = g:TreeOriginalRoot
+    return g:TreeOriginalRoot
   endif
-
-  return l:root
 endfunction
 
 function! s:getRoot(path, suffix)
