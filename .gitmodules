@@ -149,3 +149,6 @@
 [submodule "_vim/pack/john/start/vim-devicons"]
 	path = _vim/pack/john/start/vim-devicons
 	url = git@github.com:ryanoasis/vim-devicons.git
+[submodule "_vim/pack/john/start/vim-fugitive"]
+	path = _vim/pack/john/start/vim-fugitive
+	url = git@github.com:tpope/vim-fugitive.git
