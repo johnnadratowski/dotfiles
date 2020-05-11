@@ -163,7 +163,7 @@ map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
 " Close Window
-map <leader>x :bd<CR>
+map <leader>x :bp \| bd #<CR>
 map <leader>w :clo<CR>
 
 " hide matches on <leader>space
