@@ -685,3 +685,26 @@ function gen_ssl_cert () {
 
 	log_info "Successfully generated ${outPath}/${name}.crt and ${outPath}/${name}.key."
 }
+
+function json_diff() {
+  # Precondition check
+  which jq > /dev/null || (echo "jq is required" && return 1)
+
+  json1="$1"
+  json2="$2"
+  stat "$json1" > /dev/null || return $?
+  stat "$json2" > /dev/null || return $?
+
+  # Main
+  sorted1="$(mktemp).old.jsondiff"
+  sorted2="$(mktemp).new.jsondiff"
+
+  jq -S . "$json1" > "$sorted1" || return $?
+  jq -S . "$json2" > "$sorted2" || return $?
+
+  git diff -U20 "$sorted1" "$sorted2" || return $?
+
+  # Tear down
+  rm "$sorted1"
+  rm "$sorted2"
+}

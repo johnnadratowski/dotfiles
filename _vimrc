@@ -202,6 +202,10 @@ augroup myvimrc
   au BufWritePost .vimrc,_vimrc,vimrc,*/_vim/*,*/.vim/*.gvimrc,_gvimrc,gvimrc so $MYVIMRC | if has('gui_running') | so $MYGVIMRC | endif | echo "vimrc reloaded"
 augroup END
 
+" Stay in visual selection mode when changing indent
+:vnoremap < <gv
+:vnoremap > >gv
+
 " ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
