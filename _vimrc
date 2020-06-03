@@ -71,7 +71,8 @@ set wildignore+=*.o,*.obj,.git,*.pyc     " Ignore python, object, git files
 set wildignore+=*/node_modules/**        " Ignore node modules
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip " Ignore temp, so, swap, and zip
 set wildignore+=*/vendor/**              " Ignore vendor sources
-set wildmode=full             " <Tab> cycles between all matching choices.
+set wildmode=longest,list,full             " <Tab> cycles between all matching choices.
+set wildmenu                 " <Tab> cycles between all matching choices.
 
 
 """" Display
