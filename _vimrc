@@ -427,7 +427,7 @@ function! CDRoot()
     echo "Error setting root: ". l:root . "Error: " . v:exception
     return
   endtry
-  return 1
+  return 0
 endfunction
 
 function! GetRoot()
@@ -442,6 +442,8 @@ function! GetRoot()
         return l:root
       endif
     endif
+
+    return 0
   else
     return g:TreeOriginalRoot
   endif
