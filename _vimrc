@@ -259,11 +259,12 @@ let g:lightline = {
       \ 'colorscheme': 'purify',
       \ 'active': {
       \   'left': [ [ 'mode', 'paste' ],
-      \             [ 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
+      \             [ 'gitroot', 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
       \ },
       \ 'component_function': {
       \   'gitbranch': 'gitbranch#name',
-      \   'gitstatus': 'GitStatus'
+      \   'gitstatus': 'GitStatus',
+      \   'gitroot': 'RootName'
       \ },
       \ }
 
@@ -381,6 +382,10 @@ function! ToggleWrap()
     inoremap <buffer> <silent> <Home> <C-o>g<Home>
     inoremap <buffer> <silent> <End>  <C-o>g<End>
   endif
+endfunction
+
+function! RootName()
+  return fnamemodify(GetGitRoot(GetCurFile()), ":t")
 endfunction
 
 function! GitStatus()
