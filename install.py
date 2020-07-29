@@ -12,6 +12,7 @@ TARGET_BASE = os.path.expanduser("~")
 
 EXTRA_FILES = {
     'scripts': None,
+    'lib/bash/table.sh': 'bin/table',
     'zsh-custom/themes/unicandy.zsh-theme': ".oh-my-zsh/themes/unicandy.zsh-theme",
     '_zsh-theme': ".oh-my-zsh/themes/mine.zsh-theme",
 }

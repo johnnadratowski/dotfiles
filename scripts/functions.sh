@@ -4,6 +4,9 @@
 # SHELL
 # =====================================
 
+# MAC: copy from stdin and echo line count and save at a specified location
+alias c='pbcopy && echo "Line Count: $(pbpaste | wc -l)" && local foo=$(mktemp) && pbpaste > $foo && echo "cat $foo"'
+
 botch () {
     while true; do
         local tmp=$(mktemp)
@@ -708,3 +711,22 @@ function json_diff() {
   rm "$sorted1"
   rm "$sorted2"
 }
+
+function psq() {
+  psql -t -h ${H:-localhost} -U ${U:-etl} -p ${P:-5441} ${T:-statsdb} -E ${@}
+}
+
+function psql_table_cols() {
+  [[ -z ${1} ]] && echo "Must pass table name" && return 1
+
+  local table="${S:-public}.${1}"
+  psq <<$$
+SELECT attname            AS col
+FROM   pg_attribute
+WHERE  attrelid = '$table'::regclass  -- table name, optionally schema-qualified
+AND    attnum > 0
+AND    NOT attisdropped
+ORDER  BY attnum;
+$$
+}
+
