@@ -24,3 +24,6 @@ if [ -d "$HOME/bin" ] ; then
 fi
 
 export PATH="$HOME/.cargo/bin:$PATH"
+
+# Add the directory of Tizen .NET Command Line Tools to user path.
+export PATH=/Users/johnnadratowski/tizen-studio/tools/ide/bin:$PATH
