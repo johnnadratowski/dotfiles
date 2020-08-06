@@ -121,3 +121,6 @@ nnoremap <silent> <space>p  :<C-u>CocListResume<CR>
 
 " My Maps for COC
 nnoremap <silent> <C-t> :<C-u>CocList -I symbols<cr>
+
+"NodeJS Stuff
+let g:coc_node_path = trim(system('which node'))
