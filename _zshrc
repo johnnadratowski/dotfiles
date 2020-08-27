@@ -16,6 +16,8 @@ AGKOZAK_PROMPT_CHAR=( '%F{magenta}❯%f' '%F{magenta}❯%f' '%F{green}❮%f' )
 AGKOZAK_CUSTOM_SYMBOLS=( '⇣⇡' '⇣' '⇡' '+' 'x' '!' '>' '?' 'S')
 AGKOZAK_PROMPT_DIRTRIM=4 
 AGKOZAK_BLANK_LINES=1
+AGKOZAK_LEFT_PROMPT_ONLY=1
+AGKOZAK_CUSTOM_RPROMPT='%*'
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
