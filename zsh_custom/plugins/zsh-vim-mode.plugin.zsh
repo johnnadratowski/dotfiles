@@ -1,0 +1,1 @@
+/Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/zsh-vim-mode/zsh-vim-mode.plugin.zsh
