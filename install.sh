@@ -7,6 +7,10 @@ function log () {
   echo -e "${GREEN}\n======== $1\n${END}"
 }
 
+log "Installing files"
+
+./install.py
+
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
 	if which apt-get; then
 		./apt_install.sh
@@ -38,7 +42,7 @@ pip3 install -r ./requirements.txt
 
 log "Install NVM"
 mkdir -p ~/.nvm
-curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.11/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
 
 log "Install Cheat Sheet"
 curl https://cht.sh/:cht.sh > ~/bin/cht.sh
@@ -52,4 +56,11 @@ git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 git config --global user.email "john.nadratowski@gmail.com"
 git config --global user.name "John Nadratowski"
 
-./install.py
+log "installing tpm plugins"
+~/.tmux/plugins/tpm/scripts/install_plugins.sh
+
+log "compiling tmux-thumbs"
+(
+  cd ~/.tmux/plugins/tmux-thumbs
+  cargo build --release
+)

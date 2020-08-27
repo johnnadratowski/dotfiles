@@ -30,6 +30,7 @@ brew install          \
   node                \
   noti                \
   npm                 \
+  rust                \
   prettyping          \
   python3             \
   the_silver_searcher \
