@@ -152,3 +152,6 @@
 [submodule "_vim/pack/john/start/vim-fugitive"]
 	path = _vim/pack/john/start/vim-fugitive
 	url = git@github.com:tpope/vim-fugitive.git
+[submodule "zsh_custom/themes/agkozak"]
+	path = zsh_custom/themes/agkozak
+	url = https://github.com/agkozak/agkozak-zsh-prompt

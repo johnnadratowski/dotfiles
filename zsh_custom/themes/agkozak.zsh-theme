@@ -1,0 +1,1 @@
+/Users/johnnadratowski/git/dotfiles/zsh_custom/themes/agkozak/agkozak-zsh-prompt.plugin.zsh

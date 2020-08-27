@@ -10,7 +10,12 @@ ZSH=$HOME/.oh-my-zsh
 #ZSH_THEME="mine"
 #ZSH_THEME="unified"
 #ZSH_THEME="candy"
-ZSH_THEME="unicandy"
+#ZSH_THEME="unicandy"
+ZSH_THEME="agkozak"
+AGKOZAK_PROMPT_CHAR=( '%F{magenta}❯%f' '%F{magenta}❯%f' '%F{green}❮%f' )
+AGKOZAK_CUSTOM_SYMBOLS=( '⇣⇡' '⇣' '⇡' '+' 'x' '!' '>' '?' 'S')
+AGKOZAK_PROMPT_DIRTRIM=4 
+AGKOZAK_BLANK_LINES=1
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
@@ -33,7 +38,7 @@ COMPLETION_WAITING_DOTS="true"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(aws history-substring-search dirhistory docker git git-extras jsontools mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant web-search wd)
+plugins=(aws history-substring-search dirhistory docker git git-extras jsontools mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant vi-mode web-search wd)
 #virtualenv virtualenvwrapper 
 #encode64 vi-mode python pip django debian
 #golang heroku sprunge supervisor taskwarrior jira node npm redis-cli
@@ -62,6 +67,9 @@ if [ -f aws_zsh_completer.sh ]
 then
     source aws_zsh_completer.sh
 fi
+
+# Make Vi mode transitions faster (KEYTIMEOUT is in hundredths of a second)
+export KEYTIMEOUT=1
 
 if [ "$TMUX" = "" ]; then exec tmux -2 new-session -A -s main; fi
 
