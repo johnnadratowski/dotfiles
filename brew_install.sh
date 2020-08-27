@@ -26,6 +26,7 @@ brew install          \
   htop                \
   lua                 \
   mercurial           \
+  moreutils           \
   ncdu                \
   node                \
   noti                \
