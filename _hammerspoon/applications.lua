@@ -4,17 +4,6 @@ log = require("log")
 -- More flexible app searches
 hs.application.enableSpotlightForNameSearches(true)
 
--- Application quick switching
--- local ctrlTab =
---     hs.hotkey.new(
---     {"ctrl"},
---     "tab",
---     nil,
---     function()
---         hs.eventtap.keyStroke({"alt"}, "w")
---     end
--- )
-
 function ensureOpen(appName, timeout, delay)
     local app = hs.application.open(appName, timeout, timeout > 0)
     if app == nil then
@@ -76,13 +65,13 @@ exports.print_running = function()
     end
 end
 
--- hs.hints.showTitleThresh = 4
--- hs.hints.style = "vimperator"
--- hs.hotkey.bind(constants.hyper, "Space", "Window Hints", hs.hints.windowHints)
+hs.hints.showTitleThresh = 4
+hs.hints.style = "vimperator"
+hs.hotkey.bind(constants.hyper, "0", "Window Hints", hs.hints.windowHints)
 
 hs.hotkey.bind(
     constants.hyper,
-    "0",
+    "space",
     "Terminal",
     function()
         hs.application.launchOrFocus("iTerm")
@@ -98,32 +87,32 @@ hs.hotkey.bind(
 --     end
 -- )
 
-hs.hotkey.bind(
-    constants.hyper,
-    "1",
-    "Browser",
-    function()
-        hs.application.launchOrFocus(constants.defaultBrowser)
-    end
-)
+-- hs.hotkey.bind(
+--     constants.hyper,
+--     "1",
+--     "Browser",
+--     function()
+--         hs.application.launchOrFocus(constants.defaultBrowser)
+--     end
+-- )
 
-hs.hotkey.bind(
-    constants.hyper,
-    "2",
-    "Slack",
-    function()
-        hs.application.launchOrFocus("Slack")
-    end
-)
+-- hs.hotkey.bind(
+--     constants.hyper,
+--     "2",
+--     "Slack",
+--     function()
+--         hs.application.launchOrFocus("Slack")
+--     end
+-- )
 
-hs.hotkey.bind(
-    constants.hyper,
-    "D",
-    "DevDocs",
-    function()
-        hs.application.launchOrFocus("DevDocs")
-    end
-)
+-- hs.hotkey.bind(
+--     constants.hyper,
+--     "D",
+--     "DevDocs",
+--     function()
+--         hs.application.launchOrFocus("DevDocs")
+--     end
+-- )
 
 hs.hotkey.bind(constants.hyper, "G", "Google", google)
 

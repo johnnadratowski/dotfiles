@@ -83,6 +83,17 @@ hs.hotkey.bind(constants.hyper, "Right", "Window Right", move_window("right"))
 hs.hotkey.bind(constants.hyper, "Up", "Window Up", move_window("up"))
 hs.hotkey.bind(constants.hyper, "Down", "Window Down", move_window("down"))
 
+function moveWindowToDisplay(d)
+  return function()
+    local displays = hs.screen.allScreens()
+    local win = hs.window.focusedWindow()
+    win:moveToScreen(displays[d], false, true)
+  end
+end
+
+hs.hotkey.bind(constants.hyper, "1", moveWindowToDisplay(1))
+hs.hotkey.bind(constants.hyper, "2", moveWindowToDisplay(2))
+
 -- LAYOUTS
 
 -- function layoutWindows(layoutType)
