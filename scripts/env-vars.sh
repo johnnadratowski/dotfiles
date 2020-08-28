@@ -53,7 +53,7 @@ fi
 # Node.js Stuff
 export NODE_PATH='/usr/lib/node_modules/'
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" & # This loads nvm
 
 # Java stuff
 if [ -f /usr/libexec/java_home ]
@@ -72,7 +72,7 @@ export PATH="$DENO_INSTALL/bin:$PATH"
 
 [ -f ~/.ghcup/env ] && source ~/.ghcup/env
 
-[ -f /usr/local/bin/virtualenvwrapper.sh ] && source /usr/local/bin/virtualenvwrapper.sh
+[ -f /usr/local/bin/virtualenvwrapper.sh ] && source /usr/local/bin/virtualenvwrapper.sh &
 
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh

@@ -1,16 +1,12 @@
-for plugin in $HOME/scripts/startup/*
-do
-    if [ -f $plugin ]; then
-      source $plugin
-    fi
-done
+if [ -f $HOME/scripts/init.sh ]; then
+  . $HOME/scripts/init.sh
+else
+  echo "No init script found!"
+fi
 
-if [ -d $HOME/local-startup ]
+if [ -f $HOME/local-startup/init.sh ]
 then
-    for plugin in $HOME/local-startup/*
-    do
-      if [ -f $plugin ]; then
-        source $plugin
-      fi
-    done
+  . $HOME/local-startup/init.sh
+else
+  echo "No local init script found"
 fi

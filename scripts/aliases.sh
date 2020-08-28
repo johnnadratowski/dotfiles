@@ -31,17 +31,15 @@ alias _='please'
 alias ls='ls -hFG' # add colors for filetype recognition
 alias ll="ls -l"
 alias l="ll"
-alias ldot='ls -ld .*'    # show only hidden files
 alias la='ll -A'          # show hidden files
-alias lag='la | g '       # grep for patter of name in current dir
 alias lx='ll -XB'         # sort by extension
 alias lk='ll -Sr'         # sort by size, biggest last
 alias lc='ll -tcr'        # sort by and show change time, most recent last
 alias lu='ll -tur'        # sort by and show access time, most recent last
 alias lt='ll -tr'         # sort by date, most recent last
-alias lm='ll -a |more'    # pipe through 'more'
+alias lm='ll -a |less'    # pipe through 'more'
 alias lr='ll -R'          # recursive ls
-alias lmr='ll -aR |more'  # recursive pipe through 'more'
+alias lmr='ll -aR |less'  # recursive pipe through 'more'
 
 # Tree Aliases
 alias tree='tree --dirsfirst -C'
@@ -107,9 +105,6 @@ alias ..7='cd ../../../../../../../'
 alias ..8='cd ../../../../../../../../'
 alias ..9='cd ../../../../../../../../../'
 
-# cht.sh
-alias c="cht.sh "
-
 #command admin util aliases
 alias du='du -kh'       # Makes a more readable output.
 alias df='df -kTh'
@@ -118,13 +113,12 @@ alias df='df -kTh'
 alias lns='ln -s'
 alias px='ps aux'
 alias sur='sudo su -'
-alias rbProf='source ~/.zshrc'
 
 if which diff-so-fancy &> /dev/null; then
   alias diff='diff-so-fancy '
 fi
 
-if which top &> /dev/null; then
+if which htop &> /dev/null; then
   alias top='sudo htop '
 fi
 
@@ -151,9 +145,3 @@ alias setJdk8='export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)'
 alias pysrv='python -m SimpleHTTPServer'
 alias setPython2='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python2) $PY_PATH'
 alias setPython3='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python3) $PY_PATH'
-
-#venwrap=`command -v virtualenvwrapper.sh`
-#VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
-#if [ "$venwrap" != "" ]; then
-    #source $venwrap
-#fi
