@@ -2,10 +2,6 @@
 # Contains all of the environment variables that should
 # be exported in a new bash session
 
-# Allow for more file descriptors to be open by the shell.
-# Helpful with node building
-ulimit -n 10000
-
 if [ -d $HOME/bin ]
 then
 	export PATH=$HOME/bin:$PATH
@@ -43,7 +39,6 @@ export PATH=$PATH:$GOPATH/bin
 export PYTHONPATH='/usr/lib/python2.7/dist-packages/IPython/:$HOME/.pythonpath'
 export WORKON_HOME=~/venv
 export PROJECT_HOME=~/go/src/github.com/Unified/
-#export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
 
 # Ruby Stuff
 if which ruby >/dev/null && which gem >/dev/null; then
@@ -53,7 +48,6 @@ fi
 # Node.js Stuff
 export NODE_PATH='/usr/lib/node_modules/'
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" & # This loads nvm
 
 # Java stuff
 if [ -f /usr/libexec/java_home ]
@@ -61,27 +55,9 @@ then
     export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
 fi
 
-# Ruby stuff
-if which rbenv > /dev/null; then eval "$(rbenv init -)"; fi
-
 # Deno stuff
 export DENO_INSTALL="/Users/johnnadratowski/.local"
 export PATH="$DENO_INSTALL/bin:$PATH"
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
-
-[ -f ~/.ghcup/env ] && source ~/.ghcup/env
-
-[ -f /usr/local/bin/virtualenvwrapper.sh ] && source /usr/local/bin/virtualenvwrapper.sh &
-
-# added by travis gem
-[ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
-
-if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
-    powerline-daemon -q
-    POWERLINE_BASH_CONTINUATION=1
-    POWERLINE_BASH_SELECT=1
-    source /usr/share/powerline/bindings/bash/powerline.sh
-fi
-
-which pyenv 2>&1 > /dev/null && eval "$(pyenv init -)"
+export POWERLINE_BASH_CONTINUATION=1
+export POWERLINE_BASH_SELECT=1
