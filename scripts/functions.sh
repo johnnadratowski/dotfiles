@@ -5,7 +5,13 @@
 # =====================================
 
 # MAC: copy from stdin and echo line count and save at a specified location
-alias c='pbcopy && echo "Line Count: $(pbpaste | wc -l)" && local foo=$(mktemp) && pbpaste > $foo && echo "cat $foo"'
+function copy () {
+  local foo=$(mktemp)
+  cat - > $foo
+  echo "Line Count: $(cat $foo | wc -l)"
+  cat $foo | pbcopy
+  echo "Saved to: ${foo}"
+}
 
 f () {
   if which jq &> /dev/null; then
