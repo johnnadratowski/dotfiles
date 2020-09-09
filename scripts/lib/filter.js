@@ -22,7 +22,7 @@ function help() {
 function getFilters(cur) {
   cur = cur.trim()
   if (!cur) return []
-  // cur.split('.').map(j => j.trim()).filter(j => !!j)
+
   let cursor = 0
   if (cur[0] === '.') {
     cursor++
