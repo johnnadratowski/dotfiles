@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require('fs')
+const rl = require('readline')
 
 function exitError(msg) {
   console.error("\n\nERROR:\n\n" + msg)
@@ -8,90 +9,20 @@ function exitError(msg) {
 
 function help() {
   console.log("Takes data from stdin or a file, assumes it to be JSON data, and can use javascript functions to filter/map it.")
-  console.log("");
-  console.log("ARGS:");
-  console.log("");
-  console.log("\t-l, --per-line   -   Assume it to be a JSON object per line.");
-  console.log("");
-  console.log("EXAMPLES:");
-  console.log("");
-  console.log("cat foo.json | ./f.js '.items.filter(o.name == \"Jim\")");
-  console.log("// This will output all items in teh top level json object with the name Jim");
+  console.log("")
+  console.log("ARGS:")
+  console.log("")
+  console.log("\t-l, --per-line   -   Assume it to be a JSON object per line.")
+  console.log("")
+  console.log("EXAMPLES:")
+  console.log("")
+  console.log("cat foo.json | ./f.js '.items.filter(o.name == \"Jim\")")
+  console.log("// This will output all items in teh top level json object with the name Jim")
 }
 
-function getFilters(cur) {
-  cur = cur.trim()
-  if (!cur) return []
-
-  let cursor = 0
-  if (cur[0] === '.') {
-    cursor++
-  }
-
-  let part = ''
-  let paramLevel = 0
-  let inString = false
-  for (; cursor < cur.length; cursor++) {
-    const next = cur[cursor]
-    if (next === '.' && !inString && paramLevel === 0) {
-        break
-    }
-
-    switch (next) {
-      case '(':
-        if (!inString) {
-          paramLevel++
-        }
-        break
-      case ')':
-        if (!inString) {
-          paramLevel--
-        }
-        break
-      case "'":
-      case '"':
-      case '`':
-        if (!inString) {
-          inString = next
-        } else if (inString === next) {
-          inString = false
-        }
-
-        break
-    }
-    part += next
-  }
-
-  if (!part) exitError("Invalid syntax for filter")
-  if (paramLevel > 0) exitError("Invalid param syntax for filter")
-
-  const nextParen = part.indexOf('(')
-  let func = null
-  if (nextParen > -1) {
-    func = o => eval('o.' + part)
-  } else {
-    func = o => {
-      if (Array.isArray(o)) {
-        return o.map(i => {
-          if (!i[part]) {
-            exitError(`Filter ${part} is undefined on:\n\n${JSON.stringify(i, null, 2)}`)
-          }
-          return i[part]
-        })
-      } else {
-        if (!o[part]) {
-          exitError(`Filter ${part} is undefined\n\n${JSON.stringify(o, null, 2)}`)
-        } 
-        return o[part]
-      }
-    }
-  }
-
-  return [func].concat(getFilters(cur.substr(cursor)))
-}
-
+let outputPerLine = false
 let perLine = false
-let filters = null
+let filter
 let file = 0
 for (let i = 2; i < process.argv.length; i++) {
   const cur = process.argv[i]
@@ -100,36 +31,66 @@ for (let i = 2; i < process.argv.length; i++) {
     case '--per-line':
       perLine = true
       break
+    case '-o':
+    case '--output-per-line':
+      outputPerLine = true
+      break
     case '-h':
     case '--help':
       help()
       process.exit(0)
     default:
-      if (!filters) {
-        filters = getFilters(cur.trim())
+      if (!filter) {
+        filter = cur.trim()
       } else {
-        file = cur
+        file = cur.trim()
       }
       break
   }
 }
 
-if (!filters) exitError("Must provide filter arg")
+if (!filter) exitError("Must provide filter arg")
 
-const data = fs.readFileSync(file, 'utf-8')
-
-if (!data) exitError("No data to process")
-
-let objects
-if (perLine) {
-  objects = data.split('\n').map(j => j.trim()).filter(j => !!j).map(JSON.parse)
-} else {
-  objects = JSON.parse(data)
+function run(data) {
+  let $ = JSON.parse(data)
+  eval(`$ = ${filter.startsWith('.') ? '$' : ''}${filter}`)
+  return $
 }
 
-filters.forEach(f => {
-  objects = f(objects)
-})
+function output(data) {
+  console.log(JSON.stringify(data, null, 2))
+}
 
-console.log(JSON.stringify(objects, null, 2))
+if (perLine) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false
+  })
+
+  const all = []
+  rl.on('line', function(data){
+      eval(filter)
+      if (outputPerLine) {
+        output(run(data))
+      } else {
+        all.push(run(data))
+      }
+  })
+  rl.on('close', function() {
+    if (!outputPerLine) output(all)
+  })
+
+} else {
+  const data = fs.readFileSync(file, 'utf-8')
+
+  if (!data) exitError("No data to process")
+
+  const $ = run(data)
+  if (outputPerLine && Array.isArray($)) {
+    $.forEach(o => output(o))
+  } else {
+    output($)
+  }
+}
 
