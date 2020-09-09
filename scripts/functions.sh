@@ -7,6 +7,15 @@
 # MAC: copy from stdin and echo line count and save at a specified location
 alias c='pbcopy && echo "Line Count: $(pbpaste | wc -l)" && local foo=$(mktemp) && pbpaste > $foo && echo "cat $foo"'
 
+f () {
+  if which jq &> /dev/null; then
+    ~/scripts/lib/filter.js $@ | jq '.'
+  else
+    ~/scripts/lib/filter.js $@
+  fi
+
+  
+}
 botch () {
     while true; do
         local tmp=$(mktemp)
