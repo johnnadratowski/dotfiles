@@ -13,6 +13,7 @@ function help() {
   console.log("ARGS:")
   console.log("")
   console.log("\t-l, --per-line   -   Assume it to be a JSON object per line.")
+  console.log("\t-s, --string     -   Assume it to be a (non-json) string.")
   console.log("")
   console.log("EXAMPLES:")
   console.log("")
@@ -22,6 +23,7 @@ function help() {
 
 let outputPerLine = false
 let perLine = false
+let string = false
 let filter
 let file = 0
 for (let i = 2; i < process.argv.length; i++) {
@@ -30,6 +32,10 @@ for (let i = 2; i < process.argv.length; i++) {
     case '-l':
     case '--per-line':
       perLine = true
+      break
+    case '-s':
+    case '--string':
+      string = true
       break
     case '-o':
     case '--output-per-line':
@@ -52,7 +58,7 @@ for (let i = 2; i < process.argv.length; i++) {
 if (!filter) exitError("Must provide filter arg")
 
 function run(data) {
-  let $ = JSON.parse(data)
+  let $ = string ? data : JSON.parse(data)
   eval(`$ = ${filter.startsWith('.') ? '$' : ''}${filter}`)
   return $
 }

@@ -76,8 +76,8 @@ hs.console.consoleCommandColor {white = 1}
 hs.console.alpha(1)
 
 ---- Show hotkeys
--- hs.hotkey.alertDuration = 0
--- hs.hotkey.showHotkeys(constants.hyper, "/")
+hs.hotkey.alertDuration = 0
+hs.hotkey.showHotkeys(constants.hyper, "h")
 
 ---- Reload hammerspoon with HYPER+R
 hs.alert.show("Hammerspoon Reloaded")
