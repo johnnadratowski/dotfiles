@@ -145,3 +145,5 @@ alias setJdk8='export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)'
 alias pysrv='python -m SimpleHTTPServer'
 alias setPython2='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python2) $PY_PATH'
 alias setPython3='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python3) $PY_PATH'
+
+alias mvnInstall='mvn -T 1C clean install -Dmaven.test.skip -DskipTests -Dmaven.javadoc.skip=true'
