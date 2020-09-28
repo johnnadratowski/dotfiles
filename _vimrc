@@ -321,6 +321,49 @@ let g:firenvim_config = {
     \ }
 \ }
 
+if exists('g:started_by_firenvim')
+  " Remove statusline and confirmation message on close
+  set laststatus=0
+  set noconfirm
+
+  " Remove filesystem stuff
+  let g:loaded_netrw       = 1
+  let g:loaded_netrwPlugin = 1
+  let g:loaded_vinegar = 1
+  let g:loaded_lightline = 1
+  let g:loaded_startify = 1
+  let g:loaded_fugitive = 1
+  let g:loaded_gitbranch = 1
+  let g:loaded_gitgutter = 1
+  let g:loaded_tmux_navigator = 1
+  let g:loaded_vimux = 1
+  let g:leaderf_loaded = 1
+  let g:loaded_undotree = 1
+  let g:loaded_sensible = 1
+
+  " Update keybindings
+  nnoremap <C-q> :qa!<CR>
+  unmap _
+  unmap <c-e>
+  nnoremap <Esc><Esc> :call firenvim#focus_page()<CR>
+  nnoremap <C-z> :call firenvim#hide_frame()<CR>
+
+  " Assume editing markdown in github
+  au BufEnter github.com_*.txt set filetype=markdown
+  
+  " set wrapping
+  set wrap linebreak nolist
+  set virtualedit=
+  set display+=lastline
+  noremap  <silent> k   gk
+  noremap  <silent> j gj
+  noremap  <silent> <Home> g<Home>
+  noremap  <silent> <End>  g<End>
+  inoremap <silent> k   <C-o>gk
+  inoremap <silent> j <C-o>gj
+  inoremap <silent> <Home> <C-o>g<Home>
+  inoremap <silent> <End>  <C-o>g<End>
+endif
 
 
 " ==========================================================
@@ -525,20 +568,21 @@ endfunction
 function! CheatSheet()
   let old_reg = getreg("a")          " save the current content of register a
   let old_reg_type = getregtype("a") " save the type of the register as well
-try
-  let @b = join(readfile($HOME . "/.vim/doc/cheatsheet.txt"), "\n")
-  let @b .= "\n\n\n KeyMaps:\n=========\n"
-  redir @a                           " redirect output to register a
-  " Get the list of all key mappings silently, satisfy "Press ENTER to continue"
-  silent map | call feedkeys("\<CR>")
-  redir END                          " end output redirection
-  call ScratchBuffer()               " new buffer in window
-  put b
-  put a                              " put content of register
-  normal gg
-finally                              " Execute even if exception is raised
-  call setreg("a", old_reg, old_reg_type) " restore register a
-endtry
+  try
+    let @b = join(readfile($HOME . "/.vim/doc/cheatsheet.txt"), "\n")
+    let @b .= "\n\n\n KeyMaps:\n=========\n"
+    redir @a                           " redirect output to register a
+    " Get the list of all key mappings silently, satisfy "Press ENTER to continue"
+    silent map | call feedkeys("\<CR>")
+    redir END                          " end output redirection
+    call ScratchBuffer()               " new buffer in window
+    put b
+    put a                              " put content of register
+    normal gg
+  finally                              " Execute even if exception is raised
+    call setreg("a", old_reg, old_reg_type) " restore register a
+  endtry
 endfunction
 
 com! Cht call CheatSheet()      " Enable :CheatSheet to call the function
+
