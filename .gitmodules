@@ -158,3 +158,6 @@
 [submodule "/Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/zsh-vim-mode"]
 	path = /Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/zsh-vim-mode
 	url = git@github.com:softmoth/zsh-vim-mode.git
+[submodule "_vim/pack/john/start/firenvim"]
+	path = _vim/pack/john/start/firenvim
+	url = git@github.com:glacambre/firenvim.git
