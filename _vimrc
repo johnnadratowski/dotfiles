@@ -78,6 +78,24 @@ set wildmenu                 " <Tab> cycles between all matching choices.
 """" Display
 set encoding=UTF-8
 
+if has("gui_running")
+   set guifont=Roboto\ Mono\ Light\ for\ Powerline
+else
+   set t_Co=256
+endif
+
+if (has("nvim"))
+  "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
+  let $NVIM_TUI_ENABLE_TRUE_COLOR=1
+endif
+
+" Enable true color
+if exists('+termguicolors')
+  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+  set termguicolors
+endif
+
 set background=dark    " Setting dark mode
 " colorscheme deus
 " let g:deus_termcolors=256
@@ -95,24 +113,6 @@ let g:purify_undercurl = 0   " default: 1
 let g:purify_inverse = 0     " default: 1
 packadd! purify
 colorscheme purify
-
-if (has("nvim"))
-  "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
-  let $NVIM_TUI_ENABLE_TRUE_COLOR=1
-endif
-
-if has("gui_running")
-   set guifont=Roboto\ Mono\ Light\ for\ Powerline
-else
-   set t_Co=256
-endif
-
-" Enable true color
-if exists('+termguicolors')
-  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-  set termguicolors
-endif
 
 
 " Cursor vert bar in insert mode

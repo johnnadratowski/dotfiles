@@ -668,6 +668,13 @@ function vimdo() {
 	done
 }
 
+function ec2_instances () {
+  local filter="${1}"
+  local output=${2:-'json'}
+  local query=${3:-"Reservations[*].Instances[*].{Name: Tags[?Key=='Name'] | [0].Value,IP:PrivateIpAddress,ID:InstanceId,State:State.Name}"}
+  aws ec2 describe-instances --filters "Name=tag:Name,Values=${filter}*"  --output ${output}  --query ${query}
+}
+
 function gen_ssl_cert () {
 	local outPath="${1:-./}"
 	local name="${2:-server}"
