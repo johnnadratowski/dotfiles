@@ -16,7 +16,7 @@ set autoread                " Automatically reload files changes outside vim
 set autoindent                " same indentation as previous line
 set backspace=indent,eol,start  "Allow backspace in insert mode
 set clipboard=unnamed        " Use system clipboard
-set colorcolumn=80          " The right hand gutter
+set colorcolumn=0          " The right hand gutter
 set confirm                 " Y-N-C prompt if closing with unsaved changes.
 set cmdheight=2             " CoC - Give more space for displaying messages.
 set cursorline              " have a line indicate the cursor location
