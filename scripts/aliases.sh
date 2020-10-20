@@ -147,3 +147,5 @@ alias setPython2='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln
 alias setPython3='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln -s $(which python3) $PY_PATH'
 
 alias mvnInstall='mvn -T 1C clean install -Dmaven.test.skip -DskipTests -Dmaven.javadoc.skip=true'
+
+alias mksnip='(cd ~/git/dotfiles/_hammerspoon/snippets; vim .)'
