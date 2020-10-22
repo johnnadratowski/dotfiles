@@ -1,5 +1,3 @@
-local filesize = require("filesize")
-
 function toFilesize()
     copy = hs.pasteboard.getContents()
 
