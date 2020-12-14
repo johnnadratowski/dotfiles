@@ -4,6 +4,16 @@
 # SHELL
 # =====================================
 
+function stripe() {                                                                      14:47:13
+  while read line
+  do
+    echo -e "\e[1;31m$line"
+    read line
+    echo -e "\e[1;32m$line"
+  done
+  echo -en "\e[0m"
+}
+
 # MAC: copy from stdin and echo line count and save at a specified location
 function copy () {
   local foo=$(mktemp)
@@ -19,11 +29,10 @@ f () {
   else
     ~/scripts/lib/filter.js $@
   fi
-
-  
 }
+
 botch () {
-    while true; do
+  while true; do
         local tmp=$(mktemp)
         (
             ${@} | while read oLine; do
@@ -51,7 +60,7 @@ botch () {
 		fi
         sleep ${WAIT:-2}
 		rm -f "${tmp}"
-    done
+  done
 }
 alias botch='botch '
 
