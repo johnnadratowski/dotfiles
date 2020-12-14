@@ -4,7 +4,7 @@
 # SHELL
 # =====================================
 
-function stripe() {                                                                      14:47:13
+function stripe() {
   while read line
   do
     echo -e "\e[1;31m$line"
