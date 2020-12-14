@@ -7,9 +7,9 @@
 function stripe() {
   while read line
   do
-    echo -e "\e[1;31m$line"
+    echo -e "\e[1;35m$line"
     read line
-    echo -e "\e[1;32m$line"
+    echo -e "\e[1;36m$line"
   done
   echo -en "\e[0m"
 }
