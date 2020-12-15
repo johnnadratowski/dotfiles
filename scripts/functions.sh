@@ -5,12 +5,18 @@
 # =====================================
 
 function stripe() {
-  while read line
-  do
-    echo -e "\e[1;35m$line"
-    read line
-    echo -e "\e[1;36m$line"
+  local first=$(( ( RANDOM % 7 )  + 31 ))
+  local second=$(( ( RANDOM % 7 )  + 31 ))
+  while (( first == second )); do
+    second=$(( ( RANDOM % 7 )  + 31 ))
   done
+
+  while read line; do
+    echo -e "\e[1;${first}m${line}"
+    read line
+    echo -e "\e[1;${second}m${line}"
+  done
+
   echo -en "\e[0m"
 }
 
