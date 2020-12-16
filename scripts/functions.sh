@@ -22,6 +22,22 @@ function stripe() {
   echo -en "\e[0m"
 }
 
+function coll() {
+  local arr=()
+  while read oLine; do
+    if [[ $1 == '-s' ]]; then
+      arr+=('"'$oLine'"')
+    else
+      arr+=($oLine)
+    fi
+  done
+  echo "["
+  IFS=, eval 'joined="${arr[*]}"'
+  echo $joined
+  echo "]"
+  
+}
+
 # MAC: copy from stdin and echo line count and save at a specified location
 function copy () {
   local foo=$(mktemp)
