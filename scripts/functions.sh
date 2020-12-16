@@ -5,20 +5,18 @@
 # =====================================
 
 function stripe() {
-  local first=$(( ( RANDOM % 7 )  + 31 ))
-  local second=$(( ( RANDOM % 7 )  + 31 ))
-  while (( first == second )); do
-    second=$(( ( RANDOM % 7 )  + 31 ))
-  done
-
-  local i=0
   while read line; do
-    (( i++ ))
-    if (( i % 2 == 0 )); then
-      echo -e "\e[1;${first}m${line}"
-    else
-      echo -e "\e[1;${second}m${line}"
-    fi
+    if [ -z last ]; then last=0; fi
+
+    local color=$(( ( RANDOM % 7 )  + 31 ))
+    
+    while [[ $color == $last ]]; do
+      color=$(( ( RANDOM % 7 )  + 31 ))
+    done
+
+    echo -e "\e[1;${color}m${line}"
+
+    last=$color
   done
 
   echo -en "\e[0m"
