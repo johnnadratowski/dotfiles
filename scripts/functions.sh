@@ -11,10 +11,14 @@ function stripe() {
     second=$(( ( RANDOM % 7 )  + 31 ))
   done
 
+  local i=0
   while read line; do
-    echo -e "\e[1;${first}m${line}"
-    read line
-    echo -e "\e[1;${second}m${line}"
+    (( i++ ))
+    if (( i % 2 == 0 )); then
+      echo -e "\e[1;${first}m${line}"
+    else
+      echo -e "\e[1;${second}m${line}"
+    fi
   done
 
   echo -en "\e[0m"
