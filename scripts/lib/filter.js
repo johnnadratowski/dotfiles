@@ -19,7 +19,7 @@ function help() {
   console.log("")
   console.log("EXAMPLES:")
   console.log("")
-  console.log("cat foo.json | ./f.js '.items.filter(o.name == \"Jim\")")
+  console.log("cat foo.json | f '.items.filter(o.name == \"Jim\")")
   console.log("// This will output all items in teh top level json object with the name Jim")
 }
 

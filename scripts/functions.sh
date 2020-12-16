@@ -48,11 +48,7 @@ function copy () {
 }
 
 f () {
-  if which jq &> /dev/null; then
-    ~/scripts/lib/filter.js $@ | jq '.'
-  else
-    ~/scripts/lib/filter.js $@
-  fi
+  ~/scripts/lib/filter.js $@
 }
 
 botch () {
