@@ -2,9 +2,9 @@
 # Helpful with node building
 ulimit -n 10000
 
-. $(dirname "$0")/aliases.sh
-. $(dirname "$0")/env-vars.sh
-. $(dirname "$0")/functions.sh
+. $HOME/scripts/aliases.sh
+. $HOME/scripts/env-vars.sh
+. $HOME/scripts/functions.sh
 
 # Init applications
 
@@ -13,7 +13,9 @@ if which rbenv > /dev/null; then eval "$(rbenv init -)"; fi
 
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" --no-use # This loads nvm
 
-[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+if [[ $ZSH_VERSION != "" ]]; then
+  [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+fi
 
 [ -f ~/.ghcup/env ] && source ~/.ghcup/env
 

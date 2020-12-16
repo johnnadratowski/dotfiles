@@ -80,6 +80,8 @@ alias h='history'
 alias hgrep="fc -El 0 | grep"
 alias help='man'
 
+alias jqrc="jq -r -c --unbuffered"
+
 # jobs aliases
 alias j='jobs -l'
 alias watch='watch -c '
