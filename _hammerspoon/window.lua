@@ -91,9 +91,9 @@ function moveWindowToDisplay(d)
   end
 end
 
-hs.hotkey.bind(constants.hyper, "1", moveWindowToDisplay(1))
-hs.hotkey.bind(constants.hyper, "2", moveWindowToDisplay(2))
-hs.hotkey.bind(constants.hyper, "3", moveWindowToDisplay(3))
+hs.hotkey.bind(constants.hyper, "1", "Move to Display 1", moveWindowToDisplay(1))
+hs.hotkey.bind(constants.hyper, "2", "Move to Display 2", moveWindowToDisplay(2))
+hs.hotkey.bind(constants.hyper, "3", "Move to Display 3", moveWindowToDisplay(3))
 
 -- LAYOUTS
 

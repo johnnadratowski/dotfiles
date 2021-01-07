@@ -32,9 +32,6 @@
 [submodule "_vim/pack/john/start/vim-pug"]
 	path = _vim/pack/john/start/vim-pug
 	url = git@github.com:digitaltoad/vim-pug.git
-[submodule "_vim/pack/john/start/vim-vue"]
-	path = _vim/pack/john/start/vim-vue
-	url = git@github.com:posva/vim-vue.git
 [submodule "_vim/pack/john/start/typescript-vim"]
 	path = _vim/pack/john/start/typescript-vim
 	url = git@github.com:leafgarland/typescript-vim.git
@@ -161,3 +158,9 @@
 [submodule "_vim/pack/john/start/firenvim"]
 	path = _vim/pack/john/start/firenvim
 	url = git@github.com:glacambre/firenvim.git
+[submodule "_vim/pack/john/start/vim-vue-plugin"]
+	path = _vim/pack/john/start/vim-vue-plugin
+	url = git@github.com:leafOfTree/vim-vue-plugin.git
+[submodule "_vim/pack/john/start/cypher-vim-syntax"]
+	path = _vim/pack/john/start/cypher-vim-syntax
+	url = git@github.com:neo4j-contrib/cypher-vim-syntax.git

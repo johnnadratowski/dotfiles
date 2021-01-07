@@ -13,6 +13,6 @@ function toFilesize()
       else
         hs.alert.show("Error: " .. err)
       end
-    end, {"--to=iec-i", "--suffix=B", copy}):start()
+    end, {"--to=si", "--suffix=B", copy}):start()
 end
 hs.hotkey.bind(constants.hyper, "b", "Human Bytes", toFilesize)

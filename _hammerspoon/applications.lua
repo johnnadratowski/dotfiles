@@ -65,9 +65,9 @@ exports.print_running = function()
     end
 end
 
-hs.hints.showTitleThresh = 4
-hs.hints.style = "vimperator"
-hs.hotkey.bind(constants.hyper, "0", "Window Hints", hs.hints.windowHints)
+-- hs.hints.showTitleThresh = 4
+-- hs.hints.style = "vimperator"
+-- hs.hotkey.bind(constants.hyper, "0", "Window Hints", hs.hints.windowHints)
 
 hs.hotkey.bind(
     constants.hyper,

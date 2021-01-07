@@ -70,7 +70,7 @@ function obj:bindHotkeys(mapping)
     local toggleKey = mapping['toggle'][2]
 
     self.hotkey = hs.hotkey.new(
-        toggleMods, toggleKey,
+        toggleMods, toggleKey, "Emojis", 
         function() if self.chooser:isVisible() then
             self.chooser:hide() else self.chooser:show() end end
     ):enable()

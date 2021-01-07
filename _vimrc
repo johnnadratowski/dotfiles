@@ -298,6 +298,13 @@ augroup END
 nnoremap <leader>` :ToggleWorkspace<CR>
 let g:workspace_autosave = 0
 
+""" vim-vue-plugin
+let g:vim_vue_plugin_load_full_syntax = 1
+let g:vim_vue_plugin_use_stylus = 1
+let g:vim_vue_plugin_use_typescript = 1
+let g:vim_vue_plugin_use_pug = 1
+let g:vim_vue_plugin_debug = 1
+
 """ CoC
 source ~/.vim/vimrc/coc.vim
 
