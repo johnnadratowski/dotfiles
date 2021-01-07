@@ -1,7 +1,7 @@
 -- INIT
 
 require("hs.crash")
-
+local alert = require'hs.alert'
 require("applications")
 require("caffiene")
 require("colorpicker")
@@ -11,6 +11,7 @@ require("humanfilesize")
 local logger = require("log")
 require("mic")
 --require("mouse")
+require("fmtnum")
 require("ping")
 local snippets = require("snippets")
 require("timestamp")
@@ -76,9 +77,19 @@ hs.console.outputBackgroundColor {white = 0}
 hs.console.consoleCommandColor {white = 1}
 hs.console.alpha(1)
 
----- Show hotkeys
+---- DO not show alert when hotkey pressed
 hs.hotkey.alertDuration = 0
-hs.hotkey.showHotkeys(constants.hyper, "h")
+
+---- Show hotkeys
+function showHelp()
+  local t=hs.hotkey.getHotkeys()
+  print(t)
+  local s=''
+  for i=1,#t do s=s..t[i].msg..'\n' end
+  alert(s:sub(1,-2), { atScreenEdge = 1 }, 3600)
+end
+hs.hotkey.bind(constants.hyper, "h", "Show Hotkeys", showHelp, alert.closeAll)
+--hs.hotkey.showHotkeys(constants.hyper, "h")
 
 ---- Reload hammerspoon with HYPER+R
 hs.alert.show("Hammerspoon Reloaded")

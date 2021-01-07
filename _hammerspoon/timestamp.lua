@@ -6,7 +6,7 @@ function timestampToDate()
 
     ts = tonumber(copy)
     if ts == nil then
-        hs.alert.show("Invalid Timestamp: " .. copy:sub(0, 15))
+        hs.alert.show("Invalid Timestamp: " .. copy:sub(0, 15), 3600)
         return
     end
 
@@ -14,6 +14,6 @@ function timestampToDate()
         ts = math.floor(ts / 1000)
     end
 
-    hs.alert.show(os.date("%Y-%m-%d %H:%M:%S", ts))
+    hs.alert.show(os.date("%Y-%m-%d %H:%M:%S", ts), 3600)
 end
-hs.hotkey.bind(constants.hyper, "t", "Timestamp", timestampToDate)
+hs.hotkey.bind(constants.hyper, "t", "Timestamp", timestampToDate, hs.alert.closeAll)
