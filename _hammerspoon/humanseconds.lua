@@ -19,6 +19,7 @@ function toDays()
 
     one = string.format("%d days, %d hours, %d minutes, %d seconds\n", days, hours, minutes, seconds)
     two = string.format("%d-%02d-%02d %02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec)
-    hs.alert.show(one .. two, 3600)
+    out = one .. two
+    hs.alert.show(out, 3600)
 end
 hs.hotkey.bind(constants.hyper, "s", "Human Seconds", toDays, hs.alert.closeAll)
