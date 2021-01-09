@@ -234,10 +234,10 @@ nmap <silent> t<C-s> :let test#project_root=GetGitRoot(expand('%')) \| TestSuite
 nmap <silent> t<C-l> :let test#project_root=GetGitRoot(expand('%')) \| TestLast<CR>
 nmap <silent> t<C-g> :let test#project_root=GetGitRoot(expand('%')) \| TestVisit<CR>
 
-augroup golang_test
-  au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
-  au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
-augroup END
+" augroup golang_test
+"   au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
+"   au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
+" augroup END
 
 " rainbow parens
 let g:rainbow_active = 1
