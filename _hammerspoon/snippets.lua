@@ -56,7 +56,7 @@ function list_dir(dir)
 end
 
 function mod.snippets()
-  local SNIPPET_DIR = constants.home .. "snippets/"
+  local SNIPPET_DIR = constants.hammerspoonHome .. "snippets/"
   local current = hs.application.frontmostApplication()
   local choices = {}
 

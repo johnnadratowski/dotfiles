@@ -1,7 +1,8 @@
 -- INIT
 
+local files = require('files')
 require("hs.crash")
-local alert = require'hs.alert'
+local alert = require('hs.alert')
 require("applications")
 require("caffiene")
 require("colorpicker")
@@ -27,7 +28,7 @@ math.randomseed(os.time())
 -- DEBUGGING
 
 hs.crash.crashLogToNSLog = false
-configFileWatcher = hs.pathwatcher.new(constants.home, dbug.reloadConfig)
+configFileWatcher = hs.pathwatcher.new(constants.hammerspoonHome, dbug.reloadConfig)
 --debug.sethook(debug.lineTraceHook, "l")
 --configFileWatcher:start()
 
@@ -66,6 +67,40 @@ hs.hotkey.bind(
         hs.eventtap.keyStrokes(hs.pasteboard.getContents())
     end
 )
+
+-- store last pastes for meld
+hs.hotkey.bind(constants.hyper, "M", "Meld", function() 
+  local first = constants.tmp .. 'cp-1'
+  local second = constants.tmp .. 'cp-2'
+  if not files.exists(first) or not files.exists(second) then
+    hs.alert.show("No copy files found for meld command")
+    return
+  end
+
+  task = hs.task.new('/usr/local/bin/meld', nil, {first, second}):start()
+end)
+
+hs.pasteboard.watcher.new(function(data)
+  if not data then
+    hs.alert.show("No pasteboard data found for copy files")
+    return
+  end
+
+  local prefix = constants.tmp .. 'cp-'
+  print('copy files')
+  for i=9,1,-1 do
+    if files.exists(prefix .. i) then
+      os.rename(prefix .. i, prefix .. (i+1))
+    end
+  end
+  print('open ' .. prefix .. 1)
+  file = io.open(prefix .. 1, "w+")
+  print('write')
+  file:write(data)
+  print('close')
+  file:close()
+  print('fin')
+end)
 
 ---- Reload hammerspoon with HYPER+R
 hs.hotkey.bind(constants.hyper, "R", "Reload", hs.reload)

@@ -2,7 +2,11 @@ local constants = {}
 constants.hyper = {"alt", "ctrl", "cmd", "shift"}
 --constants.hyper = {"fn"}
 
-constants.home = os.getenv("HOME") .. "/.hammerspoon/"
+constants.home = os.getenv("HOME")
+
+constants.tmp = constants.home .. "/tmp/"
+
+constants.hammerspoonHome = constants.home .. "/.hammerspoon/"
 
 constants.loglevel = "debug"
 
