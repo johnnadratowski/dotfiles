@@ -1,25 +1,26 @@
 -- INIT
 
 local files = require('files')
-require("hs.crash")
+local constants = require("constants")
 local alert = require('hs.alert')
+local dialog = require("dialog")
+local dbug = require("dbug")
+local logger = require("log")
+local snippets = require("snippets")
+
+require("hs.crash")
 require("applications")
 require("caffiene")
 require("colorpicker")
-local dialog = require("dialog")
-local dbug = require("dbug")
 require("humanfilesize")
 require("humanseconds")
-local logger = require("log")
 require("mic")
 --require("mouse")
 require("fmtnum")
 require("ping")
-local snippets = require("snippets")
 require("timestamp")
 require("window")
 
-constants = require("constants")
 
 ---- SEED THE RNG
 
@@ -38,20 +39,6 @@ configFileWatcher = hs.pathwatcher.new(constants.hammerspoonHome, dbug.reloadCon
 hs.loadSpoon("Emojis")
 spoon.Emojis:bindHotkeys({toggle = {constants.hyper, "E"}})
 
----- SEAL SPOONS
--- hs.loadSpoon("Seal")
--- spoon.Seal:loadPlugins({"apps", "vpn", "screencapture", "safari_bookmarks", "calc", "useractions"})
--- spoon.Seal:bindHotkeys({show = {constants.hyper, ";"}})
--- spoon.Seal:start()
--- spoon.Seal.plugins.useractions.actions = {
---     ["Red Hat Bugzilla"] = {
---         url = "https://bugzilla.redhat.com/show_bug.cgi?id=${query}",
---         icon = "favicon",
---         keyword = "bz"
---     },
---     ["Launchpad Bugs"] = {url = "https://launchpad.net/bugs/${query}", icon = "favicon", keyword = "lp"}
--- }
-
 -- WINDOW
 
 --hs.window.animationDuration = 0.1
@@ -68,16 +55,16 @@ hs.hotkey.bind(
     end
 )
 
--- store last pastes for meld
-hs.hotkey.bind(constants.hyper, "M", "Meld", function() 
+-- store last pastes for diff and use diff application
+hs.hotkey.bind(constants.hyper, "D", "Diff", function() 
   local first = constants.tmp .. 'cp-1'
   local second = constants.tmp .. 'cp-2'
   if not files.exists(first) or not files.exists(second) then
-    hs.alert.show("No copy files found for meld command")
+    hs.alert.show("No copy files found for diff command")
     return
   end
 
-  task = hs.task.new('/usr/local/bin/meld', nil, {first, second}):start()
+  task = hs.task.new(constants.diff, nil, {first, second}):start()
 end)
 
 hs.pasteboard.watcher.new(function(data)
@@ -93,13 +80,9 @@ hs.pasteboard.watcher.new(function(data)
       os.rename(prefix .. i, prefix .. (i+1))
     end
   end
-  print('open ' .. prefix .. 1)
   file = io.open(prefix .. 1, "w+")
-  print('write')
   file:write(data)
-  print('close')
   file:close()
-  print('fin')
 end)
 
 ---- Reload hammerspoon with HYPER+R
@@ -127,11 +110,7 @@ end
 hs.hotkey.bind(constants.hyper, "h", "Show Hotkeys", showHelp, alert.closeAll)
 --hs.hotkey.showHotkeys(constants.hyper, "h")
 
----- Reload hammerspoon with HYPER+R
-hs.alert.show("Hammerspoon Reloaded")
-
 ---- Lorem Ipsum Generator
-
 hs.hotkey.bind(
     constants.hyper,
     "L",
@@ -155,3 +134,6 @@ hs.hotkey.bind(
 
 ---- Snippets
 hs.hotkey.bind(constants.hyper, "J", "Snippets", snippets.snippets)
+
+hs.alert.show("Hammerspoon Reloaded")
+
