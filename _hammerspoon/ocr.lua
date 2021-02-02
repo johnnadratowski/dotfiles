@@ -5,8 +5,9 @@ function ocr()
     task = hs.task.new(constants.home .. '/bin/ocr', function(code, out, err) 
       log.d("CODE: " .. code .. " OUT: " .. out .. " ERR: " .. err)
       if code == 0 then
-        hs.alert.show("👍 " .. out, 1)
-        hs.pasteboard.setContents(out)
+        contents = out:gsub("^%s*(.-)%s*$", "%1")
+        hs.alert.show("👍 " .. contents, 1)
+        hs.pasteboard.setContents(contents)
       else
         hs.alert.show("Error: " .. err, 2)
       end
