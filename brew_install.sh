@@ -35,6 +35,7 @@ brew install          \
   prettyping          \
   python3             \
   the_silver_searcher \
+  tesseract           \
   tldr                \
   tmux                \
   vim                 \

@@ -27,6 +27,9 @@ else
 	exit 1
 fi
 
+log "Symlinking bin folders"
+ln -s ~/scripts/lib/ocr ~/bin
+
 log "Install powerline fonts"
 (
   tmp="$(mktemp -d)"
