@@ -136,5 +136,13 @@ hs.hotkey.bind(
 ---- Snippets
 hs.hotkey.bind(constants.hyper, "J", "Snippets", snippets.snippets)
 
+hs.hotkey.bind(constants.hyper, "K", "Notes", function() 
+  hs.task.new('/usr/bin/open', function(code, out, err) 
+        if code ~= 0 then
+          hs.alert.show("Error: " .. err, 1)
+        end
+      end, {'-a', '/Applications/MacVim.app', constants.home .. '/Dropbox/notes'}):start()
+end)
+
 hs.alert.show("Hammerspoon Reloaded")
 
