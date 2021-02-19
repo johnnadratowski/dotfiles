@@ -95,6 +95,10 @@ hs.hotkey.bind(constants.hyper, "1", "Move to Display 1", moveWindowToDisplay(1)
 hs.hotkey.bind(constants.hyper, "2", "Move to Display 2", moveWindowToDisplay(2))
 hs.hotkey.bind(constants.hyper, "3", "Move to Display 3", moveWindowToDisplay(3))
 
+hs.hotkey.bind(constants.hyper, "M", "Maximize", function() 
+  hs.window.focusedWindow():maximize()
+end)
+
 -- LAYOUTS
 
 -- function layoutWindows(layoutType)
