@@ -20,6 +20,7 @@ require("fmtnum")
 require("ocr")
 require("ping")
 require("timestamp")
+require("uuid")
 require("window")
 
 
