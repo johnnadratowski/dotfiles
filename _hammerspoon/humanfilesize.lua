@@ -1,17 +1,19 @@
+local alerts = require('alerts')
+
 function toFilesize()
     copy = hs.pasteboard.getContents()
 
     ts = tonumber(copy)
     if ts == nil then
-        hs.alert.show("Invalid size: " .. copy:sub(0, 15))
+        alerts.alert("Invalid size: " .. copy:sub(0, 15))
         return
     end
 
     task = hs.task.new('/usr/local/bin/numfmt', function(code, out, err) 
       if code == 0 then
-        hs.alert.show(out:gsub("^%s*(.-)%s*$", "%1"), 3600)
+        alerts.alertI(out:gsub("^%s*(.-)%s*$"), 3600)
       else
-        hs.alert.show("Error: " .. err, 3600)
+        alerts.alertI("Error: " .. err)
       end
     end, {"--to=si", "--suffix=B", copy}):start()
 end

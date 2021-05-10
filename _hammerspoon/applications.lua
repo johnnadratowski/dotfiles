@@ -1,3 +1,5 @@
+local alerts = require('alerts')
+
 constants = require("constants")
 log = require("log")
 
@@ -7,7 +9,7 @@ hs.application.enableSpotlightForNameSearches(true)
 function ensureOpen(appName, timeout, delay)
     local app = hs.application.open(appName, timeout, timeout > 0)
     if app == nil then
-        hs.alert.show("Could not open " .. appName)
+        alerts.alert("Could not open " .. appName)
         return
     end
 

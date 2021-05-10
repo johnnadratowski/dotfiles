@@ -1,3 +1,4 @@
+local alerts = require('alerts')
 constants = require("constants")
 
 local mod = {}
@@ -49,7 +50,7 @@ function list_dir(dir)
       end
     end
   else
-    hs.alert.show(string.format("The following error occurred: %s", dirObj))
+    alerts.alert(string.format("The following error occurred: %s", dirObj))
   end
 
   return out
@@ -111,9 +112,9 @@ function mod.snippets()
       if item then
         chooser:hide()
         hs.pasteboard.setContents(item.text)
-        hs.alert.show("Copied to clipboard", 1)
+        alerts.alert("Copied to clipboard", 1)
       else
-        hs.alert.show("No search result to copy", 1)
+        alerts.alert("No search result to copy", 1)
       end
     end
   )

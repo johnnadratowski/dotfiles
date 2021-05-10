@@ -1,3 +1,4 @@
+local alerts = require('alerts')
 constants = require("constants")
 
 -- MOTION
@@ -71,7 +72,7 @@ function move_window(direction)
                 f.h = max.h / 2
             end
         else
-            hs.alert.show("move_window(): Freaky parameter received " .. direction)
+            alerts.alert("move_window(): Freaky parameter received " .. direction)
         end
 
         win:setFrame(f, 0)

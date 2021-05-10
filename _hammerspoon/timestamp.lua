@@ -1,3 +1,5 @@
+local alerts = require('alerts')
+
 constants = require("constants")
 
 function timestampToDate()
@@ -6,7 +8,7 @@ function timestampToDate()
 
     ts = tonumber(copy)
     if ts == nil then
-        hs.alert.show("Invalid Timestamp: " .. copy:sub(0, 15), 3600)
+        alerts.alertI("Invalid Timestamp: " .. copy:sub(0, 15))
         return
     end
 
@@ -14,6 +16,6 @@ function timestampToDate()
         ts = math.floor(ts / 1000)
     end
 
-    hs.alert.show(os.date("%Y-%m-%d %H:%M:%S", ts), 3600)
+    alerts.alertI(os.date("%Y-%m-%d %H:%M:%S", ts))
 end
 hs.hotkey.bind(constants.hyper, "t", "Timestamp", timestampToDate, hs.alert.closeAll)

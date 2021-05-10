@@ -3,6 +3,7 @@
 local files = require('files')
 local constants = require("constants")
 local alert = require('hs.alert')
+local alerts = require('alerts')
 local dialog = require("dialog")
 local dbug = require("dbug")
 local logger = require("log")
@@ -12,6 +13,7 @@ require("hs.crash")
 require("applications")
 require("caffiene")
 require("colorpicker")
+require("escape")
 require("humanfilesize")
 require("humanseconds")
 require("mic")
@@ -62,7 +64,7 @@ hs.hotkey.bind(constants.hyper, "D", "Diff", function()
   local first = constants.tmp .. 'cp-1'
   local second = constants.tmp .. 'cp-2'
   if not files.exists(first) or not files.exists(second) then
-    hs.alert.show("No copy files found for diff command")
+    alerts.alert("No copy files found for diff command")
     return
   end
 
@@ -71,7 +73,7 @@ end)
 
 hs.pasteboard.watcher.new(function(data)
   if not data then
-    hs.alert.show("No pasteboard data found for copy files")
+    alerts.alert("No pasteboard data found for copy files")
     return
   end
 
@@ -100,6 +102,8 @@ hs.console.alpha(1)
 
 ---- DO not show alert when hotkey pressed
 hs.hotkey.alertDuration = 0
+hs.alert.defaultStyle.textFont = "Fira Code"
+hs.alert.defaultStyle.textSize = 16
 
 ---- Show hotkeys
 function showHelp()
@@ -107,7 +111,7 @@ function showHelp()
   print(t)
   local s=''
   for i=1,#t do s=s..t[i].msg..'\n' end
-  alert(s:sub(1,-2), { atScreenEdge = 1 }, 3600)
+  alerts.alertI(s:sub(1,-2))
 end
 hs.hotkey.bind(constants.hyper, "h", "Show Hotkeys", showHelp, alert.closeAll)
 --hs.hotkey.showHotkeys(constants.hyper, "h")
@@ -120,15 +124,15 @@ hs.hotkey.bind(
     function()
         input = dialog("Lorem Ipsum Number of sentences", "error", "5")
         if input == "" or tonumber(input) == nil then
-            hs.alert.show(string.format("Invalid Input: %s", input))
+            alerts.alert(string.format("Invalid Input: %s", input))
             return
         end
         code, output, headers = hs.http.doRequest(string.format("http://metaphorpsum.com/sentences/%s", input), "GET")
         if code ~= 200 then
-            hs.alert.show(string.format("Lorem Ipsum Error Response code: %d", code))
+            alerts.alert(string.format("Lorem Ipsum Error Response code: %d", code))
             logger.ef("Error response for lorem ipsum: %s", output)
         else
-            hs.alert.show("Lorem Ipsum copied to clipboard")
+            alerts.alert("Lorem Ipsum copied to clipboard")
             hs.pasteboard.setContents(output)
         end
     end
@@ -141,10 +145,10 @@ hs.hotkey.bind(constants.hyper, "J", "Snippets", snippets.snippets)
 hs.hotkey.bind(constants.hyper, "K", "Notes", function() 
   hs.task.new('/usr/bin/open', function(code, out, err) 
         if code ~= 0 then
-          hs.alert.show("Error: " .. err, 1)
+          alerts.alert("Error: " .. err, 1)
         end
       end, {'-a', '/Applications/MacVim.app', constants.home .. '/Dropbox/notes'}):start()
 end)
 
-hs.alert.show("Hammerspoon Reloaded")
+alerts.alert("Hammerspoon Reloaded")
 

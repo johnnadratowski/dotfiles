@@ -1,3 +1,4 @@
+local alerts = require('alerts')
 
 function string:center(input)
   local lines = input:split("\n")
@@ -101,7 +102,7 @@ function fmtNum()
 
   ts = tonumber(copy)
   if ts == nil then
-      hs.alert.show("Invalid number: " .. copy:sub(0, 15))
+      alerts.alert("Invalid number: " .. copy:sub(0, 15))
       return
   end
 
@@ -145,6 +146,6 @@ function fmtNum()
     nameI = nameI - 1
   end
 
-  hs.alert(out, #parts)
+  alerts.alert(out, #parts)
 end
 hs.hotkey.bind(constants.hyper, "n", "Format Number", fmtNum, hs.alert.closeAll)

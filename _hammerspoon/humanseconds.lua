@@ -1,9 +1,11 @@
+local alerts = require('alerts')
+
 function toDays()
     copy = hs.pasteboard.getContents()
 
     ts = tonumber(copy)
     if ts == nil then
-        hs.alert.show("Invalid seconds: " .. copy:sub(0, 15))
+        alerts.alert("Invalid seconds: " .. copy:sub(0, 15))
         return
     end
 
@@ -20,6 +22,6 @@ function toDays()
     one = string.format("%d days, %d hours, %d minutes, %d seconds\n", days, hours, minutes, seconds)
     two = string.format("%d-%02d-%02d %02d:%02d:%02d", date.year, date.month, date.day, date.hour, date.min, date.sec)
     out = one .. two
-    hs.alert.show(out, 3600)
+    alerts.alertI(out)
 end
 hs.hotkey.bind(constants.hyper, "s", "Human Seconds", toDays, hs.alert.closeAll)

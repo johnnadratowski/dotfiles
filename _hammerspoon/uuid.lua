@@ -1,11 +1,13 @@
+local alerts = require('alerts')
+
 function uuid()
     task = hs.task.new('/usr/bin/uuidgen', function(code, out, err) 
       if code == 0 then
         o = out:lower():gsub("%s+", "")
-        hs.alert.show(o, 3600)
+        alerts.alertI(o)
         hs.pasteboard.setContents(o)
       else
-        hs.alert.show("Error: " .. err, 3600)
+        alerts.alertI("Error: " .. err)
       end
     end):start()
 end

@@ -1,3 +1,5 @@
+local alerts = require('alerts')
+
 hs.pasteboard.callbackWhenChanged(5, function(state)
-  hs.alert.show('here')
+  alerts.alert('here')
   if state then
