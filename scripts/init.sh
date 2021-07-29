@@ -24,7 +24,7 @@ fi
 # added by travis gem
 [ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
 
-which pyenv 2>&1 > /dev/null && eval "$(pyenv init -)"
+which pyenv 2>&1 > /dev/null && eval "$(pyenv init --path)"
 
 if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
     powerline-daemon -q

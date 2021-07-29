@@ -147,7 +147,7 @@ hs.hotkey.bind(constants.hyper, "K", "Notes", function()
         if code ~= 0 then
           alerts.alert("Error: " .. err, 1)
         end
-      end, {'-a', '/Applications/MacVim.app', constants.home .. '/Dropbox/notes'}):start()
+      end, {'-a', '/Applications/MacVim.app', constants.home .. '/Dropbox/notes.md'}):start()
 end)
 
 alerts.alert("Hammerspoon Reloaded")

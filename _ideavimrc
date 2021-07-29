@@ -2,6 +2,7 @@ set smartcase
 set clipboard+=unnamed
 set surround
 set ignorecase
+set commentary
 vnoremap > >gv 
 vnoremap < <gv 
 " Space to run macros
