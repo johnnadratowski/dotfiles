@@ -1,0 +1,42 @@
+<code_scheme name="Default" version="173">
+  <SqlCodeStyleSettings version="5">
+    <option name="KEYWORD_CASE" value="2" />
+    <option name="QUERY_EL_LINE" value="101" />
+    <option name="QUERY_EL_COMMA" value="1" />
+    <option name="QUERY_IN_ONE_STRING" value="1" />
+    <option name="SUBQUERY_OPENING" value="1" />
+    <option name="SUBQUERY_CONTENT" value="2" />
+    <option name="SUBQUERY_CLOSING" value="2" />
+    <option name="INSERT_INTO_NL" value="2" />
+    <option name="INSERT_CONTENT" value="2" />
+    <option name="INSERT_TABLE_EL_LINE" value="1" />
+    <option name="INSERT_EL_COMMA" value="1" />
+    <option name="SET_EL_LINE" value="101" />
+    <option name="SET_EL_COMMA" value="1" />
+    <option name="WITH_EL_LINE" value="1" />
+    <option name="WITH_EL_COMMA" value="1" />
+    <option name="SELECT_EL_LINE" value="101" />
+    <option name="SELECT_EL_COMMA" value="1" />
+    <option name="SELECT_KEEP_N_ITEMS_IN_LINE" value="1" />
+    <option name="SELECT_USE_AS_WORD" value="1" />
+    <option name="FROM_EL_LINE" value="101" />
+    <option name="FROM_EL_COMMA" value="1" />
+    <option name="FROM_WRAP_ON" value="true" />
+    <option name="FROM_ALIGN_JOIN_TABLES" value="true" />
+    <option name="FROM_ALIGN_ALIASES" value="true" />
+    <option name="FROM_INDENT_JOIN" value="false" />
+    <option name="WHERE_EL_LINE" value="101" />
+    <option name="ORDER_EL_LINE" value="101" />
+    <option name="ORDER_EL_WRAP" value="1" />
+    <option name="ORDER_EL_COMMA" value="1" />
+    <option name="TABLE_OPENING" value="1" />
+    <option name="TABLE_CONTENT" value="2" />
+    <option name="TABLE_CLOSING" value="3" />
+    <option name="ROUTINE_ARG_CLOSING" value="1" />
+    <option name="ROUTINE_ARG_COMMA" value="1" />
+    <option name="CORTEGE_COMMA_1ST" value="true" />
+    <option name="EXPR_CASE_THEN_ALIGN" value="true" />
+    <option name="EXPR_CASE_ELSE_ALIGN_THEN" value="true" />
+    <option name="EXPR_CASE_END" value="1" />
+  </SqlCodeStyleSettings>
+</code_scheme>
