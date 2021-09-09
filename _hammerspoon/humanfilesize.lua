@@ -10,8 +10,9 @@ function toFilesize()
     end
 
     task = hs.task.new('/usr/local/bin/numfmt', function(code, out, err) 
+      print(out)
       if code == 0 then
-        alerts.alertI(out:gsub("^%s*(.-)%s*$"), 3600)
+        alerts.alertI(out, 3600)
       else
         alerts.alertI("Error: " .. err)
       end
