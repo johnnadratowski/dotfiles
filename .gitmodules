@@ -161,3 +161,6 @@
 [submodule "zsh_custom/themes/agkozak-zsh-prompt"]
 	path = zsh_custom/themes/agkozak-zsh-prompt
 	url = git@github.com:agkozak/agkozak-zsh-prompt.git
+[submodule "zsh_custom/plugins/zsh-vim-mode"]
+	path = zsh_custom/plugins/zsh-vim-mode
+	url = git@github.com:softmoth/zsh-vim-mode.git
