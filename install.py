@@ -12,8 +12,8 @@ TARGET_BASE = os.path.expanduser("~")
 
 EXTRA_FILES = {
     'scripts': None,
-    'zsh-custom/themes/unicandy.zsh-theme': ".oh-my-zsh/themes/unicandy.zsh-theme",
-    '_zsh-theme': ".oh-my-zsh/themes/mine.zsh-theme",
+    'zsh-custom/plugins/zsh-vim-mode.plugin.zsh': "./zsh-vim-mode/zsh-vim-mode.plugin.zsh",
+    'zsh-custom/themes/agkozak.zsh-theme': "./agkozak-zsh-prompt/agkozak-zsh-prompt.plugin.zsh",
 }
 
 DIRS = [

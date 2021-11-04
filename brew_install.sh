@@ -38,6 +38,7 @@ brew install          \
   tesseract           \
   tldr                \
   tmux                \
+  tree                \
   vim                 \
   zsh
 brew cask install copyq
