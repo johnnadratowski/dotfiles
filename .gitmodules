@@ -149,12 +149,6 @@
 [submodule "_vim/pack/john/start/vim-fugitive"]
 	path = _vim/pack/john/start/vim-fugitive
 	url = git@github.com:tpope/vim-fugitive.git
-[submodule "zsh_custom/themes/agkozak"]
-	path = zsh_custom/themes/agkozak
-	url = https://github.com/agkozak/agkozak-zsh-prompt
-[submodule "/Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/zsh-vim-mode"]
-	path = /Users/johnnadratowski/git/dotfiles/zsh_custom/plugins/zsh-vim-mode
-	url = git@github.com:softmoth/zsh-vim-mode.git
 [submodule "_vim/pack/john/start/firenvim"]
 	path = _vim/pack/john/start/firenvim
 	url = git@github.com:glacambre/firenvim.git
@@ -164,3 +158,6 @@
 [submodule "_vim/pack/john/start/cypher-vim-syntax"]
 	path = _vim/pack/john/start/cypher-vim-syntax
 	url = git@github.com:neo4j-contrib/cypher-vim-syntax.git
+[submodule "zsh_custom/themes/agkozak-zsh-prompt"]
+	path = zsh_custom/themes/agkozak-zsh-prompt
+	url = git@github.com:agkozak/agkozak-zsh-prompt.git
