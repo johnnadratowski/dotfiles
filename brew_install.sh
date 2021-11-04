@@ -11,6 +11,8 @@ if ! which brew; then
 	ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 fi
 
+brew tap homebrew/cask-fonts
+
 echo "Update brew"
 brew update
 
@@ -24,7 +26,9 @@ brew install          \
   fzf                 \
   go                  \
   htop                \
+  karabiner-elements  \
   lua                 \
+  macpass             \
   mercurial           \
   moreutils           \
   ncdu                \
@@ -40,13 +44,11 @@ brew install          \
   tmux                \
   tree                \
   vim                 \
+  visual-studio-code  \
   zsh
-brew cask install copyq
-brew cask install hammerspoon
-brew cask install macpass
-brew cask install visual-studio-code
-brew cask install karabiner-elements
- > /dev/null
+
+brew install --cask font-fira-code
+
 set +x
 
 # fzf - To install useful key bindings and fuzzy completion:
