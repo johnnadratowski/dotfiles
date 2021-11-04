@@ -21,6 +21,7 @@ brew install          \
   asciidoctor         \
   awscli              \
   diff-so-fancy       \
+  drovio              \
   entr                \
   fd                  \
   fzf                 \
