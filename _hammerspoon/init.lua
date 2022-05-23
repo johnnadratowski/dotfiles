@@ -145,9 +145,19 @@ hs.hotkey.bind(constants.hyper, "J", "Snippets", snippets.snippets)
 hs.hotkey.bind(constants.hyper, "K", "Notes", function() 
   hs.task.new('/usr/bin/open', function(code, out, err) 
         if code ~= 0 then
-          alerts.alert("Error: " .. err, 1)
+          alerts.alert("Error: " .. err, 5)
         end
       end, {'-a', '/Applications/MacVim.app', constants.home .. '/Dropbox/notes.md'}):start()
+end)
+
+---- Toggle Dock
+hs.hotkey.bind(constants.hyper, "Z", "Toggle Dock", function() 
+  alerts.alert(constants.home .. '/scripts/toggle-dock.sh')
+  hs.task.new(constants.home .. '/scripts/toggle-dock.sh', function(code, out, err) 
+        if code ~= 0 then
+          alerts.alert("Error: " .. err, 5)
+        end
+      end):start()
 end)
 
 alerts.alert("Hammerspoon Reloaded")
