@@ -7,7 +7,7 @@ function ocr() {
   out="$(mktemp)"
   screencapture -i "${img}"
   #/usr/local/bin/mogrify -modulate 100,0 -resize 400% "${img}" 
-  /usr/local/bin/tesseract -l eng --psm 3 "${img}" "${out}"
+  /opt/homebrew/bin/tesseract -l eng --psm 3 "${img}" "${out}"
   cat "${out}.txt"
 }
 
