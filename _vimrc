@@ -1,4 +1,58 @@
 " ==========================================================
+" Plugins
+" ==========================================================
+
+call plug#begin()
+
+Plug 'AndrewRadev/sideways.vim'
+Plug 'Brettm12345/moonlight.vim'
+Plug 'airblade/vim-gitgutter'
+Plug 'ajmwagar/vim-deus'
+Plug 'chrisbra/NrrwRgn'
+Plug 'christoomey/vim-tmux-navigator'
+Plug 'cocopon/iceberg.vim'
+Plug 'digitaltoad/vim-pug'
+Plug 'dracula/vim'
+Plug 'editorconfig/editorconfig-vim'
+Plug 'emanuelrosa/badcat'
+Plug 'fatih/vim-go'
+Plug 'frazrepo/vim-rainbow'
+Plug 'glacambre/firenvim'
+Plug 'iloginow/vim-stylus'
+Plug 'itchyny/landscape.vim'
+Plug 'itchyny/lightline.vim'
+Plug 'itchyny/vim-gitbranch'
+Plug 'jacoborus/tender.vim'
+Plug 'joshdick/onedark.vim'
+Plug 'junegunn/vim-easy-align'
+Plug 'leafgarland/typescript-vim'
+Plug 'maxbrunsfeld/vim-emacs-bindings'
+Plug 'mbbill/undotree'
+Plug 'mhinz/vim-startify'
+Plug 'morhetz/gruvbox'
+Plug 'nanotech/jellybeans.vim'
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'preservim/vimux'
+Plug 'prettier/vim-prettier'
+Plug 'rakr/vim-one'
+Plug 'ryanoasis/vim-devicons'
+Plug 'sheerun/vim-wombat-scheme'
+Plug 'stephpy/vim-yaml'
+Plug 'thaerkh/vim-indentguides'
+Plug 'thaerkh/vim-workspace'
+Plug 'tomasr/molokai'
+Plug 'tpope/vim-abolish'
+Plug 'tpope/vim-commentary'
+Plug 'tpope/vim-fugitive'
+Plug 'tpope/vim-vinegar'
+Plug 'vim-test/vim-test'
+Plug 'yggdroot/LeaderF'
+
+call plug#end()
+
+let g:coc_global_extensions = [ 'coc-json', 'coc-snippets', 'coc-pyright', 'coc-prettier', 'coc-lightbulb', 'coc-html', 'coc-eslint', 'coc-tsserver', 'coc-sql', 'coc-sh', 'coc-json', 'coc-go', 'coc-css' ]
+
+" ==========================================================
 " Basic Settings
 " ==========================================================
 
@@ -99,22 +153,23 @@ if exists('+termguicolors')
 endif
 
 set background=dark    " Setting dark mode
+autocmd vimenter * ++nested colorscheme gruvbox
 " colorscheme deus
 " let g:deus_termcolors=256
 " packadd! dracula
 " packadd! onedark.vim
 " packadd! yowish
 " colorscheme yowish
-" colorscheme molokai
+" colorscheme gruvbox
 " colorscheme dracula
 " colorscheme tender
-let g:purify_bold = 0        " default: 1
-let g:purify_italic = 0      " default: 1
-let g:purify_underline = 0   " default: 1
-let g:purify_undercurl = 0   " default: 1
-let g:purify_inverse = 0     " default: 1
-packadd! purify
-colorscheme purify
+" let g:purify_bold = 0        " default: 1
+" let g:purify_italic = 0      " default: 1
+" let g:purify_underline = 0   " default: 1
+" let g:purify_undercurl = 0   " default: 1
+" let g:purify_inverse = 0     " default: 1
+" packadd! purify
+" colorscheme purify
 
 
 " Cursor vert bar in insert mode
