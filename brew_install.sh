@@ -17,7 +17,7 @@ echo "Update brew"
 brew update
 
 set -x
-brew install          \
+brew install  -f      \
   asciidoctor         \
   awscli              \
   diff-so-fancy       \
