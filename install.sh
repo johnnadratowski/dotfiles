@@ -53,11 +53,12 @@ chmod +x ~/bin/cht.sh
 
 curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 
-log "install tpm"
-git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
-
+log "Setup Git Config"
 git config --global user.email "john.nadratowski@gmail.com"
 git config --global user.name "John Nadratowski"
+
+log "install tpm"
+git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
 
 log "installing tpm plugins"
 ~/.tmux/plugins/tpm/scripts/install_plugins.sh
