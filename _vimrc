@@ -524,7 +524,7 @@ function! GetCurFile()
   if l:curFile == ""
     let l:curFile = getcwd()
   endif
-  return l:curFile
+  return fnamemodify(l:curFile, ':p')
 endfunction
 
 function! CDGitRoot()
@@ -578,7 +578,7 @@ function! GetRoot()
 endfunction
 
 function! s:getRoot(path, suffix)
-  if a:path == '/'
+  if a:path == '/' || a:path == '' || a:path == '.'
     return 0
   endif
 
