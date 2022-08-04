@@ -4,6 +4,8 @@
 
 call plug#begin()
 
+Plug 'tpope/vim-dadbod'
+Plug 'pbogut/vim-dadbod-ssh'
 Plug 'AndrewRadev/sideways.vim'
 Plug 'Brettm12345/moonlight.vim'
 Plug 'airblade/vim-gitgutter'
