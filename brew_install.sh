@@ -17,7 +17,7 @@ echo "Update brew"
 brew update
 
 set -x
-brew install          \
+brew install  -f      \
   asciidoctor         \
   awscli              \
   diff-so-fancy       \
@@ -26,6 +26,7 @@ brew install          \
   fd                  \
   fzf                 \
   go                  \
+  hammerspoon         \
   htop                \
   karabiner-elements  \
   lua                 \
@@ -36,7 +37,9 @@ brew install          \
   node                \
   noti                \
   npm                 \
+  rg                  \
   rust                \
+  pipenv              \
   prettyping          \
   python3             \
   the_silver_searcher \
@@ -44,11 +47,14 @@ brew install          \
   tldr                \
   tmux                \
   tree                \
+  veracrypt           \
   vim                 \
   visual-studio-code  \
+  wget                \
   zsh
 
 brew install --cask font-fira-code
+brew install --cask font-hack-nerd-font
 
 set +x
 
