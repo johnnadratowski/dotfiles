@@ -10,7 +10,7 @@ constants.hammerspoonHome = constants.home .. "/.hammerspoon/"
 
 constants.loglevel = "debug"
 
-constants.diff = '/usr/local/bin/meld'
+constants.diff = "/opt/homebrew/bin/meld"
 
 constants.defaultBrowser = "Google Chrome"
 --constants.defaultBrowser = 'FirefoxDeveloperEdition'
