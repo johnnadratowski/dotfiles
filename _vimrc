@@ -50,7 +50,7 @@ Plug 'yggdroot/LeaderF'
 
 call plug#end()
 
-let g:coc_global_extensions = [ 'coc-json', 'coc-snippets', 'coc-pyright', 'coc-prettier', 'coc-lightbulb', 'coc-html', 'coc-eslint', 'coc-tsserver', 'coc-sql', 'coc-sh', 'coc-json', 'coc-go', 'coc-css' ]
+let g:coc_global_extensions = [ 'coc-vimlsp', 'coc-json', 'coc-snippets', 'coc-pyright', 'coc-prettier', 'coc-lightbulb', 'coc-html', 'coc-eslint', 'coc-tsserver', 'coc-sql', 'coc-sh', 'coc-json', 'coc-go', 'coc-css' ]
 
 " ==========================================================
 " Basic Settings
@@ -133,7 +133,8 @@ set wildmenu                 " <Tab> cycles between all matching choices.
 set encoding=UTF-8
 
 if has("gui_running")
-   set guifont=Roboto\ Mono\ Light\ for\ Powerline
+   "set guifont=Roboto\ Mono\ Light\ for\ Powerline
+   set guifont=Hack\ Regular\ Nerd\ Font\ Complete\ Mono
 else
    set t_Co=256
 endif
@@ -313,7 +314,7 @@ let g:jn_statusline_updated = 1
 
 " vim-lightline
 let g:lightline = {
-      \ 'colorscheme': 'purify',
+      \ 'colorscheme': 'one',
       \ 'active': {
       \   'left': [ [ 'mode', 'paste' ],
       \             [ 'gitroot', 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
