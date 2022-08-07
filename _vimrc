@@ -241,8 +241,8 @@ nmap <C-m> <Plug>(close-side-windows)
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
 " Netrw
-map _ :call ExploreSessionRoot()<CR>
-map <c-e> :call ExploreGitRoot()<CR>
+map <c-e> :call ExploreSessionRoot()<CR>
+map _ :call ExploreGitRoot()<CR>
 
 augroup netrw
     autocmd!
