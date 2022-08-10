@@ -4,8 +4,6 @@
 
 call plug#begin()
 
-Plug 'tpope/vim-dadbod'
-Plug 'pbogut/vim-dadbod-ssh'
 Plug 'AndrewRadev/sideways.vim'
 Plug 'Brettm12345/moonlight.vim'
 Plug 'airblade/vim-gitgutter'
@@ -27,6 +25,7 @@ Plug 'itchyny/vim-gitbranch'
 Plug 'jacoborus/tender.vim'
 Plug 'joshdick/onedark.vim'
 Plug 'junegunn/vim-easy-align'
+Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
 Plug 'maxbrunsfeld/vim-emacs-bindings'
 Plug 'mbbill/undotree'
@@ -34,6 +33,7 @@ Plug 'mhinz/vim-startify'
 Plug 'morhetz/gruvbox'
 Plug 'nanotech/jellybeans.vim'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
 Plug 'rakr/vim-one'
@@ -42,17 +42,23 @@ Plug 'sheerun/vim-wombat-scheme'
 Plug 'stephpy/vim-yaml'
 Plug 'thaerkh/vim-indentguides'
 Plug 'thaerkh/vim-workspace'
+Plug 'tmhedberg/matchit'
 Plug 'tomasr/molokai'
 Plug 'tpope/vim-abolish'
 Plug 'tpope/vim-commentary'
+Plug 'tpope/vim-dadbod'
+Plug 'tpope/vim-dotenv'
 Plug 'tpope/vim-fugitive'
+Plug 'tpope/vim-repeat'
+Plug 'tpope/vim-sensible'
+Plug 'tpope/vim-surround'
 Plug 'tpope/vim-vinegar'
 Plug 'vim-test/vim-test'
 Plug 'yggdroot/LeaderF'
 
 call plug#end()
 
-let g:coc_global_extensions = [ 'coc-vimlsp', 'coc-json', 'coc-snippets', 'coc-pyright', 'coc-prettier', 'coc-lightbulb', 'coc-html', 'coc-eslint', 'coc-tsserver', 'coc-sql', 'coc-sh', 'coc-json', 'coc-go', 'coc-css' ]
+let g:coc_global_extensions = [ 'coc-vimlsp', 'coc-json', 'coc-snippets', 'coc-pyright', 'coc-prettier', 'coc-lightbulb', 'coc-html', 'coc-eslint', 'coc-tsserver', 'coc-sql', 'coc-sh', 'coc-json', 'coc-go', 'coc-css', 'coc-db' ]
 
 " ==========================================================
 " Basic Settings
@@ -64,13 +70,6 @@ silent !stty -ixon > /dev/null 2>/dev/null
 set nocompatible              " Don't be compatible with vi
 let mapleader=" "             " Map leader key to space
 
-syntax on                     " syntax highlighing
-filetype on                   " try to detect filetypes
-filetype plugin indent on     " enable loading indent file for filetype
-
-set autoread                " Automatically reload files changes outside vim
-set autoindent                " same indentation as previous line
-set backspace=indent,eol,start  "Allow backspace in insert mode
 set clipboard=unnamed        " Use system clipboard
 set colorcolumn=0          " The right hand gutter
 set confirm                 " Y-N-C prompt if closing with unsaved changes.
@@ -115,7 +114,6 @@ set showcmd                 " Show incomplete normal mode commands as I type.
 set showmatch               " Briefly jump to a paren once it's balanced
 set signcolumn=yes          " CoC - Always show the signcolumn
 set smartcase               " unless uppercase letters are used in the regex.
-set smarttab                " unless uppercase letters are used in the regex.
 set smartindent             " use smart indent if there is no indent file
 set softtabstop=2           " <BS> over an autoindent deletes both spaces.
 set tabstop=2               " <tab> inserts 2 spaces
@@ -128,11 +126,9 @@ set wildignore+=*/node_modules/**        " Ignore node modules
 set wildignore+=*/tmp/*,*.so,*.swp,*.zip " Ignore temp, so, swap, and zip
 set wildignore+=*/vendor/**              " Ignore vendor sources
 set wildmode=longest,list,full             " <Tab> cycles between all matching choices.
-set wildmenu                 " <Tab> cycles between all matching choices.
 
 
 """" Display
-set encoding=UTF-8
 
 if has("gui_running")
    "set guifont=Roboto\ Mono\ Light\ for\ Powerline
@@ -245,9 +241,9 @@ map <c-e> :call ExploreSessionRoot()<CR>
 map _ :call ExploreGitRoot()<CR>
 
 augroup netrw
-    autocmd!
-    autocmd filetype netrw call NetrwMapping()
-    autocmd FileType netrw setl bufhidden=wipe " delete netrw buffer when hidden
+  autocmd!
+  autocmd filetype netrw call NetrwMapping()
+  autocmd filetype netrw setl bufhidden=wipe " delete netrw buffer when hidden
 augroup END
 
 function! NetrwMapping()
@@ -266,6 +262,12 @@ augroup END
 " Stay in visual selection mode when changing indent
 :vnoremap < <gv
 :vnoremap > >gv
+
+" DBUI
+nmap <leader>d :DBUIToggle<CR>
+autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
+autocmd filetype dbui nnoremap <buffer> <c-k> :TmuxNavigateUp<CR>
+autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
 
 " ==========================================================
 " Plugin Settings + Keymaps
@@ -387,6 +389,7 @@ let g:firenvim_config = {
         \ },
     \ }
 \ }
+
 
 if exists('g:started_by_firenvim')
   " Remove statusline and confirmation message on close

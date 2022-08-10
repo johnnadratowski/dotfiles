@@ -2,6 +2,9 @@
 # Contains all of the aliases that should be
 # loaded in a new bash shell session
 
+# Use neovim by default
+alias vim="nvim"
+
 # zsh specific aliases
 if which zstyle &> /dev/null; then
   # Make zsh know about hosts already accessed by SSH
