@@ -129,7 +129,7 @@ function shell_isSet () {
 
     local var
     for var in "${@}"; do
-        if [[ ! -v "${1}" ]]; then
+        if [ ! -v "${1}" ]; then
             return 1
         fi
     done

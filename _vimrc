@@ -4,17 +4,17 @@
 
 call plug#begin()
 
+Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
+Plug 'junegunn/fzf.vim' " needed for previews
+Plug 'antoinemadec/coc-fzf', {'branch': 'release'}
 Plug 'AndrewRadev/sideways.vim'
-Plug 'Brettm12345/moonlight.vim'
 Plug 'airblade/vim-gitgutter'
 Plug 'ajmwagar/vim-deus'
 Plug 'chrisbra/NrrwRgn'
 Plug 'christoomey/vim-tmux-navigator'
-Plug 'cocopon/iceberg.vim'
 Plug 'digitaltoad/vim-pug'
 Plug 'dracula/vim'
 Plug 'editorconfig/editorconfig-vim'
-Plug 'emanuelrosa/badcat'
 Plug 'fatih/vim-go'
 Plug 'frazrepo/vim-rainbow'
 Plug 'glacambre/firenvim'
@@ -23,21 +23,22 @@ Plug 'itchyny/landscape.vim'
 Plug 'itchyny/lightline.vim'
 Plug 'itchyny/vim-gitbranch'
 Plug 'jacoborus/tender.vim'
-Plug 'joshdick/onedark.vim'
 Plug 'junegunn/vim-easy-align'
 Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
+Plug 'leafOfTree/vim-vue-plugin'
 Plug 'maxbrunsfeld/vim-emacs-bindings'
 Plug 'mbbill/undotree'
 Plug 'mhinz/vim-startify'
 Plug 'morhetz/gruvbox'
 Plug 'nanotech/jellybeans.vim'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'neoclide/coc-vetur'
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
-Plug 'rakr/vim-one'
 Plug 'ryanoasis/vim-devicons'
+Plug 'shannonmoeller/vim-monokai256'
 Plug 'sheerun/vim-wombat-scheme'
 Plug 'stephpy/vim-yaml'
 Plug 'thaerkh/vim-indentguides'
@@ -54,11 +55,27 @@ Plug 'tpope/vim-sensible'
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-vinegar'
 Plug 'vim-test/vim-test'
-Plug 'yggdroot/LeaderF'
+Plug 'yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
 
 call plug#end()
 
-let g:coc_global_extensions = [ 'coc-vimlsp', 'coc-json', 'coc-snippets', 'coc-pyright', 'coc-prettier', 'coc-lightbulb', 'coc-html', 'coc-eslint', 'coc-tsserver', 'coc-sql', 'coc-sh', 'coc-json', 'coc-go', 'coc-css', 'coc-db' ]
+let g:coc_global_extensions = [ 
+      \ 'coc-css', 
+      \ 'coc-db',
+      \ 'coc-eslint', 
+      \ 'coc-go', 
+      \ 'coc-html', 
+      \ 'coc-json', 
+      \ 'coc-json', 
+      \ 'coc-lightbulb', 
+      \ 'coc-prettier', 
+      \ 'coc-pyright', 
+      \ 'coc-sh', 
+      \ 'coc-snippets', 
+      \ 'coc-sql', 
+      \ 'coc-tsserver', 
+      \ 'coc-vimlsp',
+      \ ]
 
 " ==========================================================
 " Basic Settings
@@ -145,16 +162,29 @@ else
 endif
 
 " Enable true color
-if exists('+termguicolors')
-  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-  set termguicolors
-endif
+" if exists('+termguicolors')
+"   let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+"   let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+"   set termguicolors
+" endif
 
-set background=dark    " Setting dark mode
-autocmd vimenter * ++nested colorscheme gruvbox
+" set background=dark    " Setting dark mode
+
+" MOLOKAI256
+" let g:rehash256=1
+" let g:molokai_original=0
+" colorscheme monokai256
+"
+" MOLOKAI
+let g:rehash256=1
+let g:molokai_original=0
+autocmd vimenter * ++nested colorscheme molokai
+"
+" DEUS
 " colorscheme deus
 " let g:deus_termcolors=256
+
+" OTHERS
 " packadd! dracula
 " packadd! onedark.vim
 " packadd! yowish
@@ -162,6 +192,8 @@ autocmd vimenter * ++nested colorscheme gruvbox
 " colorscheme gruvbox
 " colorscheme dracula
 " colorscheme tender
+
+" PURIFY
 " let g:purify_bold = 0        " default: 1
 " let g:purify_italic = 0      " default: 1
 " let g:purify_underline = 0   " default: 1
@@ -273,6 +305,9 @@ autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" stylus
+autocmd FileType stylus setlocal commentstring=//\ %s
+
 " NrrwRng
 command! -nargs=* -bang -range -complete=filetype NN
             \ :<line1>,<line2> call nrrwrgn#NrrwRgn('',<q-bang>)
@@ -359,11 +394,19 @@ nnoremap <leader>` :ToggleWorkspace<CR>
 let g:workspace_autosave = 0
 
 """ vim-vue-plugin
-let g:vim_vue_plugin_load_full_syntax = 1
-let g:vim_vue_plugin_use_stylus = 1
-let g:vim_vue_plugin_use_typescript = 1
-let g:vim_vue_plugin_use_pug = 1
-let g:vim_vue_plugin_debug = 1
+let g:vim_vue_plugin_config = { 
+      \'syntax': {
+      \   'template': ['html', 'pug'],
+      \   'script': ['javascript', 'typescript'],
+      \   'style': ['css', 'stylus'],
+      \},
+      \'full_syntax': [],
+      \'initial_indent': [],
+      \'attribute': 0,
+      \'keyword': 0,
+      \'foldexpr': 0,
+      \'debug': 0,
+      \}
 
 """ CoC
 source ~/.vim/vimrc/coc.vim

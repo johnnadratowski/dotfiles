@@ -75,4 +75,13 @@ MODE_CURSOR_SEARCH="#ff00ff steady underline"
 MODE_CURSOR_VISUAL="$MODE_CURSOR_VICMD steady bar"
 MODE_CURSOR_VLINE="$MODE_CURSOR_VISUAL #00ffff"
 
+if [[ $OSTYPE == 'darwin'* ]]; then
+  if [[ $(arch) == 'i386' && $(sysctl -n sysctl.proc_translated || 0) == 1 ]]; then
+    export TMUX=notmux
+  fi
+fi
+
 if [ "$TMUX" = "" ]; then exec tmux -2 new-session -A -s main; fi
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
