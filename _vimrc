@@ -12,6 +12,7 @@ Plug 'airblade/vim-gitgutter'
 Plug 'ajmwagar/vim-deus'
 Plug 'chrisbra/NrrwRgn'
 Plug 'christoomey/vim-tmux-navigator'
+Plug 'dbeniamine/cheat.sh-vim'
 Plug 'digitaltoad/vim-pug'
 Plug 'dracula/vim'
 Plug 'editorconfig/editorconfig-vim'
@@ -33,7 +34,7 @@ Plug 'mhinz/vim-startify'
 Plug 'morhetz/gruvbox'
 Plug 'nanotech/jellybeans.vim'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
-Plug 'neoclide/coc-vetur'
+" Plug 'neoclide/coc-vetur'
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
@@ -307,6 +308,10 @@ autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
 
 " stylus
 autocmd FileType stylus setlocal commentstring=//\ %s
+
+" typescript
+autocmd FileType typescript setlocal re=2
+autocmd FileType vue setlocal re=2
 
 " NrrwRng
 command! -nargs=* -bang -range -complete=filetype NN
