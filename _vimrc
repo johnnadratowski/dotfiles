@@ -10,8 +10,10 @@ Plug 'antoinemadec/coc-fzf', {'branch': 'release'}
 Plug 'AndrewRadev/sideways.vim'
 Plug 'airblade/vim-gitgutter'
 Plug 'ajmwagar/vim-deus'
+Plug 'bignimbus/pop-punk.vim'
 Plug 'chrisbra/NrrwRgn'
 Plug 'christoomey/vim-tmux-navigator'
+Plug 'crater2150/vim-theme-chroma'
 Plug 'dbeniamine/cheat.sh-vim'
 Plug 'digitaltoad/vim-pug'
 Plug 'dracula/vim'
@@ -28,6 +30,7 @@ Plug 'junegunn/vim-easy-align'
 Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
 Plug 'leafOfTree/vim-vue-plugin'
+Plug 'lissaferreira/dalton-vim'
 Plug 'maxbrunsfeld/vim-emacs-bindings'
 Plug 'mbbill/undotree'
 Plug 'mhinz/vim-startify'
@@ -38,6 +41,8 @@ Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
+Plug 'rafalbromirski/vim-aurora'
+Plug 'Reewr/vim-monokai-phoenix'
 Plug 'ryanoasis/vim-devicons'
 Plug 'sebdah/vim-delve'
 Plug 'shannonmoeller/vim-monokai256'
@@ -164,12 +169,15 @@ else
 endif
 
 " Enable true color
-" if exists('+termguicolors')
-"   let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-"   let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-"   set termguicolors
-" endif
+if exists('+termguicolors')
+  " let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  " let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+  set termguicolors
+endif
 
+" chroma
+" colorscheme chroma
+"
 " set background=dark    " Setting dark mode
 
 " MOLOKAI256
@@ -178,9 +186,22 @@ endif
 " colorscheme monokai256
 "
 " MOLOKAI
-let g:rehash256=1
-let g:molokai_original=0
+" let g:rehash256=1
+" let g:molokai_original=0
 autocmd vimenter * ++nested colorscheme molokai
+
+" Monokai Phoenix
+" colorscheme monokai-phoenix
+
+" Aurora
+" set termguicolors
+" set background=dark
+" colorscheme aurora
+
+" PopPunk
+" colorscheme pop-punk
+" let g:terminal_ansi_colors = pop_punk#AnsiColors()
+" let g:lightline.colorscheme = 'pop_punk'
 "
 " DEUS
 " colorscheme deus
@@ -303,6 +324,16 @@ autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
 autocmd filetype dbui nnoremap <buffer> <c-k> :TmuxNavigateUp<CR>
 autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
 
+if (has("nvim"))
+  " Make escape work in the Neovim terminal.
+  tnoremap <Esc> <C-\><C-n>
+
+  " Make navigation into and out of Neovim terminal splits nicer.
+  tnoremap <C-h> <C-\><C-N><C-w>h
+  tnoremap <C-j> <C-\><C-N><C-w>j
+  tnoremap <C-k> <C-\><C-N><C-w>k
+  tnoremap <C-l> <C-\><C-N><C-w>l
+endif 
 " ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
@@ -374,6 +405,26 @@ let g:lightline = {
 """ Renamer
 source ~/.vim/vimrc/renamer.vim
 
+""" vim-startify
+let g:startify_change_to_dir       = 0
+
+let g:startify_custom_header = [
+      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬜⬜⬜⬛⬛⬜',
+      \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬛⬜⬜⬛⬛⬜',
+      \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬛⬛⬜⬛⬛⬜',
+      \'⬜🟨🟨🟨🟨🟨⬜⬛⬛⬛⬛⬛⬛⬛⬜',
+      \'⬜🟨🟨🟨🟨🟨⬜⬛⬛⬜⬛⬛⬛⬛⬜',
+      \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬛⬛⬛⬜',
+      \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬜⬛⬛⬜',
+      \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬜⬛⬛⬜',
+      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+      \]
 """ vim-go
 " disable vim-go :GoDef short cut (gd)
 " this is handled by LanguageClient [LC]

@@ -4,6 +4,7 @@ let g:Lf_UseCache = 0
 let g:Lf_UseMemoryCache = 0
 let g:Lf_UseVersionControlTool = 0
 let g:Lf_IgnoreCurrentBufferName = 1
+let g:Lf_ShowHidden = 1
 " popup mode
 " let g:Lf_WindowPosition = 'popup'
 let g:Lf_PreviewInPopup = 1
