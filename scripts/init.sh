@@ -19,11 +19,6 @@ fi
 
 [ -f ~/.ghcup/env ] && source ~/.ghcup/env
 
-#[ -f /usr/local/bin/virtualenvwrapper.sh ] && source /usr/local/bin/virtualenvwrapper.sh
-
-# added by travis gem
-[ -f /Users/johnnadratowski/.travis/travis.sh ] && source /Users/johnnadratowski/.travis/travis.sh
-
 which pyenv 2>&1 > /dev/null && eval "$(pyenv init --path)"
 
 if [ -f /usr/share/powerline/bindings/bash/powerline.sh ]; then
