@@ -17,7 +17,10 @@ AGKOZAK_CUSTOM_SYMBOLS=( '⇣⇡' '⇣' '⇡' '+' 'x' '!' '>' '?' 'S')
 AGKOZAK_PROMPT_DIRTRIM=4 
 AGKOZAK_BLANK_LINES=1
 AGKOZAK_LEFT_PROMPT_ONLY=1
-AGKOZAK_CUSTOM_LPROMPT='%*'
+
+if [[ ! "$SSH_CLIENT" == "" || ! "$SSH_TTY" == "" ]]; then
+  AGKOZAK_PRE_PROMPT_CHAR=' 🖥  '
+fi
 
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
