@@ -19,7 +19,7 @@ AGKOZAK_BLANK_LINES=1
 AGKOZAK_LEFT_PROMPT_ONLY=1
 
 if [[ ! "$SSH_CLIENT" == "" || ! "$SSH_TTY" == "" ]]; then
-  AGKOZAK_PRE_PROMPT_CHAR=' 🖥  '
+  AGKOZAK_PROMPT_CHAR=( '[%F{yellow}%*%f] 🌐  %F{magenta}❯%f' '[%F{yellow}%*%f] 🌐  %F{magenta}❯%f' '[%F{yellow}%*%f] 🌐  %F{green}❮%f' )
 fi
 
 # Set to this to use case-sensitive completion
