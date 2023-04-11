@@ -367,6 +367,8 @@ vnoremap > >gv
     setlocal noexpandtab
     setl spell spl=en_us fdl=4 noru nonu nornu
     setl fdo+=search
+
+    let g:lexical#spell_key = '<leader>s'
     let g:lexical#dictionary_key = '<leader>k'
     let g:lexical#thesaurus_key = '<leader>t' " Overrwites scratchpad mapping
 
@@ -393,9 +395,36 @@ vnoremap > >gv
   let g:pencil#softDetectSample = 20
   let g:pencil#softDetectThreshold = 130
 
-  autocmd! User GoyoEnter Limelight | setlocal showbreak=NONE
-  autocmd! User GoyoLeave Limelight! | setlocal showbreak=➡\ 
+  autocmd! User GoyoEnter Limelight | 
+  autocmd! User GoyoLeave Limelight! | 
 
+function! s:goyo_enter()
+  if executable('tmux') && strlen($TMUX)
+    silent !tmux set status off
+    silent !tmux list-panes -F '\#F' | grep -q Z || tmux resize-pane -Z
+  endif
+  set noshowmode
+  set noshowcmd
+  setlocal showbreak=NONE
+  set scrolloff=999
+  Limelight
+  " ...
+endfunction
+
+function! s:goyo_leave()
+  if executable('tmux') && strlen($TMUX)
+    silent !tmux set status on
+    silent !tmux list-panes -F '\#F' | grep -q Z && tmux resize-pane -Z
+  endif
+  set scrolloff=5
+  set showmode
+  set showcmd
+  setlocal showbreak=➡\
+  Limelight!
+endfunction
+
+autocmd! User GoyoEnter nested call <SID>goyo_enter()
+autocmd! User GoyoLeave nested call <SID>goyo_leave()
 " }}}
 
 " stylus {{{
