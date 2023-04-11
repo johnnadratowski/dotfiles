@@ -14,7 +14,7 @@ Plug 'christoomey/vim-tmux-navigator'
 Plug 'crater2150/vim-theme-chroma'
 Plug 'dbeniamine/cheat.sh-vim'
 Plug 'digitaltoad/vim-pug'
-Plug 'dpelle/vim-LanguageTool'
+"Plug 'dpelle/vim-LanguageTool'
 Plug 'dracula/vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
@@ -46,13 +46,13 @@ Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
 Plug 'rafalbromirski/vim-aurora'
-Plug 'reedes/vim-pencil' " Super-powered writing things
 Plug 'reedes/vim-lexical' " Better spellcheck mappings
 Plug 'reedes/vim-litecorrect' " Better autocorrections
+Plug 'reedes/vim-pencil' " Super-powered writing things
 Plug 'reedes/vim-textobj-sentence' " Treat sentences as text objects
 Plug 'reedes/vim-wordy' " Weasel words and passive voice
 Plug 'Reewr/vim-monokai-phoenix'
-Plug 'ron89/thesaurus_query.vim'
+"Plug 'ron89/thesaurus_query.vim'
 Plug 'ryanoasis/vim-devicons'
 Plug 'sebdah/vim-delve'
 Plug 'shannonmoeller/vim-monokai256'
@@ -145,7 +145,7 @@ set shiftround              " rounds indent to a multiple of shiftwidth
 set shiftwidth=2            " but an indent level is 2 spaces wide.
 set shortmess+=a            " Use [+]/[RO]/[w] for modified/readonly/written.
 set shortmess+=c            " CoC - Don't pass messages to |ins-completion-menu|. 
-set showbreak=➡️\ \          " Character to show at word wrap
+set showbreak=➡\            " Character to show at word wrap
 set showcmd                 " Show incomplete normal mode commands as I type.
 set showmatch               " Briefly jump to a paren once it's balanced
 set signcolumn=yes          " CoC - Always show the signcolumn
@@ -367,6 +367,16 @@ vnoremap > >gv
     setlocal noexpandtab
     setl spell spl=en_us fdl=4 noru nonu nornu
     setl fdo+=search
+    let g:lexical#dictionary_key = '<leader>k'
+    let g:lexical#thesaurus_key = '<leader>t' " Overrwites scratchpad mapping
+
+    " toggle goyo
+    nmap <leader>G :Goyo<CR>
+
+    " Litecorrect fix word
+    nnoremap <C-s> [s1z=<c-o>
+    inoremap <C-s> <c-g>u<Esc>[s1z=`]A<c-g>u
+
     call pencil#init()
     call lexical#init()
     call litecorrect#init()
@@ -383,8 +393,8 @@ vnoremap > >gv
   let g:pencil#softDetectSample = 20
   let g:pencil#softDetectThreshold = 130
 
-  autocmd! User GoyoEnter Limelight | setlocal showbreak=
-  autocmd! User GoyoLeave Limelight! | setlocal showbreak=➡️\ \
+  autocmd! User GoyoEnter Limelight | setlocal showbreak=NONE
+  autocmd! User GoyoLeave Limelight! | setlocal showbreak=➡\ 
 
 " }}}
 
@@ -843,4 +853,5 @@ function! CheatSheet()
 endfunction
 
 com! Cht call CheatSheet()      " Enable :CheatSheet to call the function
+
 
