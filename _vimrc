@@ -203,6 +203,12 @@ augroup END
 " Theme {{{
   autocmd vimenter * ++nested colorscheme molokai
 
+  " Set highlight type
+
+  hi clear SpellBad
+  hi SpellBad term=undercurl cterm=undercurl ctermfg=12 ctermbg=NONE gui=undercurl guisp=red
+  hi CocErrorHighlight term=undercurl cterm=undercurl ctermfg=12 ctermbg=NONE gui=undercurl guisp=red
+
   " chroma
   " colorscheme chroma
   "
