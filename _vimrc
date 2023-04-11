@@ -364,7 +364,17 @@ vnoremap > >gv
 
 " markdown {{{
 
-  autocmd Filetype markdown,mkd,md,text call SetMDOptions()
+  let g:languagetool_jar='$HOME/LanguageTool-5.9/languagetool-commandline.jar'
+
+  let g:pencil#wrapModeDefault = 'soft'
+  let g:pencil#textwidth = 74
+  let g:pencil#joinspaces = 2
+  let g:pencil#cursorwrap = 1
+  let g:pencil#conceallevel = 3
+  let g:pencil#concealcursor = 'c'
+  let g:pencil#softDetectSample = 20
+  let g:pencil#softDetectThreshold = 130
+
   function SetMDOptions()
     setlocal wrap
     setlocal noexpandtab
@@ -405,47 +415,35 @@ vnoremap > >gv
     call litecorrect#init()
   endfunction
 
-  let g:languagetool_jar='$HOME/LanguageTool-5.9/languagetool-commandline.jar'
+  function! s:goyo_enter()
+    if executable('tmux') && strlen($TMUX)
+      silent !tmux set status off
+      silent !tmux list-panes -F '\#F' | grep -q Z || tmux resize-pane -Z
+    endif
+    set noshowmode
+    set noshowcmd
+    setlocal showbreak=NONE
+    set scrolloff=999
+    Limelight
+    " ...
+  endfunction
 
-  let g:pencil#wrapModeDefault = 'soft'
-  let g:pencil#textwidth = 74
-  let g:pencil#joinspaces = 0
-  let g:pencil#cursorwrap = 1
-  let g:pencil#conceallevel = 3
-  let g:pencil#concealcursor = 'c'
-  let g:pencil#softDetectSample = 20
-  let g:pencil#softDetectThreshold = 130
+  function! s:goyo_leave()
+    if executable('tmux') && strlen($TMUX)
+      silent !tmux set status on
+      silent !tmux list-panes -F '\#F' | grep -q Z && tmux resize-pane -Z
+    endif
+    set scrolloff=5
+    set showmode
+    set showcmd
+    setlocal showbreak=➡\
+    Limelight!
+  endfunction
 
-  autocmd! User GoyoEnter Limelight | 
-  autocmd! User GoyoLeave Limelight! | 
+  autocmd Filetype markdown,mkd,md,text call SetMDOptions()
+  autocmd! User GoyoEnter nested call <SID>goyo_enter()
+  autocmd! User GoyoLeave nested call <SID>goyo_leave()
 
-function! s:goyo_enter()
-  if executable('tmux') && strlen($TMUX)
-    silent !tmux set status off
-    silent !tmux list-panes -F '\#F' | grep -q Z || tmux resize-pane -Z
-  endif
-  set noshowmode
-  set noshowcmd
-  setlocal showbreak=NONE
-  set scrolloff=999
-  Limelight
-  " ...
-endfunction
-
-function! s:goyo_leave()
-  if executable('tmux') && strlen($TMUX)
-    silent !tmux set status on
-    silent !tmux list-panes -F '\#F' | grep -q Z && tmux resize-pane -Z
-  endif
-  set scrolloff=5
-  set showmode
-  set showcmd
-  setlocal showbreak=➡\
-  Limelight!
-endfunction
-
-autocmd! User GoyoEnter nested call <SID>goyo_enter()
-autocmd! User GoyoLeave nested call <SID>goyo_leave()
 " }}}
 
 " stylus {{{
