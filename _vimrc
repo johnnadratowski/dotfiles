@@ -43,6 +43,8 @@ Plug 'nanotech/jellybeans.vim'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 " Plug 'neoclide/coc-vetur'
 Plug 'pbogut/vim-dadbod-ssh'
+Plug 'preservim/vim-colors-pencil' " Theme
+Plug 'preservim/vim-wordchipper' " Shortcuts for insert mode
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
 Plug 'rafalbromirski/vim-aurora'
@@ -50,6 +52,7 @@ Plug 'reedes/vim-lexical' " Better spellcheck mappings
 Plug 'reedes/vim-litecorrect' " Better autocorrections
 Plug 'reedes/vim-pencil' " Super-powered writing things
 Plug 'reedes/vim-textobj-sentence' " Treat sentences as text objects
+Plug 'reedes/vim-textobj-quote' " Treat quotes as text objects
 Plug 'reedes/vim-wordy' " Weasel words and passive voice
 Plug 'Reewr/vim-monokai-phoenix'
 "Plug 'ron89/thesaurus_query.vim'
@@ -372,12 +375,30 @@ vnoremap > >gv
     let g:lexical#dictionary_key = '<leader>k'
     let g:lexical#thesaurus_key = '<leader>t' " Overrwites scratchpad mapping
 
+    " Sentence Movement
+    let g:textobj#sentence#select = 's'
+    let g:textobj#sentence#move_p = '('
+    let g:textobj#sentence#move_n = ')'
+
     " toggle goyo
     nmap <leader>G :Goyo<CR>
 
     " Litecorrect fix word
     nnoremap <C-s> [s1z=<c-o>
     inoremap <C-s> <c-g>u<Esc>[s1z=`]A<c-g>u
+
+    " Wordchipper - delete with movement on keybind in insert
+    inoremap <buffer> <expr> <C-e> wordchipper#chipWith('de')
+    inoremap <buffer> <expr> <C-w> wordchipper#chipWith('dB')
+    inoremap <buffer> <expr> <C-y> wordchipper#chipWith('d)')
+
+    " Go to next wordy error
+    noremap <silent> <F8> :<C-u>NextWordy<cr>
+    xnoremap <silent> <F8> :<C-u>NextWordy<cr>
+    inoremap <silent> <F8> <C-o>:NextWordy<cr>
+    noremap <silent> <S-F8> :<C-u>PrevWordy<cr>
+    xnoremap <silent> <S-F8> :<C-u>PrevWordy<cr>
+    inoremap <silent> <S-F8> <C-o>:PrevWordy<cr>
 
     call pencil#init()
     call lexical#init()
