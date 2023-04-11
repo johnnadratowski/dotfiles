@@ -87,3 +87,5 @@ fi
 
 if [[ "$TMUX" = "" && "$SSH_CLIENT" == "" && "$SSH_TTY" == "" ]]; then exec tmux -2 new-session -A -s main; fi
 
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
