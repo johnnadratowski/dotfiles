@@ -68,3 +68,11 @@ log "compiling tmux-thumbs"
   cd ~/.tmux/plugins/tmux-thumbs
   cargo build --release
 )
+
+log "install languagetool"
+(
+  cd ~
+  wget https://languagetool.org/download/LanguageTool-5.9.zip
+  unzip LanguageTool-5.9.zip
+)
+

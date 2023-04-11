@@ -4,7 +4,7 @@ First run apt_install.sh then install.py
 
 For Mac:
 
-First run brew_insta..sh then install.py
+First run brew_install.sh then install.py
 
 
 Updates:

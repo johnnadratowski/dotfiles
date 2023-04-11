@@ -4,8 +4,6 @@
 
 call plug#begin()
 
-Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
-Plug 'junegunn/fzf.vim' " needed for previews
 Plug 'antoinemadec/coc-fzf', {'branch': 'release'}
 Plug 'AndrewRadev/sideways.vim'
 Plug 'airblade/vim-gitgutter'
@@ -16,6 +14,7 @@ Plug 'christoomey/vim-tmux-navigator'
 Plug 'crater2150/vim-theme-chroma'
 Plug 'dbeniamine/cheat.sh-vim'
 Plug 'digitaltoad/vim-pug'
+Plug 'dpelle/vim-LanguageTool'
 Plug 'dracula/vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
@@ -26,7 +25,12 @@ Plug 'itchyny/landscape.vim'
 Plug 'itchyny/lightline.vim'
 Plug 'itchyny/vim-gitbranch'
 Plug 'jacoborus/tender.vim'
+Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
+Plug 'junegunn/fzf.vim' " needed for previews
+Plug 'junegunn/goyo.vim' 
+Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
+Plug 'junegunn/vim-peekaboo'
 Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
 Plug 'leafOfTree/vim-vue-plugin'
@@ -42,7 +46,13 @@ Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
 Plug 'rafalbromirski/vim-aurora'
+Plug 'reedes/vim-pencil' " Super-powered writing things
+Plug 'reedes/vim-lexical' " Better spellcheck mappings
+Plug 'reedes/vim-litecorrect' " Better autocorrections
+Plug 'reedes/vim-textobj-sentence' " Treat sentences as text objects
+Plug 'reedes/vim-wordy' " Weasel words and passive voice
 Plug 'Reewr/vim-monokai-phoenix'
+Plug 'ron89/thesaurus_query.vim'
 Plug 'ryanoasis/vim-devicons'
 Plug 'sebdah/vim-delve'
 Plug 'shannonmoeller/vim-monokai256'
@@ -95,13 +105,12 @@ set nocompatible              " Don't be compatible with vi
 let mapleader=" "             " Map leader key to space
 
 set clipboard=unnamed        " Use system clipboard
+set cmdheight=2             " CoC - Give more space for displaying messages.
 set colorcolumn=0          " The right hand gutter
 set confirm                 " Y-N-C prompt if closing with unsaved changes.
-set cmdheight=2             " CoC - Give more space for displaying messages.
 set cursorline              " have a line indicate the cursor location
 set expandtab               " Use spaces, not tabs, for autoindent/tab key.
 set ffs=unix,dos,mac        " Try recognizing dos, unix, and mac line endings.
-set nofoldenable            " DO NOT enable folds by default
 set foldcolumn=0            " space of folds to be shown in sidebar
 set foldlevel=2             " fold to 2nd level
 set foldmethod=indent       " allow us to fold on indents
@@ -110,6 +119,7 @@ set hidden                  " CoC - TextEdit might fail if hidden is not set.
 set history=1000            " Command history
 set hlsearch                " Highlight searches by default.
 set ignorecase              " Default to using case insensitive searches,
+set incsearch               " Incremental search
 set laststatus=2            " Always show statusline, even if only 1 window.
 set lazyredraw              " Don't redraw screen in middle of macro
 set linebreak               " don't wrap textin the middle of a word
@@ -122,18 +132,20 @@ set mouse=a                 " Allow mouse
 set mousehide               " Hid emouse when typing
 set nobackup                " No backup file
 set noerrorbells            " No bell on error
+set nofoldenable            " DO NOT enable folds by default
 set noshowmode              " Do not show the current mode, as we use lightline
 set nostartofline           " Avoid moving cursor to BOL when jumping around
 set noswapfile              " No swap file
-set nowritebackup           " CoC - some servers might have problesmw ith backup
-set nowrap                  " No text wrapping by default
 set nowb                    " Make a write backup for write errors
+set nowrap                  " No text wrapping by default
+set nowritebackup           " CoC - some servers might have problesmw ith backup
 set number                  " Show line numbers
 set report=0                " : commands always print changed line count.
 set shiftround              " rounds indent to a multiple of shiftwidth
 set shiftwidth=2            " but an indent level is 2 spaces wide.
 set shortmess+=a            " Use [+]/[RO]/[w] for modified/readonly/written.
 set shortmess+=c            " CoC - Don't pass messages to |ins-completion-menu|. 
+set showbreak=➡️\ \          " Character to show at word wrap
 set showcmd                 " Show incomplete normal mode commands as I type.
 set showmatch               " Briefly jump to a paren once it's balanced
 set signcolumn=yes          " CoC - Always show the signcolumn
@@ -142,8 +154,8 @@ set smartindent             " use smart indent if there is no indent file
 set softtabstop=2           " <BS> over an autoindent deletes both spaces.
 set tabstop=2               " <tab> inserts 2 spaces
 set updatetime=300          " CoC - user experience
-set visualbell              " Allow visual bells
 set virtualedit=block       " Let cursor move past the last char in <C-v> mode
+set visualbell              " Allow visual bells
 set wildignore+=*.egg-info/**,eggs/**    " Ignore python egg folders
 set wildignore+=*.o,*.obj,.git,*.pyc     " Ignore python, object, git files
 set wildignore+=*/node_modules/**        " Ignore node modules
@@ -152,7 +164,9 @@ set wildignore+=*/vendor/**              " Ignore vendor sources
 set wildmode=longest,list,full             " <Tab> cycles between all matching choices.
 
 
-"""" Display
+" ==========================================================
+" Display and Themes
+" ==========================================================
 
 if has("gui_running")
    "set guifont=Roboto\ Mono\ Light\ for\ Powerline
@@ -175,57 +189,6 @@ if exists('+termguicolors')
   set termguicolors
 endif
 
-" chroma
-" colorscheme chroma
-"
-" set background=dark    " Setting dark mode
-
-" MOLOKAI256
-" let g:rehash256=1
-" let g:molokai_original=0
-" colorscheme monokai256
-"
-" MOLOKAI
-" let g:rehash256=1
-" let g:molokai_original=0
-autocmd vimenter * ++nested colorscheme molokai
-
-" Monokai Phoenix
-" colorscheme monokai-phoenix
-
-" Aurora
-" set termguicolors
-" set background=dark
-" colorscheme aurora
-
-" PopPunk
-" colorscheme pop-punk
-" let g:terminal_ansi_colors = pop_punk#AnsiColors()
-" let g:lightline.colorscheme = 'pop_punk'
-"
-" DEUS
-" colorscheme deus
-" let g:deus_termcolors=256
-
-" OTHERS
-" packadd! dracula
-" packadd! onedark.vim
-" packadd! yowish
-" colorscheme yowish
-" colorscheme gruvbox
-" colorscheme dracula
-" colorscheme tender
-
-" PURIFY
-" let g:purify_bold = 0        " default: 1
-" let g:purify_italic = 0      " default: 1
-" let g:purify_underline = 0   " default: 1
-" let g:purify_undercurl = 0   " default: 1
-" let g:purify_inverse = 0     " default: 1
-" packadd! purify
-" colorscheme purify
-
-
 " Cursor vert bar in insert mode
 let &t_SI = "\e[6 q"
 let &t_EI = "\e[2 q"
@@ -234,16 +197,71 @@ augroup visuals
   autocmd VimEnter * silent !echo -ne "\e[2 q"
 augroup END
 
-"""" Persistent Undo
+" Theme {{{
+  autocmd vimenter * ++nested colorscheme molokai
 
-" Keep undo history across sessions, by storing in file.
-" Only works all the time.
-if has('persistent_undo')
-  silent !mkdir -p ~/tmp/backups > /dev/null 2>&1
-  set undodir=~/tmp/backups
-  set undofile
-endif
+  " chroma
+  " colorscheme chroma
+  "
+  " set background=dark    " Setting dark mode
 
+  " MOLOKAI256
+  " let g:rehash256=1
+  " let g:molokai_original=0
+  " colorscheme monokai256
+  "
+  " MOLOKAI
+  " let g:rehash256=1
+  " let g:molokai_original=0
+
+  " Monokai Phoenix
+  " colorscheme monokai-phoenix
+
+  " Aurora
+  " set termguicolors
+  " set background=dark
+  " colorscheme aurora
+
+  " PopPunk
+  " colorscheme pop-punk
+  " let g:terminal_ansi_colors = pop_punk#AnsiColors()
+  " let g:lightline.colorscheme = 'pop_punk'
+  "
+  " DEUS
+  " colorscheme deus
+  " let g:deus_termcolors=256
+
+  " OTHERS
+  " packadd! dracula
+  " packadd! onedark.vim
+  " packadd! yowish
+  " colorscheme yowish
+  " colorscheme gruvbox
+  " colorscheme dracula
+  " colorscheme tender
+
+  " PURIFY
+  " let g:purify_bold = 0        " default: 1
+  " let g:purify_italic = 0      " default: 1
+  " let g:purify_underline = 0   " default: 1
+  " let g:purify_undercurl = 0   " default: 1
+  " let g:purify_inverse = 0     " default: 1
+  " packadd! purify
+  " colorscheme purify
+
+" }}}
+
+" Persistent Undo {{{
+
+  " Keep undo history across sessions, by storing in file.
+  " Only works all the time.
+  if has('persistent_undo')
+    silent !mkdir -p ~/tmp/backups > /dev/null 2>&1
+    set undodir=~/tmp/backups
+    set undofile
+  endif
+
+" }}}
 
 " ==========================================================
 " Keymaps
@@ -291,22 +309,6 @@ nmap <C-m> <Plug>(close-side-windows)
 " Quit window
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
 
-" Netrw
-map <c-e> :call ExploreSessionRoot()<CR>
-map _ :call ExploreGitRoot()<CR>
-
-augroup netrw
-  autocmd!
-  autocmd filetype netrw call NetrwMapping()
-  autocmd filetype netrw setl bufhidden=wipe " delete netrw buffer when hidden
-augroup END
-
-function! NetrwMapping()
-    nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
-    nmap <buffer> <C-[> :bn<CR>
-endfunction
-
-
 " Reload Vimrc
 map <silent> <leader>V :source ~/.vimrc<CR>:exe ":echo 'vimrc reloaded'"<CR>
 augroup myvimrc
@@ -315,78 +317,145 @@ augroup myvimrc
 augroup END
 
 " Stay in visual selection mode when changing indent
-:vnoremap < <gv
-:vnoremap > >gv
+vnoremap < <gv
+vnoremap > >gv
 
-" DBUI
-nmap <leader>d :DBUIToggle<CR>
-autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
-autocmd filetype dbui nnoremap <buffer> <c-k> :TmuxNavigateUp<CR>
-autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
-
-if (has("nvim"))
-  " Make escape work in the Neovim terminal.
-  tnoremap <Esc> <C-\><C-n>
-
-  " Make navigation into and out of Neovim terminal splits nicer.
-  tnoremap <C-h> <C-\><C-N><C-w>h
-  tnoremap <C-j> <C-\><C-N><C-w>j
-  tnoremap <C-k> <C-\><C-N><C-w>k
-  tnoremap <C-l> <C-\><C-N><C-w>l
-endif 
 " ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
 
-" stylus
-autocmd FileType stylus setlocal commentstring=//\ %s
+" DBUI {{{
+  nmap <leader>d :DBUIToggle<CR>
+  autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
+  autocmd filetype dbui nnoremap <buffer> <c-k> :TmuxNavigateUp<CR>
+  autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
 
-" typescript
-autocmd FileType typescript setlocal re=2
-autocmd FileType vue setlocal re=2
+  if (has("nvim"))
+    " Make escape work in the Neovim terminal.
+    tnoremap <Esc> <C-\><C-n>
 
-" NrrwRng
-command! -nargs=* -bang -range -complete=filetype NN
-            \ :<line1>,<line2> call nrrwrgn#NrrwRgn('',<q-bang>)
-            \ | set filetype=<args>
+    " Make navigation into and out of Neovim terminal splits nicer.
+    tnoremap <C-h> <C-\><C-N><C-w>h
+    tnoremap <C-j> <C-\><C-N><C-w>j
+    tnoremap <C-k> <C-\><C-N><C-w>k
+    tnoremap <C-l> <C-\><C-N><C-w>l
+  endif 
+" }}}
 
-" vim-sideways
-nmap ( :SidewaysLeft<CR>
-nmap ) :SidewaysRight<CR>
-omap aa <Plug>SidewaysArgumentTextobjA
-xmap aa <Plug>SidewaysArgumentTextobjA
-omap ia <Plug>SidewaysArgumentTextobjI
-xmap ia <Plug>SidewaysArgumentTextobjI
+" Netrw {{{
+  map <c-e> :call ExploreSessionRoot()<CR>
+  map _ :call ExploreGitRoot()<CR>
 
-" vim-test
-let test#strategy = 'vimux'
-nmap <silent> t<C-n> :let test#project_root=GetGitRoot(expand('%')) \| TestNearest<CR>
-nmap <silent> t<C-f> :let test#project_root=GetGitRoot(expand('%')) \| TestFile<CR>
-nmap <silent> t<C-s> :let test#project_root=GetGitRoot(expand('%')) \| TestSuite<CR>
-nmap <silent> t<C-l> :let test#project_root=GetGitRoot(expand('%')) \| TestLast<CR>
-nmap <silent> t<C-g> :let test#project_root=GetGitRoot(expand('%')) \| TestVisit<CR>
+  augroup netrw
+    autocmd!
+    autocmd filetype netrw call NetrwMapping()
+    autocmd filetype netrw setl bufhidden=wipe " delete netrw buffer when hidden
+  augroup END
 
-" augroup golang_test
-"   au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
-"   au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
-" augroup END
+  function! NetrwMapping()
+      nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
+      nmap <buffer> <C-[> :bn<CR>
+  endfunction
+
+" }}}
+
+" markdown {{{
+
+  autocmd Filetype markdown,mkd,md,text call SetMDOptions()
+  function SetMDOptions()
+    setlocal wrap
+    setlocal noexpandtab
+    setl spell spl=en_us fdl=4 noru nonu nornu
+    setl fdo+=search
+    call pencil#init()
+    call lexical#init()
+    call litecorrect#init()
+  endfunction
+
+  let g:languagetool_jar='$HOME/LanguageTool-5.9/languagetool-commandline.jar'
+
+  let g:pencil#wrapModeDefault = 'soft'
+  let g:pencil#textwidth = 74
+  let g:pencil#joinspaces = 0
+  let g:pencil#cursorwrap = 1
+  let g:pencil#conceallevel = 3
+  let g:pencil#concealcursor = 'c'
+  let g:pencil#softDetectSample = 20
+  let g:pencil#softDetectThreshold = 130
+
+  autocmd! User GoyoEnter Limelight | setlocal showbreak=
+  autocmd! User GoyoLeave Limelight! | setlocal showbreak=➡️\ \
+
+" }}}
+
+" stylus {{{
+
+  autocmd FileType stylus setlocal commentstring=//\ %s
+
+" }}}
+
+" typescript {{{
+
+  autocmd FileType typescript setlocal re=2
+  autocmd FileType vue setlocal re=2
+
+" }}}
+
+" NrrwRng {{{
+
+  command! -nargs=* -bang -range -complete=filetype NN
+              \ :<line1>,<line2> call nrrwrgn#NrrwRgn('',<q-bang>)
+              \ | set filetype=<args>
+
+" }}}
+
+" vim-sideways {{{
+
+  nmap ( :SidewaysLeft<CR>
+  nmap ) :SidewaysRight<CR>
+  omap aa <Plug>SidewaysArgumentTextobjA
+  xmap aa <Plug>SidewaysArgumentTextobjA
+  omap ia <Plug>SidewaysArgumentTextobjI
+  xmap ia <Plug>SidewaysArgumentTextobjI
+
+" }}}
+
+" vim-test {{{
+
+  let test#strategy = 'vimux'
+  nmap <silent> t<C-n> :let test#project_root=GetGitRoot(expand('%')) \| TestNearest<CR>
+  nmap <silent> t<C-f> :let test#project_root=GetGitRoot(expand('%')) \| TestFile<CR>
+  nmap <silent> t<C-s> :let test#project_root=GetGitRoot(expand('%')) \| TestSuite<CR>
+  nmap <silent> t<C-l> :let test#project_root=GetGitRoot(expand('%')) \| TestLast<CR>
+  nmap <silent> t<C-g> :let test#project_root=GetGitRoot(expand('%')) \| TestVisit<CR>
+
+  " augroup golang_test
+  "   au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
+  "   au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
+  " augroup END
+
+" }}}
+
 
 " rainbow parens
 let g:rainbow_active = 1
 
-" easyalign
+" easyalign {{{
 
-" Start interactive EasyAlign in visual mode (e.g. vipga)
-xmap ga <Plug>(EasyAlign)
-" Start interactive EasyAlign for a motion/text object (e.g. gaip)
-nmap ga <Plug>(EasyAlign)
+  " Start interactive EasyAlign in visual mode (e.g. vipga)
+  xmap ga <Plug>(EasyAlign)
+  " Start interactive EasyAlign for a motion/text object (e.g. gaip)
+  nmap ga <Plug>(EasyAlign)
 
+" }}}
+  
+" gitgutter {{{
+  if !exists("g:jn_statusline_updated")
+    set statusline+=%{GitStatus()}
+  endif
+  let g:jn_statusline_updated = 1
 
-" gitgutter
-if !exists("g:jn_statusline_updated")
-  set statusline+=%{GitStatus()}
-endif
-let g:jn_statusline_updated = 1
+" }}}
 
 " vim-lightline
 let g:lightline = {
@@ -402,10 +471,10 @@ let g:lightline = {
       \ },
       \ }
 
-""" Renamer
+" Renamer
 source ~/.vim/vimrc/renamer.vim
 
-""" vim-startify
+" vim-startify
 let g:startify_change_to_dir       = 0
 
 let g:startify_custom_header = [
@@ -425,116 +494,135 @@ let g:startify_custom_header = [
       \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
       \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
       \]
-""" vim-go
-" disable vim-go :GoDef short cut (gd)
-" this is handled by LanguageClient [LC]
-let g:go_def_mapping_enabled = 0
-augroup golang
-  au BufWritePost *.go :GoImports
-augroup END
 
-""" vim-prettier
-let g:prettier#autoformat = 1
-let g:prettier#autoformat_require_pragma = 0
-let g:prettier#autoformat_config_present = 1
-let g:prettier#config#arrow_parens = 'always'
+" vim-go {{{
+  " disable vim-go :GoDef short cut (gd)
+  " this is handled by LanguageClient [LC]
+  let g:go_def_mapping_enabled = 0
+  augroup golang
+    au BufWritePost *.go :GoImports
+  augroup END
 
-""" vim-commentary
-augroup vim_commentary
-  autocmd FileType vim setlocal commentstring=\"\ %s
-  autocmd FileType vimrc setlocal commentstring=\"\ %s
-  autocmd FileType vue setlocal commentstring=//\ %s
-augroup END
+" }}}
 
-""" vim-workspace
-nnoremap <leader>` :ToggleWorkspace<CR>
-let g:workspace_autosave = 0
+" vim-prettier {{{
+  let g:prettier#autoformat = 1
+  let g:prettier#autoformat_require_pragma = 0
+  let g:prettier#autoformat_config_present = 1
+  let g:prettier#config#arrow_parens = 'always'
 
-""" vim-vue-plugin
-let g:vim_vue_plugin_config = { 
-      \'syntax': {
-      \   'template': ['html', 'pug'],
-      \   'script': ['javascript', 'typescript'],
-      \   'style': ['css', 'stylus'],
-      \},
-      \'full_syntax': [],
-      \'initial_indent': [],
-      \'attribute': 0,
-      \'keyword': 0,
-      \'foldexpr': 0,
-      \'debug': 0,
-      \}
+" }}}
 
-""" CoC
-source ~/.vim/vimrc/coc.vim
+" vim-commentary {{{
+  augroup vim_commentary
+    autocmd FileType vim setlocal commentstring=\"\ %s
+    autocmd FileType vimrc setlocal commentstring=\"\ %s
+    autocmd FileType vue setlocal commentstring=//\ %s
+  augroup END
 
+" }}}
 
-""" Leaderf
-source ~/.vim/vimrc/leaderf.vim
+" vim-workspace {{{
+  nnoremap <leader>` :ToggleWorkspace<CR>
+  let g:workspace_autosave = 0
 
-""" Undotree
-map <leader>g :UndotreeToggle<CR>
+" }}}
 
-""" firenvim
-let g:firenvim_config = { 
-    \ 'globalSettings': {
-        \ 'alt': 'all',
-    \  },
-    \ 'localSettings': {
-        \ '.*': {
-            \ 'cmdline': 'neovim',
-            \ 'priority': 0,
-            \ 'selector': 'textarea',
-            \ 'takeover': 'never',
-        \ },
-    \ }
-\ }
+" vim-vue-plugin {{{
+  let g:vim_vue_plugin_config = { 
+        \'syntax': {
+        \   'template': ['html', 'pug'],
+        \   'script': ['javascript', 'typescript'],
+        \   'style': ['css', 'stylus'],
+        \},
+        \'full_syntax': [],
+        \'initial_indent': [],
+        \'attribute': 0,
+        \'keyword': 0,
+        \'foldexpr': 0,
+        \'debug': 0,
+        \}
+
+" }}}
+
+" CoC {{{
+  source ~/.vim/vimrc/coc.vim
 
 
-if exists('g:started_by_firenvim')
-  " Remove statusline and confirmation message on close
-  set laststatus=0
-  set noconfirm
+" }}}
 
-  " Remove filesystem stuff
-  let g:loaded_netrw       = 1
-  let g:loaded_netrwPlugin = 1
-  let g:loaded_vinegar = 1
-  let g:loaded_lightline = 1
-  let g:loaded_startify = 1
-  let g:loaded_fugitive = 1
-  let g:loaded_gitbranch = 1
-  let g:loaded_gitgutter = 1
-  let g:loaded_tmux_navigator = 1
-  let g:loaded_vimux = 1
-  let g:leaderf_loaded = 1
-  let g:loaded_undotree = 1
-  let g:loaded_sensible = 1
+" Leaderf {{{
+  source ~/.vim/vimrc/leaderf.vim
 
-  " Update keybindings
-  nnoremap <C-q> :qa!<CR>
-  unmap _
-  unmap <c-e>
-  nnoremap <Esc><Esc> :call firenvim#focus_page()<CR>
-  nnoremap <C-z> :call firenvim#hide_frame()<CR>
+" }}}
 
-  " Assume editing markdown in github
-  au BufEnter github.com_*.txt set filetype=markdown
-  
-  " set wrapping
-  set wrap linebreak nolist
-  set virtualedit=
-  set display+=lastline
-  noremap  <silent> k   gk
-  noremap  <silent> j gj
-  noremap  <silent> <Home> g<Home>
-  noremap  <silent> <End>  g<End>
-  inoremap <silent> k   <C-o>gk
-  inoremap <silent> j <C-o>gj
-  inoremap <silent> <Home> <C-o>g<Home>
-  inoremap <silent> <End>  <C-o>g<End>
-endif
+" Undotree {{{
+  map <leader>g :UndotreeToggle<CR>
 
+" }}}
+
+" firenvim {{{
+  let g:firenvim_config = { 
+      \ 'globalSettings': {
+          \ 'alt': 'all',
+      \  },
+      \ 'localSettings': {
+          \ '.*': {
+              \ 'cmdline': 'neovim',
+              \ 'priority': 0,
+              \ 'selector': 'textarea',
+              \ 'takeover': 'never',
+          \ },
+      \ }
+  \ }
+
+
+  if exists('g:started_by_firenvim')
+    " Remove statusline and confirmation message on close
+    set laststatus=0
+    set noconfirm
+
+    " Remove filesystem stuff
+    let g:loaded_netrw       = 1
+    let g:loaded_netrwPlugin = 1
+    let g:loaded_vinegar = 1
+    let g:loaded_lightline = 1
+    let g:loaded_startify = 1
+    let g:loaded_fugitive = 1
+    let g:loaded_gitbranch = 1
+    let g:loaded_gitgutter = 1
+    let g:loaded_tmux_navigator = 1
+    let g:loaded_vimux = 1
+    let g:leaderf_loaded = 1
+    let g:loaded_undotree = 1
+    let g:loaded_sensible = 1
+
+    " Update keybindings
+    nnoremap <C-q> :qa!<CR>
+    unmap _
+    unmap <c-e>
+    nnoremap <Esc><Esc> :call firenvim#focus_page()<CR>
+    nnoremap <C-z> :call firenvim#hide_frame()<CR>
+
+    " Assume editing markdown in github
+    au BufEnter github.com_*.txt set filetype=markdown
+    
+    " set wrapping
+    set wrap linebreak nolist
+    set virtualedit=
+    set display+=lastline
+    noremap  <silent> k   gk
+    noremap  <silent> j gj
+    noremap  <silent> <Home> g<Home>
+    noremap  <silent> <End>  g<End>
+    inoremap <silent> k   <C-o>gk
+    inoremap <silent> j <C-o>gj
+    inoremap <silent> <Home> <C-o>g<Home>
+    inoremap <silent> <End>  <C-o>g<End>
+  endif
+
+
+" }}}
 
 " ==========================================================
 " Functions

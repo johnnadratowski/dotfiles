@@ -29,6 +29,7 @@ brew install  -f      \
   hammerspoon         \
   htop                \
   karabiner-elements  \
+  languagetool        \
   lua                 \
   macpass             \
   mercurial           \
