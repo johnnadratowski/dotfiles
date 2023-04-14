@@ -14,7 +14,6 @@ Plug 'christoomey/vim-tmux-navigator'
 Plug 'crater2150/vim-theme-chroma'
 Plug 'dbeniamine/cheat.sh-vim'
 Plug 'digitaltoad/vim-pug'
-"Plug 'dpelle/vim-LanguageTool'
 Plug 'dracula/vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
@@ -41,7 +40,6 @@ Plug 'mhinz/vim-startify'
 Plug 'morhetz/gruvbox'
 Plug 'nanotech/jellybeans.vim'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
-" Plug 'neoclide/coc-vetur'
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vim-colors-pencil' " Theme
 Plug 'preservim/vim-wordchipper' " Shortcuts for insert mode
@@ -55,7 +53,6 @@ Plug 'reedes/vim-textobj-sentence' " Treat sentences as text objects
 Plug 'reedes/vim-textobj-quote' " Treat quotes as text objects
 Plug 'reedes/vim-wordy' " Weasel words and passive voice
 Plug 'Reewr/vim-monokai-phoenix'
-"Plug 'ron89/thesaurus_query.vim'
 Plug 'ryanoasis/vim-devicons'
 Plug 'sebdah/vim-delve'
 Plug 'shannonmoeller/vim-monokai256'
@@ -201,13 +198,34 @@ augroup visuals
 augroup END
 
 " Theme {{{
-  autocmd vimenter * ++nested colorscheme molokai
+  "autocmd vimenter * ++nested colorscheme molokai
+  colorscheme molokai
+  if has("gui_running")
+    hi clear SpellRare
+    hi SpellRare gui=undercurl guisp=yellow
+    hi clear SpellBad
+    hi SpellBad gui=undercurl guisp=red
+    hi clear CocWarningHighlight
+    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
+    hi clear CocErrorHighlight
+    hi CocErrorHighlight gui=undercurl guisp=red 
+  else
+    hi clear SpellRare
+    hi SpellRare gui=undercurl guisp=yellow
+    hi clear SpellBad
+    hi SpellBad gui=undercurl guisp=red
+    hi clear CocWarningHighlight
+    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
+    hi clear CocErrorHighlight
+    hi CocErrorHighlight gui=undercurl guisp=red 
+  endif
 
   " Set highlight type
 
-  hi clear SpellBad
-  hi SpellBad term=undercurl cterm=undercurl ctermfg=12 ctermbg=NONE gui=undercurl guisp=red
-  hi CocErrorHighlight term=undercurl cterm=undercurl ctermfg=12 ctermbg=NONE gui=undercurl guisp=red
+  "autocmd vimenter * ++nested hi clear SpellBad
+  "autocmd vimenter * ++nested hi SpellBad gui=undercurl guisp=red
+  "autocmd vimenter * ++nested hi clear CocErrorHighlight
+  "autocmd vimenter * ++nested hi CocErrorHighlight gui=undercurl guisp=red
 
   " chroma
   " colorscheme chroma
@@ -907,5 +925,4 @@ function! CheatSheet()
 endfunction
 
 com! Cht call CheatSheet()      " Enable :CheatSheet to call the function
-
 
