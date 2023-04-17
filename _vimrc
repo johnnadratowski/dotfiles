@@ -7,14 +7,10 @@ call plug#begin()
 Plug 'antoinemadec/coc-fzf', {'branch': 'release'}
 Plug 'AndrewRadev/sideways.vim'
 Plug 'airblade/vim-gitgutter'
-Plug 'ajmwagar/vim-deus'
-Plug 'bignimbus/pop-punk.vim'
 Plug 'chrisbra/NrrwRgn'
 Plug 'christoomey/vim-tmux-navigator'
-Plug 'crater2150/vim-theme-chroma'
 Plug 'dbeniamine/cheat.sh-vim'
 Plug 'digitaltoad/vim-pug'
-Plug 'dracula/vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
 Plug 'frazrepo/vim-rainbow'
@@ -23,7 +19,6 @@ Plug 'iloginow/vim-stylus'
 Plug 'itchyny/landscape.vim'
 Plug 'itchyny/lightline.vim'
 Plug 'itchyny/vim-gitbranch'
-Plug 'jacoborus/tender.vim'
 Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
 Plug 'junegunn/fzf.vim' " needed for previews
 Plug 'junegunn/goyo.vim' 
@@ -33,29 +28,23 @@ Plug 'junegunn/vim-peekaboo'
 Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
 Plug 'leafOfTree/vim-vue-plugin'
-Plug 'lissaferreira/dalton-vim'
 Plug 'maxbrunsfeld/vim-emacs-bindings'
 Plug 'mbbill/undotree'
 Plug 'mhinz/vim-startify'
-Plug 'morhetz/gruvbox'
-Plug 'nanotech/jellybeans.vim'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vim-colors-pencil' " Theme
 Plug 'preservim/vim-wordchipper' " Shortcuts for insert mode
 Plug 'preservim/vimux'
 Plug 'prettier/vim-prettier'
-Plug 'rafalbromirski/vim-aurora'
 Plug 'reedes/vim-lexical' " Better spellcheck mappings
 Plug 'reedes/vim-litecorrect' " Better autocorrections
 Plug 'reedes/vim-pencil' " Super-powered writing things
 Plug 'reedes/vim-textobj-sentence' " Treat sentences as text objects
 Plug 'reedes/vim-textobj-quote' " Treat quotes as text objects
 Plug 'reedes/vim-wordy' " Weasel words and passive voice
-Plug 'Reewr/vim-monokai-phoenix'
 Plug 'ryanoasis/vim-devicons'
 Plug 'sebdah/vim-delve'
-Plug 'shannonmoeller/vim-monokai256'
 Plug 'sheerun/vim-wombat-scheme'
 Plug 'stephpy/vim-yaml'
 Plug 'thaerkh/vim-indentguides'
@@ -201,8 +190,10 @@ augroup visuals
 augroup END
 
 " Theme {{{
-  "autocmd vimenter * ++nested colorscheme molokai
   colorscheme molokai
+  "autocmd vimenter * ++nested colorscheme molokai
+  
+  " Set highlight type
   if has("gui_running")
     hi clear SpellRare
     hi SpellRare gui=undercurl guisp=yellow
@@ -222,62 +213,6 @@ augroup END
     hi clear CocErrorHighlight
     hi CocErrorHighlight gui=undercurl guisp=red 
   endif
-
-  " Set highlight type
-
-  "autocmd vimenter * ++nested hi clear SpellBad
-  "autocmd vimenter * ++nested hi SpellBad gui=undercurl guisp=red
-  "autocmd vimenter * ++nested hi clear CocErrorHighlight
-  "autocmd vimenter * ++nested hi CocErrorHighlight gui=undercurl guisp=red
-
-  " chroma
-  " colorscheme chroma
-  "
-  " set background=dark    " Setting dark mode
-
-  " MOLOKAI256
-  " let g:rehash256=1
-  " let g:molokai_original=0
-  " colorscheme monokai256
-  "
-  " MOLOKAI
-  " let g:rehash256=1
-  " let g:molokai_original=0
-
-  " Monokai Phoenix
-  " colorscheme monokai-phoenix
-
-  " Aurora
-  " set termguicolors
-  " set background=dark
-  " colorscheme aurora
-
-  " PopPunk
-  " colorscheme pop-punk
-  " let g:terminal_ansi_colors = pop_punk#AnsiColors()
-  " let g:lightline.colorscheme = 'pop_punk'
-  "
-  " DEUS
-  " colorscheme deus
-  " let g:deus_termcolors=256
-
-  " OTHERS
-  " packadd! dracula
-  " packadd! onedark.vim
-  " packadd! yowish
-  " colorscheme yowish
-  " colorscheme gruvbox
-  " colorscheme dracula
-  " colorscheme tender
-
-  " PURIFY
-  " let g:purify_bold = 0        " default: 1
-  " let g:purify_italic = 0      " default: 1
-  " let g:purify_underline = 0   " default: 1
-  " let g:purify_undercurl = 0   " default: 1
-  " let g:purify_inverse = 0     " default: 1
-  " packadd! purify
-  " colorscheme purify
 
 " }}}
 
