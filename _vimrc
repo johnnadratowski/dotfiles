@@ -79,12 +79,14 @@ call plug#end()
 let g:coc_global_extensions = [ 
       \ 'coc-css', 
       \ 'coc-db',
+      \ 'coc-dictionary',
+      \ 'coc-emoji', 
       \ 'coc-eslint', 
       \ 'coc-go', 
       \ 'coc-html', 
       \ 'coc-json', 
-      \ 'coc-json', 
       \ 'coc-lightbulb', 
+      \ 'coc-omni', 
       \ 'coc-prettier', 
       \ 'coc-pyright', 
       \ 'coc-sh', 
@@ -104,9 +106,10 @@ silent !stty -ixon > /dev/null 2>/dev/null
 set nocompatible              " Don't be compatible with vi
 let mapleader=" "             " Map leader key to space
 
-set clipboard=unnamed        " Use system clipboard
+set clipboard=unnamed       " Use system clipboard
 set cmdheight=2             " CoC - Give more space for displaying messages.
-set colorcolumn=0          " The right hand gutter
+set colorcolumn=0           " The right hand gutter
+set conceallevel=0          " The level to hide in a file
 set confirm                 " Y-N-C prompt if closing with unsaved changes.
 set cursorline              " have a line indicate the cursor location
 set expandtab               " Use spaces, not tabs, for autoindent/tab key.
@@ -351,6 +354,11 @@ vnoremap > >gv
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" JSON {{{
+  " Disable quote concealing in JSON files
+  let g:vim_json_conceal=0
+" }}}
+
 " DBUI {{{
   nmap <leader>d :DBUIToggle<CR>
   autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
@@ -418,8 +426,8 @@ vnoremap > >gv
     nmap <leader>G :Goyo<CR>
 
     " Litecorrect fix word
-    nnoremap <C-s> [s1z=<c-o>
-    inoremap <C-s> <c-g>u<Esc>[s1z=`]A<c-g>u
+    nnoremap <M-s> [s1z=<c-o>
+    inoremap <M-s> <c-g>u<Esc>[s1z=`]A<c-g>u
 
     " Wordchipper - delete with movement on keybind in insert
     inoremap <buffer> <expr> <C-e> wordchipper#chipWith('de')
