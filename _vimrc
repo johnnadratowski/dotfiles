@@ -155,79 +155,6 @@ set wildignore+=*/tmp/*,*.so,*.swp,*.zip " Ignore temp, so, swap, and zip
 set wildignore+=*/vendor/**              " Ignore vendor sources
 set wildmode=longest,list,full             " <Tab> cycles between all matching choices.
 
-
-" ==========================================================
-" Display and Themes
-" ==========================================================
-
-if has("gui_running")
-   "set guifont=Roboto\ Mono\ Light\ for\ Powerline
-   set guifont=Hack\ Regular\ Nerd\ Font\ Complete\ Mono
-else
-   set t_Co=256
-endif
-
-if (has("nvim"))
-  "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
-  let $NVIM_TUI_ENABLE_TRUE_COLOR=1
-else
-  let g:firenvim_loaded = 1 "Firenvim doesn't work with vim
-endif
-
-" Enable true color
-if exists('+termguicolors')
-  " let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  " let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
-  set termguicolors
-endif
-
-" Cursor vert bar in insert mode
-let &t_SI = "\e[6 q"
-let &t_EI = "\e[2 q"
-augroup visuals
-  au!
-  autocmd VimEnter * silent !echo -ne "\e[2 q"
-augroup END
-
-" Theme {{{
-  colorscheme molokai
-  "autocmd vimenter * ++nested colorscheme molokai
-  
-  " Set highlight type
-  if has("gui_running")
-    hi clear SpellRare
-    hi SpellRare gui=undercurl guisp=yellow
-    hi clear SpellBad
-    hi SpellBad gui=undercurl guisp=red
-    hi clear CocWarningHighlight
-    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
-    hi clear CocErrorHighlight
-    hi CocErrorHighlight gui=undercurl guisp=red 
-  else
-    hi clear SpellRare
-    hi SpellRare gui=undercurl guisp=yellow
-    hi clear SpellBad
-    hi SpellBad gui=undercurl guisp=red
-    hi clear CocWarningHighlight
-    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
-    hi clear CocErrorHighlight
-    hi CocErrorHighlight gui=undercurl guisp=red 
-  endif
-
-" }}}
-
-" Persistent Undo {{{
-
-  " Keep undo history across sessions, by storing in file.
-  " Only works all the time.
-  if has('persistent_undo')
-    silent !mkdir -p ~/tmp/backups > /dev/null 2>&1
-    set undodir=~/tmp/backups
-    set undofile
-  endif
-
-" }}}
-
 " ==========================================================
 " Keymaps
 " ==========================================================
@@ -288,6 +215,15 @@ vnoremap > >gv
 " ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
+
+" Pug {{{
+augroup pug
+  au!
+  " Horrible hack to get pug files to display syntax highlighting.  Need to
+  " redetect file but after reload, or all highlighting doesn't work.
+  au BufNewFile,BufRead,BufReadPost,BufEnter *.pug call timer_start(20, { tid -> execute('filetype detect')})
+augroup END
+" }}}
 
 " JSON {{{
   " Disable quote concealing in JSON files
@@ -535,6 +471,18 @@ let g:startify_custom_header = [
   let g:prettier#autoformat_require_pragma = 0
   let g:prettier#autoformat_config_present = 1
   let g:prettier#config#arrow_parens = 'always'
+
+" }}}
+
+" Persistent Undo {{{
+
+  " Keep undo history across sessions, by storing in file.
+  " Only works all the time.
+  if has('persistent_undo')
+    silent !mkdir -p ~/tmp/backups > /dev/null 2>&1
+    set undodir=~/tmp/backups
+    set undofile
+  endif
 
 " }}}
 
@@ -868,4 +816,66 @@ function! CheatSheet()
 endfunction
 
 com! Cht call CheatSheet()      " Enable :CheatSheet to call the function
+
+
+
+" ==========================================================
+" Display and Themes
+" ==========================================================
+
+if has("gui_running")
+   "set guifont=Roboto\ Mono\ Light\ for\ Powerline
+   set guifont=Hack\ Regular\ Nerd\ Font\ Complete\ Mono
+else
+   set t_Co=256
+endif
+
+if (has("nvim"))
+  "For Neovim 0.1.3 and 0.1.4 < https://github.com/neovim/neovim/pull/2198 >
+  let $NVIM_TUI_ENABLE_TRUE_COLOR=1
+else
+  let g:firenvim_loaded = 1 "Firenvim doesn't work with vim
+endif
+
+" Enable true color
+if exists('+termguicolors')
+  " let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  " let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+  set termguicolors
+endif
+
+" Cursor vert bar in insert mode
+let &t_SI = "\e[6 q"
+let &t_EI = "\e[2 q"
+augroup visuals
+  au!
+  autocmd VimEnter * silent !echo -ne "\e[2 q"
+augroup END
+
+" Theme {{{
+  colorscheme molokai
+  "autocmd vimenter * ++nested colorscheme molokai
+  
+  " Set highlight type
+  if has("gui_running")
+    hi clear SpellRare
+    hi SpellRare gui=undercurl guisp=yellow
+    hi clear SpellBad
+    hi SpellBad gui=undercurl guisp=red
+    hi clear CocWarningHighlight
+    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
+    hi clear CocErrorHighlight
+    hi CocErrorHighlight gui=undercurl guisp=red 
+  else
+    hi clear SpellRare
+    hi SpellRare gui=undercurl guisp=yellow
+    hi clear SpellBad
+    hi SpellBad gui=undercurl guisp=red
+    hi clear CocWarningHighlight
+    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
+    hi clear CocErrorHighlight
+    hi CocErrorHighlight gui=undercurl guisp=red 
+  endif
+
+" }}}
 
