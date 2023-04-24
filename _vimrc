@@ -26,6 +26,7 @@ Plug 'junegunn/goyo.vim'
 Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
 Plug 'junegunn/vim-peekaboo'
+Plug 'kamou/gpt-vim'
 Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
 Plug 'leafOfTree/vim-vue-plugin'
@@ -133,6 +134,7 @@ set nowrap                  " No text wrapping by default
 set nowritebackup           " CoC - some servers might have problesmw ith backup
 set number                  " Show line numbers
 set report=0                " : commands always print changed line count.
+set scrolloff=5             " Number of lines to show above/below cursor
 set shiftround              " rounds indent to a multiple of shiftwidth
 set shiftwidth=2            " but an indent level is 2 spaces wide.
 set shortmess+=a            " Use [+]/[RO]/[w] for modified/readonly/written.
@@ -216,13 +218,20 @@ vnoremap > >gv
 " Plugin Settings + Keymaps
 " ==========================================================
 
+" vim-gpt {{{
+  let g:gpt_api_key = $GPT_API_TOKEN
+  map <silent> <C-g> :<C-U>call gpt#assist()<cr>
+  xnoremap <silent> <C-g> :'<,'>call gpt#visual_assist()<cr>
+  vnoremap <silent> <C-g> :'<,'>call gpt#visual_assist()<cr>
+" }}}
+
 " Pug {{{
-augroup pug
-  au!
-  " Horrible hack to get pug files to display syntax highlighting.  Need to
-  " redetect file but after reload, or all highlighting doesn't work.
-  au BufNewFile,BufRead,BufReadPost,BufEnter *.pug call timer_start(20, { tid -> execute('filetype detect')})
-augroup END
+  augroup pug
+    au!
+    " Horrible hack to get pug files to display syntax highlighting.  Need to
+    " redetect file but after reload, or all highlighting doesn't work.
+    au BufNewFile,BufRead,BufReadPost,BufEnter *.pug call timer_start(20, { tid -> execute('filetype detect')})
+  augroup END
 " }}}
 
 " JSON {{{
@@ -249,18 +258,21 @@ augroup END
 " }}}
 
 " Netrw {{{
+  let g:netrw_localcopycmd='cp'
   map <c-e> :call ExploreSessionRoot()<CR>
   map _ :call ExploreGitRoot()<CR>
 
   augroup netrw
     autocmd!
     autocmd filetype netrw call NetrwMapping()
-    autocmd filetype netrw setl bufhidden=wipe " delete netrw buffer when hidden
+    autocmd filetype netrw setl bufhidden=wipe
   augroup END
-
+  
   function! NetrwMapping()
-      nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
-      nmap <buffer> <C-[> :bn<CR>
+    nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
+    nmap <buffer> <C-[> :bn<CR>
+    "Leader-d duplicates file
+    autocmd filetype netrw nnoremap <silent> <Leader>d :clear<bar>silent exec "!cp '%:p' '%:p:h/%:t:r-copy.%:e'"<bar>redraw<bar>echo "Copied " . expand('%:t') . ' to ' . expand('%:t:r') . '-copy.' . expand('%:e')<cr>
   endfunction
 
 " }}}
@@ -326,9 +338,8 @@ augroup END
     set noshowmode
     set noshowcmd
     setlocal showbreak=NONE
-    set scrolloff=999
+    "set scrolloff=999
     Limelight
-    " ...
   endfunction
 
   function! s:goyo_leave()
@@ -520,18 +531,14 @@ let g:startify_custom_header = [
 
 " CoC {{{
   source ~/.vim/vimrc/coc.vim
-
-
 " }}}
 
 " Leaderf {{{
   source ~/.vim/vimrc/leaderf.vim
-
 " }}}
 
 " Undotree {{{
   map <leader>g :UndotreeToggle<CR>
-
 " }}}
 
 " firenvim {{{
