@@ -14,12 +14,12 @@ Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
 Plug 'frazrepo/vim-rainbow'
 Plug 'glacambre/firenvim'
-Plug 'iloginow/vim-stylus'
 Plug 'itchyny/landscape.vim'
 Plug 'itchyny/lightline.vim'
 Plug 'itchyny/vim-gitbranch'
 Plug 'johnnadratowski/molokai'
 Plug 'johnnadratowski/vim-pug'
+Plug 'johnnadratowski/vim-stylus'
 Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
 Plug 'junegunn/fzf.vim' " needed for previews
 Plug 'junegunn/goyo.vim' 
