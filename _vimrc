@@ -861,6 +861,9 @@ augroup END
 
 " Theme {{{
   colorscheme molokai
+  let g:molokai_override_bg = 0
+  let g:molokai_original = 0
+
   "autocmd vimenter * ++nested colorscheme molokai
   
   " Set highlight type
