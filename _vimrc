@@ -72,6 +72,7 @@ let g:coc_global_extensions = [
       \ 'coc-emoji', 
       \ 'coc-eslint', 
       \ 'coc-go', 
+      \ 'coc-highlight', 
       \ 'coc-html', 
       \ 'coc-json', 
       \ 'coc-lightbulb', 
@@ -230,6 +231,15 @@ vnoremap > >gv
     " Horrible hack to get pug files to display syntax highlighting.  Need to
     " redetect file but after reload, or all highlighting doesn't work.
     au BufNewFile,BufRead,BufReadPost,BufEnter *.pug call timer_start(20, { tid -> execute('filetype detect')})
+  augroup END
+" }}}
+
+" Less {{{
+  augroup less
+    au!
+    " Horrible hack to get less files to display syntax highlighting.  Need to
+    " redetect file but after reload, or all highlighting doesn't work.
+    au BufNewFile,BufRead,BufReadPost,BufEnter *.less call timer_start(20, { tid -> execute('filetype detect')})
   augroup END
 " }}}
 
@@ -887,4 +897,4 @@ augroup END
   endif
 
 " }}}
-
+"
