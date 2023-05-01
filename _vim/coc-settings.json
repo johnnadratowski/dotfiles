@@ -1,4 +1,10 @@
 {
+  "languageserver": {
+    "coffee": {
+      "command": "coffeesense-language-server",
+      "filetypes": ["coffee"]
+    }
+  },
   "coc.source.omni.enable": true,
   "coc.source.omni.filetypes": ["styl", "stylus"],
   "less.completion.completePropertyWithSemicolon": false,
