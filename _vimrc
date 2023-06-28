@@ -62,6 +62,7 @@ Plug 'tpope/vim-sensible'
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-vinegar'
 Plug 'vim-test/vim-test'
+Plug 'wesQ3/vim-windowswap'
 Plug 'yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
 
 call plug#end()
