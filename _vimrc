@@ -523,6 +523,11 @@ let g:startify_custom_header = [
 
 " }}}
 
+" vim-windowswap {{{
+  let g:windowswap_map_keys = 0 "prevent default bindings
+  nnoremap <silent> <leader>m :call WindowSwap#EasyWindowSwap()<CR>
+
+" }}}
 " vim-vue-plugin {{{
   let g:vim_vue_plugin_config = { 
         \'syntax': {
