@@ -161,3 +161,7 @@ alias setPython3='export PY_PATH=$(which python); sudo rm -f $PY_PATH && sudo ln
 alias mvnInstall='mvn -T 1C clean install -Dmaven.test.skip -DskipTests -Dmaven.javadoc.skip=true'
 
 alias mksnip='(cd ~/git/dotfiles/_hammerspoon/snippets; vim .)'
+
+alias mountMacMini='sshfs john@johns-mac-mini.lan:/ ~/mnt/macmini'
+alias umountMacMini='sudo diskutil umount force ~/mnt/macmini'
+alias remountMacMini='umountMacMini; mountMacMini'

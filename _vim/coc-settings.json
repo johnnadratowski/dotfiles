@@ -9,7 +9,10 @@
   "coc.source.omni.filetypes": ["styl", "stylus"],
   "less.completion.completePropertyWithSemicolon": false,
   "css.completion.completePropertyWithSemicolon": false,
-  "scss.completion.completePropertyWithSemicolon": false
+  "scss.completion.completePropertyWithSemicolon": false,
+  "python.formatting.provider": "black",
+  "python.formatting.blackPath": "/opt/homebrew/bin/black"
+  "coc.preferences.formatOnSaveFiletypes": ["python"]
 }
 // {
 //   "languageserver": {

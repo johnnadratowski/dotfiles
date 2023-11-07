@@ -1,5 +1,5 @@
 set smartcase
-set clipboard+=unnamed
+set clipboard+=unnamedplus
 set surround
 set ignorecase
 set commentary

@@ -19,6 +19,6 @@ nnoremap <C-f> :call CDGitRoot() <bar> :Leaderf --stayOpen rg
 xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! --stayOpen -F -e %s ", leaderf#Rg#visual())<CR>
 
 let g:Lf_WildIgnore = {
-        \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache', 'node_modules'],
+        \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache', 'public'],
         \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]']
         \}
