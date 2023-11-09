@@ -20,5 +20,5 @@ xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! --stayOpen -F -e %s ", leaderf#Rg#
 
 let g:Lf_WildIgnore = {
         \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache', 'public'],
-        \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]']
+        \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]','Pipfile.lock']
         \}

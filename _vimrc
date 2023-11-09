@@ -24,7 +24,7 @@ Plug 'junegunn/fzf.vim' " needed for previews
 Plug 'junegunn/goyo.vim' 
 Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
-Plug 'junegunn/vim-peekaboo'
+"Plug 'junegunn/vim-peekaboo' " Issue - makes teh cmd line window height maximum
 "Plug 'kamou/gpt-vim'
 Plug 'kchmck/vim-coffee-script'
 Plug 'kristijanhusak/vim-dadbod-ui'
@@ -61,6 +61,7 @@ Plug 'tpope/vim-repeat'
 Plug 'tpope/vim-sensible'
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-vinegar'
+Plug 'ttibsi/pre-commit.nvim'
 Plug 'vim-test/vim-test'
 Plug 'wesQ3/vim-windowswap'
 Plug 'yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
@@ -165,6 +166,7 @@ set wildmode=longest,list,full             " <Tab> cycles between all matching c
 
 " Save buffer
 nmap <c-s> :w<CR>
+imap <c-s> <Esc> :w<CR>
 
 " Scratch buffer creation
 command! -nargs=* -bang -range -complete=filetype Scratch
@@ -478,6 +480,20 @@ let g:startify_custom_header = [
       \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
       \]
 
+let g:startify_bookmarks = [ {'v': '~/.vimrc'}, {'z': '~/.zshrc'} ]
+
+let g:startify_commands = [
+    \ {'c': 'Cht'},
+    \ ['Vim Reference', 'h ref'],
+    \ ]
+
+let g:startify_lists = [
+      \ { 'type': 'dir',       'header': ['   MRU '. getcwd()] },
+      \ { 'type': 'commands',  'header': ['   Commands']       },
+      \ { 'type': 'sessions',  'header': ['   Sessions']       },
+      \ { 'type': 'bookmarks', 'header': ['   Bookmarks']      },
+      \ { 'type': 'files',     'header': ['   MRU']            },
+      \ ]
 " vim-go {{{
   " disable vim-go :GoDef short cut (gd)
   " this is handled by LanguageClient [LC]
