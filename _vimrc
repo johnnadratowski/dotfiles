@@ -25,7 +25,7 @@ Plug 'junegunn/goyo.vim'
 Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
 "Plug 'junegunn/vim-peekaboo' " Issue - makes teh cmd line window height maximum
-"Plug 'kamou/gpt-vim'
+Plug 'madox2/vim-ai'
 Plug 'kchmck/vim-coffee-script'
 Plug 'kristijanhusak/vim-dadbod-ui'
 Plug 'leafgarland/typescript-vim'
@@ -165,8 +165,10 @@ set wildmode=longest,list,full             " <Tab> cycles between all matching c
 " ==========================================================
 
 " Save buffer
-nmap <c-s> :w<CR>
-imap <c-s> <Esc> :w<CR>
+nmap <c-s> :update<CR>
+imap <c-s> <Esc> :update<CR>
+nmap <F2> :update<CR>
+imap <F2> <C-O>:update<CR>
 
 " Scratch buffer creation
 command! -nargs=* -bang -range -complete=filetype Scratch
@@ -222,11 +224,15 @@ vnoremap > >gv
 " Plugin Settings + Keymaps
 " ==========================================================
 
-" vim-gpt {{{
+" vim-ai {{{
   let g:gpt_api_key = $GPT_API_TOKEN
-  map <silent> <C-g> :<C-U>call gpt#assist()<cr>
-  xnoremap <silent> <C-g> :'<,'>call gpt#visual_assist()<cr>
-  vnoremap <silent> <C-g> :'<,'>call gpt#visual_assist()<cr>
+  inoremap <C-g> <Esc> :AIEdit 
+  vnoremap <C-g> :AIEdit 
+  noremap <C-g> :AIEdit 
+
+  inoremap <C-M-g> <Esc> :AI 
+  vnoremap <C-M-g> :AI 
+  noremap <C-M-g> :AI 
 " }}}
 
 " Pug {{{
