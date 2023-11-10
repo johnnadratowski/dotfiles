@@ -192,6 +192,9 @@ cmap W! w !sudo tee % >/dev/null
 map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
+" Reload all buffers from disk
+map <leader>r :bufdo e!<CR>
+
 " Close Window
 map <leader>x :bp \| bd #<CR>
 map <leader>w :clo<CR>
@@ -230,9 +233,8 @@ vnoremap > >gv
   vnoremap <C-g> :AIEdit 
   noremap <C-g> :AIEdit 
 
-  inoremap <C-M-g> <Esc> :AI 
-  vnoremap <C-M-g> :AI 
-  noremap <C-M-g> :AI 
+  vnoremap <leader>g :AI
+  noremap <leader>g :AI
 " }}}
 
 " Pug {{{
@@ -325,7 +327,9 @@ vnoremap > >gv
     let g:textobj#sentence#move_n = ')'
 
     " toggle goyo
-    nmap <leader>G :Goyo<CR>
+    " Changed to use for GPT
+    " May remap in future
+    " nmap <leader>G :Goyo<CR>
 
     " Litecorrect fix word
     nnoremap <M-s> [s1z=<c-o>
@@ -576,7 +580,7 @@ let g:startify_lists = [
 " }}}
 
 " Undotree {{{
-  map <leader>g :UndotreeToggle<CR>
+  map <leader>u :UndotreeToggle<CR>
 " }}}
 
 " firenvim {{{
