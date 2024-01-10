@@ -9,4 +9,11 @@ vnoremap < <gv
 nnoremap <Space> q
 nnoremap <C-@> @
 nnoremap <C-Space> @
-#source ~/.vimrc
+
+nnoremap yy "+yy
+vnoremap y "+y
+
+nnoremap p "+p
+vnoremap p "+p
+nnoremap P "+P
+vnoremap P "+P

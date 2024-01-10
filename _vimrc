@@ -165,8 +165,8 @@ set wildmode=longest,list,full             " <Tab> cycles between all matching c
 " ==========================================================
 
 " Save buffer
-nmap <c-s> :update<CR>
-imap <c-s> <Esc> :update<CR>
+nmap <c-s> :update!<CR>
+imap <c-s> <Esc> :update!<CR>
 nmap <F2> :update<CR>
 imap <F2> <C-O>:update<CR>
 

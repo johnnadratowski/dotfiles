@@ -250,9 +250,21 @@
       "Text" : "0x1d",
       "Action" : 11
     },
+    "0x5d-0x100000-0x1e" : {
+      "Version" : 1,
+      "Action" : 11,
+      "Text" : "0x1d",
+      "Label" : ""
+    },
     "0xf70f-0x20000" : {
       "Text" : "[24;2~",
       "Action" : 10
+    },
+    "0x5b-0x100000-0x21" : {
+      "Version" : 1,
+      "Action" : 11,
+      "Text" : "0x1b",
+      "Label" : ""
     },
     "0xf703-0x240000" : {
       "Text" : "[1;5C",

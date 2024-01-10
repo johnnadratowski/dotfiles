@@ -55,9 +55,8 @@ then
     export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
 fi
 
-# Deno stuff
-export DENO_INSTALL="/Users/johnnadratowski/.local"
-export PATH="$DENO_INSTALL/bin:$PATH"
+# Pipx install location
+export PATH="$HOME/.local/bin:$PATH"
 
 export POWERLINE_BASH_CONTINUATION=1
 export POWERLINE_BASH_SELECT=1

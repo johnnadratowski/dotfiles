@@ -13,6 +13,7 @@
   "python.linting.enabled": true,
   "python.formatting.provider": "black",
   "python.formatting.blackPath": "/opt/homebrew/bin/black",
+  //"python.linting.mypyEnabled": true,
   "diagnostic.virtualText": true,
   "diagnostic.virtualTextCurrentLineOnly": false,
   "coc.preferences.extensionUpdateCheck": "daily",
@@ -91,18 +92,3 @@
   "signature.target": "float",
   "typescript.suggestionActions.enabled": true
 }
-// {
-//   "languageserver": {
-//     "golang": {
-//       "command": "gopls",
-//       "rootPatterns": ["go.mod", ".vim/", ".git/", ".hg/"],
-//       "filetypes": ["go"]
-//     }
-//   },
-//   "list.source.files.excludePatterns": [
-//     "**/.git/**",
-//     "**/node_modules/**",
-//     "**/vendor/**"
-//   ],
-//   "python.jediEnabled": false
-// }
