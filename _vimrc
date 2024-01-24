@@ -13,6 +13,7 @@ Plug 'dbeniamine/cheat.sh-vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
 Plug 'glacambre/firenvim'
+Plug 'heavenshell/vim-pydocstring', { 'do': 'make install', 'for': 'python' }
 Plug 'itchyny/landscape.vim'
 Plug 'itchyny/lightline.vim'
 Plug 'itchyny/vim-gitbranch'
@@ -193,7 +194,7 @@ map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
 " Reload all buffers from disk
-map <leader>r :bufdo e!<CR>
+" map <leader>r :bufdo e!<CR>
 
 " Close Window
 map <leader>x :bp \| bd #<CR>
@@ -432,8 +433,10 @@ vnoremap > >gv
 " }}}
 
 
-" rainbow parens
-let g:rainbow_active = 1
+" rainbow parens {{{
+  let g:rainbow_active = 1
+" }}}
+
 
 " easyalign {{{
 
@@ -444,6 +447,7 @@ let g:rainbow_active = 1
 
 " }}}
   
+
 " gitgutter {{{
   if !exists("g:jn_statusline_updated")
     set statusline+=%{GitStatus()}
@@ -452,58 +456,68 @@ let g:rainbow_active = 1
 
 " }}}
 
-" vim-lightline
-let g:lightline = {
-      \ 'colorscheme': 'one',
-      \ 'active': {
-      \   'left': [ [ 'mode', 'paste' ],
-      \             [ 'gitroot', 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
-      \ },
-      \ 'component_function': {
-      \   'gitbranch': 'gitbranch#name',
-      \   'gitstatus': 'GitStatus',
-      \   'gitroot': 'RootName'
-      \ },
-      \ }
 
-" Renamer
-source ~/.vim/vimrc/renamer.vim
+" vim-lightline {{{
+  let g:lightline = {
+        \ 'colorscheme': 'one',
+        \ 'active': {
+        \   'left': [ [ 'mode', 'paste' ],
+        \             [ 'gitroot', 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
+        \ },
+        \ 'component_function': {
+        \   'gitbranch': 'gitbranch#name',
+        \   'gitstatus': 'GitStatus',
+        \   'gitroot': 'RootName'
+        \ },
+        \ }
+" }}}
 
-" vim-startify
-let g:startify_change_to_dir       = 0
 
-let g:startify_custom_header = [
-      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬜⬜⬜⬛⬛⬜',
-      \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬛⬜⬜⬛⬛⬜',
-      \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬛⬛⬜⬛⬛⬜',
-      \'⬜🟨🟨🟨🟨🟨⬜⬛⬛⬛⬛⬛⬛⬛⬜',
-      \'⬜🟨🟨🟨🟨🟨⬜⬛⬛⬜⬛⬛⬛⬛⬜',
-      \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬛⬛⬛⬜',
-      \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬜⬛⬛⬜',
-      \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬜⬛⬛⬜',
-      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
-      \]
+" Renamer {{{
+  source ~/.vim/vimrc/renamer.vim
+" }}}
 
-let g:startify_bookmarks = [ {'v': '~/.vimrc'}, {'z': '~/.zshrc'} ]
 
-let g:startify_commands = [
-    \ {'c': 'Cht'},
-    \ ['Vim Reference', 'h ref'],
-    \ ]
+" vim-startify {{{
+  nmap <leader>H :Startify<CR>
 
-let g:startify_lists = [
-      \ { 'type': 'dir',       'header': ['   MRU '. getcwd()] },
-      \ { 'type': 'commands',  'header': ['   Commands']       },
-      \ { 'type': 'sessions',  'header': ['   Sessions']       },
-      \ { 'type': 'bookmarks', 'header': ['   Bookmarks']      },
-      \ { 'type': 'files',     'header': ['   MRU']            },
+  let g:startify_change_to_dir       = 0
+
+  let g:startify_custom_header = [
+        \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \'⬜⬜⬜⬜🟨🟨⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬜⬜⬜⬛⬛⬜',
+        \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬛⬜⬜⬛⬛⬜',
+        \'⬜⬜⬜⬜🟨🟨⬜⬛⬛⬛⬛⬜⬛⬛⬜',
+        \'⬜🟨🟨🟨🟨🟨⬜⬛⬛⬛⬛⬛⬛⬛⬜',
+        \'⬜🟨🟨🟨🟨🟨⬜⬛⬛⬜⬛⬛⬛⬛⬜',
+        \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬛⬛⬛⬜',
+        \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬜⬛⬛⬜',
+        \'⬜⬜⬜⬜⬜⬜⬜⬛⬛⬜⬜⬜⬛⬛⬜',
+        \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \'⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜',
+        \]
+
+  let g:startify_bookmarks = [ {'v': '~/.vimrc'}, {'z': '~/.zshrc'} ]
+
+  let g:startify_commands = [
+      \ {'c': 'Cht'},
+      \ ['Vim Reference', 'h ref'],
       \ ]
+
+  let g:startify_lists = [
+        \ { 'type': 'dir',       'header': ['   MRU '. getcwd()] },
+        \ { 'type': 'commands',  'header': ['   Commands']       },
+        \ { 'type': 'sessions',  'header': ['   Sessions']       },
+        \ { 'type': 'bookmarks', 'header': ['   Bookmarks']      },
+        \ { 'type': 'files',     'header': ['   MRU']            },
+        \ ]
+" }}}
+
+
 " vim-go {{{
   " disable vim-go :GoDef short cut (gd)
   " this is handled by LanguageClient [LC]
@@ -514,6 +528,7 @@ let g:startify_lists = [
 
 " }}}
 
+
 " vim-prettier {{{
   let g:prettier#autoformat = 1
   let g:prettier#autoformat_require_pragma = 0
@@ -521,6 +536,12 @@ let g:startify_lists = [
   let g:prettier#config#arrow_parens = 'always'
 
 " }}}
+
+
+" Pydocstring {{{
+  let g:pydocstring_enable_mapping = 0
+" }}}
+
 
 " Persistent Undo {{{
 
@@ -534,6 +555,7 @@ let g:startify_lists = [
 
 " }}}
 
+
 " vim-commentary {{{
   augroup vim_commentary
     autocmd FileType vim setlocal commentstring=\"\ %s
@@ -543,17 +565,21 @@ let g:startify_lists = [
 
 " }}}
 
+
 " vim-workspace {{{
   nnoremap <leader>` :ToggleWorkspace<CR>
   let g:workspace_autosave = 0
 
 " }}}
 
+
 " vim-windowswap {{{
   let g:windowswap_map_keys = 0 "prevent default bindings
   nnoremap <silent> <leader>m :call WindowSwap#EasyWindowSwap()<CR>
 
 " }}}
+
+
 " vim-vue-plugin {{{
   let g:vim_vue_plugin_config = { 
         \'syntax': {
@@ -571,17 +597,21 @@ let g:startify_lists = [
 
 " }}}
 
+
 " CoC {{{
   source ~/.vim/vimrc/coc.vim
 " }}}
+
 
 " Leaderf {{{
   source ~/.vim/vimrc/leaderf.vim
 " }}}
 
+
 " Undotree {{{
   map <leader>u :UndotreeToggle<CR>
 " }}}
+
 
 " firenvim {{{
   let g:firenvim_config = { 
@@ -645,6 +675,9 @@ let g:startify_lists = [
 
 
 " }}}
+
+
+
 
 " ==========================================================
 " Functions
