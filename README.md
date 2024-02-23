@@ -19,6 +19,9 @@ startup files that shouldn't be in git.
 
 Supports vim mode, but also has emacs type bindings when you navigate.
 
+### Prompt
+
+Uses the [agkozak](https://github.com/agkozak/agkozak-zsh-prompt) prompt with git integration.
 
 ## Vim
 
@@ -35,7 +38,7 @@ Extensively configures vim (vimscript) and neovim:
 
 Extensively uses Hammerspoon for Mac automation.  I use Karabiner to map
 CapsLock to Shift+ctrl+option+cmd for all the tools keybindings.
-The tools are either ran using a hotkey or they run in the toolbar
+The tools are either ran using a hotkey or they run in the toolbar.
 
 The [init.lua](_hammerspoon/init.lua) is the entry points.
 
