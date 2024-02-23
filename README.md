@@ -37,7 +37,7 @@ Extensively uses Hammerspoon for Mac automation.  I use Karabiner to map
 CapsLock to Shift+ctrl+option+cmd for all the tools keybindings.
 The tools are either ran using a hotkey or they run in the toolbar
 
-The init.lua is the entry points.
+The `init.lua` is the entry points.
 
 List of tools:
 
