@@ -8,7 +8,9 @@ function timestampToDate()
 
     ts = tonumber(copy)
     if ts == nil then
-        alerts.alertI("Invalid Timestamp: " .. copy:sub(0, 15))
+        ts = os.time(os.date("!*t"))
+        hs.pasteboard.setContents(ts)
+        alerts.alertI("No timestamp on clipboard.  Showing current timestamp and copying to clipboard: " .. ts)
         return
     end
 
@@ -16,6 +18,8 @@ function timestampToDate()
         ts = math.floor(ts / 1000)
     end
 
-    alerts.alertI(os.date("%Y-%m-%d %H:%M:%S", ts))
+    ts = os.date("%Y-%m-%d %H:%M:%S", ts)
+    hs.pasteboard.setContents(ts)
+    alerts.alertI("Timestamp from clipboard: " .. ts)
 end
 hs.hotkey.bind(constants.hyper, "t", "Timestamp", timestampToDate, hs.alert.closeAll)

@@ -49,6 +49,7 @@ List of tools:
 - Caps + Arrows - Tile window to halves and thirds
 - Caps + 1,2,3  - Move current window to monitor 1, 2, or 3
 - Caps + M		- Maximize current window
+- Caps + T		- If there is a timestamp on the clipboard, show the date for that timestamp and copy that date to clipboard.  Else, show current timestamp and copy that to clipboard.
 - Caps + L		- Lorem Ipsum Sentence Generator
 - Caps + U		- Generate a new UUID4 and copy to clipboard
 - Caps + N		- If you have a string on the clipboard which is a big number, hold this hotkey to format it in a human readable way
