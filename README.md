@@ -7,12 +7,12 @@ To install: `./install.sh`
 ## Installation
 
 - All files/dirs starting with `_(name)` get symlinked to `~/.(name)`.
-- To explicitly symlink other objects, update `EXTRA_FILES` in `install.py`.
-- To explicitly create directories, update `DIRS` in `install.py`
+- To explicitly symlink other objects, update [EXTRA_FILES](https://github.com/johnnadratowski/dotfiles/blob/master/install.py#L13) in [install.py](install.py).
+- To explicitly create directories, update [DIRS](https://github.com/johnnadratowski/dotfiles/blob/master/install.py#L19) in [install.py](install.py).
 
 ## Shell
 
-Uses tmux and zsh with [oh-my-zsh](https://ohmyz.sh/).
+Uses [tmux](https://github.com/tmux/tmux/wiki) and [zsh](https://www.zsh.org/) with [oh-my-zsh](https://ohmyz.sh/).
 
 `.shellrc` will run a `~/scripts/init.sh` and a `~/local-startup/init.sh` for
 startup files that shouldn't be in git.
