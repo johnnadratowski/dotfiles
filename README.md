@@ -1,6 +1,6 @@
 # dotfiles
 
-NOTE: This repo supports Mac only!  It could be fairly easily updated for Linux variants by adding a file for installing requirements replacing [brew_install.sh](brew_install.sh)
+NOTE: This repo supports Mac only!  It could be fairly easily updated for Linux variants by adding a file for installing requirements replacing [brew_install.sh](brew_install.sh).  Some of the commands in aliases and functions in the `scripts` folder are mac specific too so you might be playing whack-a-mole with them.
 
 To install: `./install.sh`
 
