@@ -3,7 +3,7 @@ local constants = require("constants")
 local log = require("log")
 
 function ocr()
-    task = hs.task.new(constants.home .. '/bin/ocr', function(code, out, err) 
+    task = hs.task.new(constants.ocr, function(code, out, err) 
       log.d("CODE: " .. code .. " OUT: " .. out .. " ERR: " .. err)
       if code == 0 then
         contents = out:gsub("^%s*(.-)%s*$", "%1")

@@ -10,7 +10,10 @@ constants.hammerspoonHome = constants.home .. "/.hammerspoon/"
 
 constants.loglevel = "debug"
 
-constants.diff = "/opt/homebrew/bin/meld"
+constants.diff = "/usr/bin/open"
+constants.diffargs = {"-na", "PyCharm.app", "--args", "diff"}
+
+constants.ocr = constants.home .. '/bin/ocr'
 
 constants.defaultBrowser = "Google Chrome"
 --constants.defaultBrowser = 'FirefoxDeveloperEdition'

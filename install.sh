@@ -11,21 +11,7 @@ log "Installing files"
 
 ./install.py
 
-if [[ "$OSTYPE" == "linux-gnu" ]]; then
-	if which apt-get; then
-		./apt_install.sh
-	elif which pacman; then
-		./pac_install.sh
-	else
-		echo "UNKNOWN PACKAGE MANAGER"
-		exit 1
-	fi
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-	./brew_install.sh
-else
-	echo "UNKNOWN OS $OSTYPE"
-	exit 1
-fi
+./brew_install.sh
 
 log "Symlinking bin folders"
 ln -s ~/scripts/lib/ocr ~/bin

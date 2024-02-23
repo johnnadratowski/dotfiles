@@ -30,4 +30,4 @@ function mouseHighlight()
   )
 end
 
-hs.hotkey.bind(constants.hyper, "M", "Show Mouse", mouseHighlight)
+-- hs.hotkey.bind(constants.hyper, "M", "Show Mouse", mouseHighlight)

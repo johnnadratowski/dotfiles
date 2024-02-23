@@ -40,5 +40,13 @@ function str.split( inSplitPattern, outResults )
   return outResults
 end
 
+function str.trim(string)
+  return string.gsub(string, '^%s*(.-)%s*$', '%1')
+end
+
+function str.isempty(s)
+  return s == nil or s == ''
+end
+
 return str
 

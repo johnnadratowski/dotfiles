@@ -20,6 +20,7 @@ set -x
 brew install  -f      \
   asciidoctor         \
   awscli              \
+  coreutils           \
   diff-so-fancy       \
   drovio              \
   entr                \
