@@ -1,5 +1,7 @@
 # dotfiles
 
+NOTE: This repo supports Mac only!  It could be fairly easily updated for Linux variants by adding a file for installing requirements replacing `brew_install.sh`
+
 To install: `./install.sh`
 
 ## Installation
