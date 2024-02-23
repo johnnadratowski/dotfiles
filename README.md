@@ -14,7 +14,7 @@ To install: `./install.sh`
 
 Uses [tmux](https://github.com/tmux/tmux/wiki) and [zsh](https://www.zsh.org/) with [oh-my-zsh](https://ohmyz.sh/).
 
-`.shellrc` will run a `~/scripts/init.sh` and a `~/local-startup/init.sh` for
+[.shellrc](.shellrc) will run a [~/scripts/init.sh](scripts/init.sh) and a `~/local-startup/init.sh` for
 startup files that shouldn't be in git.
 
 Supports vim mode, but also has emacs type bindings when you navigate.
@@ -37,7 +37,7 @@ Extensively uses Hammerspoon for Mac automation.  I use Karabiner to map
 CapsLock to Shift+ctrl+option+cmd for all the tools keybindings.
 The tools are either ran using a hotkey or they run in the toolbar
 
-The `init.lua` is the entry points.
+The [init.lua](_hammerspoon/init.lua) is the entry points.
 
 List of tools:
 
