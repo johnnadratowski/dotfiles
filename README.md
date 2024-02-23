@@ -14,7 +14,7 @@ To install: `./install.sh`
 
 Uses [tmux](https://github.com/tmux/tmux/wiki) and [zsh](https://www.zsh.org/) with [oh-my-zsh](https://ohmyz.sh/).
 
-[.shellrc](.shellrc) will run a [~/scripts/init.sh](scripts/init.sh) and a `~/local-startup/init.sh` for
+[.shellrc](_shellrc) will run a [~/scripts/init.sh](scripts/init.sh) and a `~/local-startup/init.sh` for
 startup files that shouldn't be in git.
 
 Supports vim mode, but also has emacs type bindings when you navigate.
