@@ -49,7 +49,7 @@ function! s:show_documentation()
   if (index(['vim','help'], &filetype) >= 0)
     execute 'h '.expand('<cword>')
   else
-    call CocAction('doHover')
+    call CocAction('definitionHover')
   endif
 endfunction
 
@@ -103,6 +103,9 @@ command! -nargs=? Fold :call     CocAction('fold', <f-args>)
 
 " Add `:OR` command for organize imports of the current buffer.
 command! -nargs=0 OR   :call     CocAction('runCommand', 'editor.action.organizeImport')
+
+" Run project wide ts build, must open quicklist after (:copen)
+command! -nargs=0 Tsc :call CocAction('runCommand', 'tsserver.watchBuild')
 
 " Add (Neo)Vim's native statusline support.
 " NOTE: Please see `:h coc-status` for integrations with external plugins that

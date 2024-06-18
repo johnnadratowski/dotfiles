@@ -11,14 +11,14 @@ let g:Lf_PreviewInPopup = 1
 let g:Lf_CommandMap = {'<C-K>': ['<C-p>'], '<C-J>': ['<C-n>']}
 
 command! -bang -nargs=* -complete=file LeaderfRg exec printf("Leaderf<bang> rg %s", escape('<args>', '\\'))
-nnoremap <leader>p :call CDRoot() <bar> :Leaderf file --popup --no-ignore<CR>
-nnoremap <C-p> :call CDGitRoot() <bar> :Leaderf file --popup --no-ignore<CR>
-nnoremap <C-n> :call CDRoot() <bar> :Leaderf buffer --popup --no-ignore<CR>
+nnoremap <leader>p :call CDRoot() <bar> :Leaderf file --popup<CR>
+nnoremap <C-p> :call CDGitRoot() <bar> :Leaderf file --popup<CR>
+nnoremap <C-n> :call CDRoot() <bar> :Leaderf buffer --popup<CR>
 nnoremap <leader>f :call CDRoot() <bar> :LeaderfRg --stayOpen 
 nnoremap <C-f> :call CDGitRoot() <bar> :Leaderf --stayOpen rg 
 xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! --stayOpen -F -e %s ", leaderf#Rg#visual())<CR>
 
 let g:Lf_WildIgnore = {
         \ 'dir': ['node_modules', 'vendor', '.svn','.git','.hg', '.mypy_cache', 'public'],
-        \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]','Pipfile.lock']
+        \ 'file': ['*.sw?','~$*','*.bak','*.exe','*.o','*.so','*.py[co]','Pipfile.lock','pi.txt']
         \}
