@@ -22,6 +22,7 @@ brew install  -f      \
   awscli              \
   coreutils           \
   diff-so-fancy       \
+  direnv              \
   drovio              \
   entr                \
   fd                  \

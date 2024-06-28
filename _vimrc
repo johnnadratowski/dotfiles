@@ -268,6 +268,7 @@ vnoremap > >gv
   autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
 
   if (has("nvim"))
+
     " Make escape work in the Neovim terminal.
     tnoremap <Esc> <C-\><C-n>
 
@@ -679,7 +680,6 @@ vnoremap > >gv
 
 
 
-
 " ==========================================================
 " Functions
 " ==========================================================
@@ -900,7 +900,24 @@ endfunction
 
 com! Cht call CheatSheet()      " Enable :CheatSheet to call the function
 
+function! DiffSelectionWithClipboard() range
+    let l:selection = getline(a:firstline-1, a:lastline)
+    tabnew
+    setlocal bufhidden=wipe buftype=nofile nobuflisted noswapfile
+    :file clipboard
+    :1put *
+    silent 0d_
+    diffthis
+    vertical new
+    setlocal bufhidden=wipe buftype=nofile nobuflisted noswapfile
+    :file selection
+    call setline(1, l:selection)
+    silent 0d_
+    diffthis
+endfunction
 
+" Map the function to a key combination, for example <leader>d
+xnoremap <M-d> :<C-u>'<,'>call DiffSelectionWithClipboard()<CR>
 
 " ==========================================================
 " Display and Themes
