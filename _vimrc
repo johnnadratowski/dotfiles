@@ -10,6 +10,7 @@ Plug 'airblade/vim-gitgutter'
 Plug 'chrisbra/NrrwRgn'
 Plug 'christoomey/vim-tmux-navigator'
 Plug 'dbeniamine/cheat.sh-vim'
+Plug 'direnv/direnv.vim'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'fatih/vim-go'
 Plug 'glacambre/firenvim'
@@ -35,6 +36,8 @@ Plug 'maxbrunsfeld/vim-emacs-bindings'
 Plug 'mbbill/undotree'
 Plug 'mhinz/vim-startify'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'nvim-tree/nvim-web-devicons'
+Plug 'OXY2DEV/markview.nvim'
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vim-colors-pencil' " Theme
 Plug 'preservim/vim-wordchipper' " Shortcuts for insert mode
