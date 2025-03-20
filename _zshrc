@@ -43,7 +43,7 @@ COMPLETION_WAITING_DOTS="true"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
-plugins=(aws history-substring-search dirhistory docker git git-extras jsontools mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant web-search wd zsh-vim-mode fzf)
+plugins=(aws direnv history-substring-search dirhistory docker git git-extras jsontools mvn node npm pep8 pip python pylint redis-cli tmux urltools vagrant web-search wd zsh-vim-mode fzf)
 export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window down:3:wrap --bind '?:toggle-preview'"
 
 # AUTOLOADS
