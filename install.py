@@ -12,6 +12,7 @@ TARGET_BASE = os.path.expanduser("~")
 
 EXTRA_FILES = {
     'scripts': None,
+    'nvim': '.config/nvim',
     'zsh-custom/plugins/zsh-vim-mode.plugin.zsh': "./zsh-vim-mode/zsh-vim-mode.plugin.zsh",
     'zsh-custom/themes/agkozak.zsh-theme': "./agkozak-zsh-prompt/agkozak-zsh-prompt.plugin.zsh",
 }
