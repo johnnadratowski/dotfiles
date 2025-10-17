@@ -37,7 +37,7 @@ Plug 'mbbill/undotree'
 Plug 'mhinz/vim-startify'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'nvim-tree/nvim-web-devicons'
-Plug 'OXY2DEV/markview.nvim'
+"Plug 'OXY2DEV/markview.nvim'
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vim-colors-pencil' " Theme
 Plug 'preservim/vim-wordchipper' " Shortcuts for insert mode
@@ -113,7 +113,8 @@ set expandtab               " Use spaces, not tabs, for autoindent/tab key.
 set ffs=unix,dos,mac        " Try recognizing dos, unix, and mac line endings.
 set foldcolumn=0            " space of folds to be shown in sidebar
 set foldlevel=2             " fold to 2nd level
-set foldmethod=indent       " allow us to fold on indents
+set foldmethod=marker       " allow us to fold on indents
+set foldmarker=#region,#endregion " fold based on #region / #endregion
 set grepprg=ag              " replace the default grep program with ag
 set hidden                  " CoC - TextEdit might fail if hidden is not set.
 set history=1000            " Command history
@@ -222,6 +223,8 @@ augroup myvimrc
   au!
   au BufWritePost .vimrc,_vimrc,vimrc,*/_vim/*,*/.vim/*.gvimrc,_gvimrc,gvimrc so $MYVIMRC | if has('gui_running') | so $MYGVIMRC | endif | echo "vimrc reloaded"
 augroup END
+
+vnoremap <leader>v :CreateRegion<CR>
 
 " Stay in visual selection mode when changing indent
 vnoremap < <gv
@@ -686,6 +689,27 @@ vnoremap > >gv
 " ==========================================================
 " Functions
 " ==========================================================
+
+function! CreateRegionFold() range
+  " Get the first line (the comment)
+  let firstline = getline(a:firstline)
+
+  " Extract indentation from the first line
+  let indent = matchstr(firstline, '^\s*')
+
+  " Extract comment text (remove comment markers)
+  let comment_text = substitute(firstline, '^\s*//\s*', '', '')
+  let comment_text = substitute(comment_text, '^\s*/\*\s*', '', '')
+  let comment_text = substitute(comment_text, '\s*\*/\s*$', '', '')
+  let comment_text = substitute(comment_text, '^\s*#\s*', '', '')
+
+  " Insert #region at the first line with proper indentation
+  call setline(a:firstline, indent . '// #region ' . comment_text)
+
+  " Insert #endregion at the last line + 1 with proper indentation
+  call append(a:lastline, indent . '// #endregion')
+endfunction
+command! -range CreateRegion <line1>,<line2>call CreateRegionFold()
 
 function! WipeoutBuffers()
   " list of *all* buffer numbers
