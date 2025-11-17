@@ -8,10 +8,12 @@ fi
 
 if ! which brew; then
 	echo "Install brew"
-	ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+	/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
-brew tap homebrew/cask-fonts
+if ! $(which brew); then
+  PATH="$PATH:/opt/homebew/bin"
+fi
 
 echo "Update brew"
 brew update
@@ -37,12 +39,14 @@ brew install  -f      \
   mercurial           \
   moreutils           \
   ncdu                \
+  neovim              \
   node                \
   noti                \
   npm                 \
   rg                  \
   rust                \
   pipenv              \
+  pipx                \
   prettyping          \
   python3             \
   the_silver_searcher \
@@ -50,12 +54,14 @@ brew install  -f      \
   tldr                \
   tmux                \
   tree                \
+  uv                  \
   veracrypt           \
   vim                 \
   visual-studio-code  \
   wget                \
   zsh
 
+brew install --cask iterm2
 brew install --cask font-fira-code
 brew install --cask font-hack-nerd-font
 

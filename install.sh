@@ -7,14 +7,20 @@ function log () {
   echo -e "${GREEN}\n======== $1\n${END}"
 }
 
+log "install oh my zsh"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
 log "Installing files"
 
 ./install.py
 
 ./brew_install.sh
 
+log "Install NVim Python Modules"
+pipx install --upgrade pynvim
+
 log "Symlinking bin folders"
-ln -s ~/scripts/lib/ocr ~/bin
+ln -s ~/scripts/lib/ocr ~/bin/ocr
 
 log "Install powerline fonts"
 (
@@ -31,11 +37,14 @@ pip3 install -r ./requirements.txt
 
 log "Install NVM"
 mkdir -p ~/.nvm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.3/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 
 log "Install Cheat Sheet"
 curl https://cht.sh/:cht.sh > ~/bin/cht.sh
 chmod +x ~/bin/cht.sh
+
+log "Install Claude Code"
+curl -fsSL https://claude.ai/install.sh | bash
 
 curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 
@@ -53,12 +62,5 @@ log "compiling tmux-thumbs"
 (
   cd ~/.tmux/plugins/tmux-thumbs
   cargo build --release
-)
-
-log "install languagetool"
-(
-  cd ~
-  wget https://languagetool.org/download/LanguageTool-5.9.zip
-  unzip LanguageTool-5.9.zip
 )
 
