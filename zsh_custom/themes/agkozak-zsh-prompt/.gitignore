@@ -1,0 +1,5 @@
+*.zwc
+tags
+._zplugin/
+._zinit/
+.zplugin_lstupd
