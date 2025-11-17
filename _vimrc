@@ -26,6 +26,8 @@ Plug 'junegunn/fzf.vim' " needed for previews
 Plug 'junegunn/goyo.vim' 
 Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
+Plug 'nvim-lua/plenary.nvim'
+Plug 'greggh/claude-code.nvim'
 "Plug 'junegunn/vim-peekaboo' " Issue - makes teh cmd line window height maximum
 Plug 'madox2/vim-ai'
 Plug 'kchmck/vim-coffee-script'
@@ -233,6 +235,11 @@ vnoremap > >gv
 " ==========================================================
 " Plugin Settings + Keymaps
 " ==========================================================
+
+" ClaudeCode {{{
+ lua require('claude-code').setup()
+" }}}
+
 
 " vim-ai {{{
   let g:gpt_api_key = $GPT_API_TOKEN
