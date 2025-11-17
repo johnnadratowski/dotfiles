@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import sys
-from distutils.spawn import find_executable
 import shutil
 from subprocess import call
 import platform
@@ -89,9 +88,6 @@ def run_files(fn, **extra):
 
 
 def update_submodules():
-    if not find_executable('git'):
-        print("Git not installed - unable to update submodules")
-        return
     call(["git", "submodule", "update", "--init", "--recursive"])
     call([
         "git", "submodule", "foreach", "--recursive", "git", "pull", "origin",

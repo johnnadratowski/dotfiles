@@ -1,1 +1,0 @@
-./zsh-vim-mode/zsh-vim-mode.plugin.zsh
