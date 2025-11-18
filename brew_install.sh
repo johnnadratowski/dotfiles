@@ -59,8 +59,10 @@ brew install  -f      \
   vim                 \
   visual-studio-code  \
   wget                \
+  yarn                \
   zsh
 
+brew install --cask copyq
 brew install --cask iterm2
 brew install --cask font-fira-code
 brew install --cask font-hack-nerd-font
