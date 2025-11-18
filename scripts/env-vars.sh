@@ -52,7 +52,8 @@ export NVM_DIR="$HOME/.nvm"
 # Java stuff
 if [ -f /usr/libexec/java_home ]
 then
-    export JAVA_HOME=$(/usr/libexec/java_home -v 1.8)
+    export JAVA_HOME=$(/usr/libexec/java_home -v 1.8 2>&1 /dev/null)
+else
 fi
 
 # Pipx install location
