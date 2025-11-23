@@ -474,7 +474,20 @@ vnoremap > >gv
 
 " vim-lightline {{{
   let g:lightline = {
-        \ 'colorscheme': 'one',
+        \ 'colorscheme': 'wombat',
+        \ 'mode_map': {
+        \ 'n' : 'N',
+        \ 'i' : 'I',
+        \ 'R' : 'R',
+        \ 'v' : 'V',
+        \ 'V' : 'VL',
+        \ "\<C-v>": 'VB',
+        \ 'c' : 'C',
+        \ 's' : 'S',
+        \ 'S' : 'SL',
+        \ "\<C-s>": 'SB',
+        \ 't': 'T',
+        \ },
         \ 'active': {
         \   'left': [ [ 'mode', 'paste' ],
         \             [ 'gitroot', 'gitbranch', 'gitstatus', 'readonly', 'filename', 'modified' ] ]
@@ -485,6 +498,13 @@ vnoremap > >gv
         \   'gitroot': 'RootName'
         \ },
         \ }
+  if ! exists('g:lightline')
+    let g:lightline = {}
+  endif
+  if ! exists('g:lightline.component')
+    let g:lightline.component = {}
+  endif
+  let g:lightline.component.filename = '%F'
 " }}}
 
 
