@@ -12,7 +12,7 @@
     default = matching
 
 [core]
-    editor = code
+	editor = nvim
     pager = less -R
 
 [pager]

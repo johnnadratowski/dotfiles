@@ -973,6 +973,15 @@ endfunction
 " Map the function to a key combination, for example <leader>d
 xnoremap <M-d> :<C-u>'<,'>call DiffSelectionWithClipboard()<CR>
 
+function! YankLineInfo()
+    let l:filepath = expand("%:p")
+    let l:linenr = line(".")
+    let l:linecontent = getline(".")
+    let l:clipboard_content = printf("%s:%d: %s", l:filepath, l:linenr, l:linecontent)
+    call setreg('+', l:clipboard_content)
+endfunction
+
+nnoremap <leader>yl :call YankLineInfo()<CR>
 " ==========================================================
 " Display and Themes
 " ==========================================================
