@@ -5,6 +5,7 @@ _vim/ropevim/src*
 _vim/ropevim/pylibs*
 *.netrwhist
 _vim/.netrwhist
+_vim/plugged/
 *.swp
 *.pyc
 history.sqlite
