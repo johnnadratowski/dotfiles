@@ -1,1 +1,11 @@
-/Users/john/git/dotfiles/_claude/settings.json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0
+  },
+  "enabledPlugins": {
+    "claude-notifications-go@claude-notifications-go": true
+  },
+  "alwaysThinkingEnabled": false
+}
