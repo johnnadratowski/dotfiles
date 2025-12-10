@@ -28,7 +28,6 @@ Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
 Plug 'nvim-lua/plenary.nvim'
 Plug 'greggh/claude-code.nvim'
-"Plug 'junegunn/vim-peekaboo' " Issue - makes teh cmd line window height maximum
 Plug 'madox2/vim-ai'
 Plug 'kchmck/vim-coffee-script'
 Plug 'kristijanhusak/vim-dadbod-ui'
@@ -39,7 +38,6 @@ Plug 'mbbill/undotree'
 Plug 'mhinz/vim-startify'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'nvim-tree/nvim-web-devicons'
-"Plug 'OXY2DEV/markview.nvim'
 Plug 'pbogut/vim-dadbod-ssh'
 Plug 'preservim/vim-colors-pencil' " Theme
 Plug 'preservim/vim-wordchipper' " Shortcuts for insert mode
@@ -51,13 +49,12 @@ Plug 'reedes/vim-pencil' " Super-powered writing things
 Plug 'reedes/vim-textobj-sentence' " Treat sentences as text objects
 Plug 'reedes/vim-textobj-quote' " Treat quotes as text objects
 Plug 'reedes/vim-wordy' " Weasel words and passive voice
-Plug 'ryanoasis/vim-devicons'
+Plug 'ryanoasis/vim-devicons' " For vim compatibility (nvim-web-devicons for neovim)
 Plug 'sebdah/vim-delve'
 Plug 'sheerun/vim-wombat-scheme'
 Plug 'stephpy/vim-yaml'
 Plug 'thaerkh/vim-indentguides'
 Plug 'thaerkh/vim-workspace'
-Plug 'tmhedberg/matchit'
 Plug 'tpope/vim-abolish'
 Plug 'tpope/vim-commentary'
 Plug 'tpope/vim-dadbod'
@@ -102,7 +99,11 @@ let g:coc_global_extensions = [
 " Allow control characters to pass to vim for shortcuts
 silent !stty -ixon > /dev/null 2>/dev/null
 
-set nocompatible              " Don't be compatible with vi
+" Enable builtin matchit (extended % matching)
+if !has('nvim')
+  packadd! matchit
+endif
+
 let mapleader=" "             " Map leader key to space
 
 set clipboard=unnamed       " Use system clipboard
@@ -127,7 +128,6 @@ set laststatus=2            " Always show statusline, even if only 1 window.
 set lazyredraw              " Don't redraw screen in middle of macro
 set linebreak               " don't wrap textin the middle of a word
 set list                    " Show Whitespaces
-set ls=2                    " allways show status line
 set matchpairs+=<:>         " show matching <> (html mainly) as well
 set modeline                " Allow vim options to be embedded in files;
 set modelines=5             " they must be within the first or last 5 lines.
@@ -199,9 +199,6 @@ cmap W! w !sudo tee % >/dev/null
 map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
-" Reload all buffers from disk
-" map <leader>r :bufdo e!<CR>
-
 " Close Window
 map <leader>x :bp \| bd #<CR>
 map <leader>w :clo<CR>
@@ -231,6 +228,24 @@ vnoremap <leader>v :CreateRegion<CR>
 " Stay in visual selection mode when changing indent
 vnoremap < <gv
 vnoremap > >gv
+
+" Resize splits with arrow keys
+nnoremap <Up> :resize +2<CR>
+nnoremap <Down> :resize -2<CR>
+nnoremap <Left> :vertical resize -2<CR>
+nnoremap <Right> :vertical resize +2<CR>
+
+" Move lines up/down
+nnoremap <A-j> :m .+1<CR>==
+nnoremap <A-k> :m .-2<CR>==
+vnoremap <A-j> :m '>+1<CR>gv=gv
+vnoremap <A-k> :m '<-2<CR>gv=gv
+
+" Keep cursor centered when scrolling/searching
+nnoremap n nzzzv
+nnoremap N Nzzzv
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
 
 " ==========================================================
 " Plugin Settings + Keymaps
@@ -276,9 +291,12 @@ vnoremap > >gv
 
 " DBUI {{{
   nmap <leader>d :DBUIToggle<CR>
-  autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
-  autocmd filetype dbui nnoremap <buffer> <c-k> :TmuxNavigateUp<CR>
-  autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
+  augroup dbui
+    autocmd!
+    autocmd filetype sql nnoremap <buffer> <Enter> :DB<CR>
+    autocmd filetype dbui nnoremap <buffer> <c-k> :TmuxNavigateUp<CR>
+    autocmd filetype dbui nnoremap <buffer> <c-j> :TmuxNavigateDown<CR>
+  augroup END
 
   if (has("nvim"))
 
@@ -309,7 +327,7 @@ vnoremap > >gv
     nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
     nmap <buffer> <C-[> :bn<CR>
     "Leader-d duplicates file
-    autocmd filetype netrw nnoremap <silent> <Leader>d :clear<bar>silent exec "!cp '%:p' '%:p:h/%:t:r-copy.%:e'"<bar>redraw<bar>echo "Copied " . expand('%:t') . ' to ' . expand('%:t:r') . '-copy.' . expand('%:e')<cr>
+    nnoremap <buffer> <silent> <Leader>d :clear<bar>silent exec "!cp '%:p' '%:p:h/%:t:r-copy.%:e'"<bar>redraw<bar>echo "Copied " . expand('%:t') . ' to ' . expand('%:t:r') . '-copy.' . expand('%:e')<cr>
   endfunction
 
 " }}}
@@ -341,11 +359,6 @@ vnoremap > >gv
     let g:textobj#sentence#select = 's'
     let g:textobj#sentence#move_p = '('
     let g:textobj#sentence#move_n = ')'
-
-    " toggle goyo
-    " Changed to use for GPT
-    " May remap in future
-    " nmap <leader>G :Goyo<CR>
 
     " Litecorrect fix word
     nnoremap <M-s> [s1z=<c-o>
@@ -393,23 +406,28 @@ vnoremap > >gv
     Limelight!
   endfunction
 
-  autocmd Filetype markdown,mkd,md,text call SetMDOptions()
-  autocmd! User GoyoEnter nested call <SID>goyo_enter()
-  autocmd! User GoyoLeave nested call <SID>goyo_leave()
+  augroup markdown
+    autocmd!
+    autocmd Filetype markdown,mkd,md,text call SetMDOptions()
+    autocmd User GoyoEnter nested call <SID>goyo_enter()
+    autocmd User GoyoLeave nested call <SID>goyo_leave()
+  augroup END
 
 " }}}
 
 " stylus {{{
-
-  autocmd FileType stylus setlocal commentstring=//\ %s
-
+  augroup stylus
+    autocmd!
+    autocmd FileType stylus setlocal commentstring=//\ %s
+  augroup END
 " }}}
 
 " typescript {{{
-
-  autocmd FileType typescript setlocal re=2
-  autocmd FileType vue setlocal re=2
-
+  augroup typescript_vue
+    autocmd!
+    autocmd FileType typescript setlocal re=2
+    autocmd FileType vue setlocal re=2
+  augroup END
 " }}}
 
 " NrrwRng {{{
@@ -439,11 +457,6 @@ vnoremap > >gv
   nmap <silent> t<C-s> :let test#project_root=GetGitRoot(expand('%')) \| TestSuite<CR>
   nmap <silent> t<C-l> :let test#project_root=GetGitRoot(expand('%')) \| TestLast<CR>
   nmap <silent> t<C-g> :let test#project_root=GetGitRoot(expand('%')) \| TestVisit<CR>
-
-  " augroup golang_test
-  "   au BufWritePost *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestNearest
-  "   au BufEnter,BufLeave *.spec.*,*_test.go :let test#project_root=GetGitRoot(expand('%')) | TestFile
-  " augroup END
 
 " }}}
 
@@ -497,14 +510,10 @@ vnoremap > >gv
         \   'gitstatus': 'GitStatus',
         \   'gitroot': 'RootName'
         \ },
+        \ 'component': {
+        \   'filename': '%F'
+        \ },
         \ }
-  if ! exists('g:lightline')
-    let g:lightline = {}
-  endif
-  if ! exists('g:lightline.component')
-    let g:lightline.component = {}
-  endif
-  let g:lightline.component.filename = '%F'
 " }}}
 
 
@@ -593,11 +602,11 @@ vnoremap > >gv
 
 " vim-commentary {{{
   augroup vim_commentary
+    autocmd!
     autocmd FileType vim setlocal commentstring=\"\ %s
     autocmd FileType vimrc setlocal commentstring=\"\ %s
     autocmd FileType vue setlocal commentstring=//\ %s
   augroup END
-
 " }}}
 
 
@@ -802,10 +811,6 @@ function! ToggleWrap()
     noremap  <buffer> <silent> j gj
     noremap  <buffer> <silent> <Home> g<Home>
     noremap  <buffer> <silent> <End>  g<End>
-    " inoremap <buffer> <silent> k   <C-o>gk
-    " inoremap <buffer> <silent> j <C-o>gj
-    " inoremap <buffer> <silent> <Home> <C-o>g<Home>
-    " inoremap <buffer> <silent> <End>  <C-o>g<End>
   endif
 endfunction
 
@@ -987,7 +992,6 @@ nnoremap <leader>yl :call YankLineInfo()<CR>
 " ==========================================================
 
 if has("gui_running")
-   "set guifont=Roboto\ Mono\ Light\ for\ Powerline
    set guifont=Hack\ Regular\ Nerd\ Font\ Complete\ Mono
 else
    set t_Co=256
@@ -1002,8 +1006,6 @@ endif
 
 " Enable true color
 if exists('+termguicolors')
-  " let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
-  " let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
   set termguicolors
 endif
 
@@ -1020,28 +1022,14 @@ augroup END
   let g:molokai_override_bg = 0
   let g:molokai_original = 0
 
-  "autocmd vimenter * ++nested colorscheme molokai
-  
   " Set highlight type
-  if has("gui_running")
-    hi clear SpellRare
-    hi SpellRare gui=undercurl guisp=yellow
-    hi clear SpellBad
-    hi SpellBad gui=undercurl guisp=red
-    hi clear CocWarningHighlight
-    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
-    hi clear CocErrorHighlight
-    hi CocErrorHighlight gui=undercurl guisp=red 
-  else
-    hi clear SpellRare
-    hi SpellRare gui=undercurl guisp=yellow
-    hi clear SpellBad
-    hi SpellBad gui=undercurl guisp=red
-    hi clear CocWarningHighlight
-    hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
-    hi clear CocErrorHighlight
-    hi CocErrorHighlight gui=undercurl guisp=red 
-  endif
+  hi clear SpellRare
+  hi SpellRare gui=undercurl guisp=yellow
+  hi clear SpellBad
+  hi SpellBad gui=undercurl guisp=red
+  hi clear CocWarningHighlight
+  hi CocWarningHighlight ctermfg=yellow guifg=#c4ab39 gui=undercurl term=undercurl
+  hi clear CocErrorHighlight
+  hi CocErrorHighlight gui=undercurl guisp=red
 
 " }}}
-"
