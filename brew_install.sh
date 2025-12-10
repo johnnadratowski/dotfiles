@@ -49,6 +49,7 @@ brew install  -f      \
   pipx                \
   prettyping          \
   python3             \
+  python-setuptools   \
   the_silver_searcher \
   tesseract           \
   tldr                \
