@@ -14,6 +14,9 @@ EXTRA_FILES = {
     'nvim': '.config/nvim',
     'zsh-custom/plugins/zsh-vim-mode.plugin.zsh': "./zsh-vim-mode/zsh-vim-mode.plugin.zsh",
     'zsh-custom/themes/agkozak.zsh-theme': "./agkozak-zsh-prompt/agkozak-zsh-prompt.plugin.zsh",
+    'claude-config/settings.json': '.claude/settings.json',
+    'claude-config/agents': '.claude/agents',
+    'claude-config/scripts': '.claude/scripts',
 }
 
 DIRS = [
@@ -113,16 +116,6 @@ def main():
     make_dirs(DIRS)
 
     run_files(link_file, **EXTRA_FILES)
-
-    if 'install' in sys.argv:
-        if platform.system() == 'Darwin':
-            call(['sudo', os.path.abspath('./brew_install.sh')])
-        elif shutil.which('pacman'):
-            call(['sudo', os.path.abspath('./pac_install.sh')])
-        else:
-            call(['sudo', os.path.abspath('./apt_install.sh')])
-
-        call(['sudo', os.path.abspath('./install.sh')])
 
 
 if __name__ == '__main__':

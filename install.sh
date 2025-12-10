@@ -12,7 +12,7 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 
 log "Installing files"
 
-./install.py
+./symlink.py
 
 ./brew_install.sh
 
