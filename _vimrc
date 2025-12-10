@@ -23,7 +23,6 @@ Plug 'johnnadratowski/vim-pug'
 Plug 'johnnadratowski/vim-stylus'
 Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
 Plug 'junegunn/fzf.vim' " needed for previews
-Plug 'junegunn/goyo.vim' 
 Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
 Plug 'nvim-lua/plenary.nvim'
@@ -252,7 +251,9 @@ nnoremap <C-u> <C-u>zz
 " ==========================================================
 
 " ClaudeCode {{{
- lua require('claude-code').setup()
+  if has('nvim')
+    lua require('claude-code').setup()
+  endif
 " }}}
 
 
@@ -326,8 +327,30 @@ nnoremap <C-u> <C-u>zz
   function! NetrwMapping()
     nnoremap <buffer> <c-l> :TmuxNavigateRight<CR>
     nmap <buffer> <C-[> :bn<CR>
-    "Leader-d duplicates file
-    nnoremap <buffer> <silent> <Leader>d :clear<bar>silent exec "!cp '%:p' '%:p:h/%:t:r-copy.%:e'"<bar>redraw<bar>echo "Copied " . expand('%:t') . ' to ' . expand('%:t:r') . '-copy.' . expand('%:e')<cr>
+    "Leader-d duplicates file under cursor
+    nnoremap <buffer> <silent> <Leader>d :call NetrwDuplicateFile()<CR>
+  endfunction
+
+  function! NetrwDuplicateFile()
+    let l:curfile = netrw#Call("NetrwGetWord")
+    if l:curfile == ''
+      echo "No file under cursor"
+      return
+    endif
+    let l:curdir = b:netrw_curdir
+    let l:srcpath = l:curdir . '/' . l:curfile
+    " Get extension and base name
+    let l:ext = fnamemodify(l:curfile, ':e')
+    let l:base = fnamemodify(l:curfile, ':r')
+    if l:ext != ''
+      let l:destfile = l:base . '-copy.' . l:ext
+    else
+      let l:destfile = l:curfile . '-copy'
+    endif
+    let l:destpath = l:curdir . '/' . l:destfile
+    silent exec "!cp " . shellescape(l:srcpath) . " " . shellescape(l:destpath)
+    redraw!
+    echo "Copied " . l:curfile . " to " . l:destfile
   endfunction
 
 " }}}
@@ -382,35 +405,9 @@ nnoremap <C-u> <C-u>zz
     call litecorrect#init()
   endfunction
 
-  function! s:goyo_enter()
-    if executable('tmux') && strlen($TMUX)
-      silent !tmux set status off
-      silent !tmux list-panes -F '\#F' | grep -q Z || tmux resize-pane -Z
-    endif
-    set noshowmode
-    set noshowcmd
-    setlocal showbreak=NONE
-    "set scrolloff=999
-    Limelight
-  endfunction
-
-  function! s:goyo_leave()
-    if executable('tmux') && strlen($TMUX)
-      silent !tmux set status on
-      silent !tmux list-panes -F '\#F' | grep -q Z && tmux resize-pane -Z
-    endif
-    set scrolloff=5
-    set showmode
-    set showcmd
-    setlocal showbreak=➡\
-    Limelight!
-  endfunction
-
   augroup markdown
     autocmd!
     autocmd Filetype markdown,mkd,md,text call SetMDOptions()
-    autocmd User GoyoEnter nested call <SID>goyo_enter()
-    autocmd User GoyoLeave nested call <SID>goyo_leave()
   augroup END
 
 " }}}
