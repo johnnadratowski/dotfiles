@@ -333,6 +333,7 @@ nnoremap <C-u> <C-u>zz
     require('claudecode').setup({
       -- Disable default keymaps, we'll set our own with <leader>C
       keys = { disable = true },
+      focus_after_send = true,
       diff_opts = {
         layout = "vertical",
         open_in_new_tab = false,
@@ -347,6 +348,7 @@ nnoremap <C-u> <C-u>zz
           border = "single",
         }
       },
+      terminal_cmd = 'SHELL="$(which bash)" claude'
     })
 EOF
     " Neovim keybindings using <leader><Tab> prefix
@@ -355,8 +357,8 @@ EOF
     nmap <leader><Tab>r <cmd>ClaudeCode --resume<cr>
     nmap <leader><Tab><Tab> <cmd>ClaudeCode --continue<cr>
     nmap <leader><Tab>m <cmd>ClaudeCodeSelectModel<cr>
-    nmap <leader><Tab>b <cmd>ClaudeCodeAdd %<cr><cmd>ClaudeCodeFocus<cr>
-    xmap <leader><Tab>s <cmd>ClaudeCodeSend<cr><cmd>ClaudeCodeFocus<cr>
+    nmap <leader><Tab>b <cmd>ClaudeCodeAdd %<cr>
+    xmap <leader><Tab>s <cmd>ClaudeCodeSend<cr>
     nmap <leader><Tab>a <cmd>ClaudeCodeDiffAccept<cr>
     nmap <leader><Tab>d <cmd>ClaudeCodeDiffDeny<cr>
 
