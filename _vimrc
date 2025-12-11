@@ -64,6 +64,10 @@ Plug 'tpope/vim-sensible'
 Plug 'tpope/vim-surround'
 Plug 'tpope/vim-vinegar'
 Plug 'ttibsi/pre-commit.nvim'
+if has('nvim')
+  Plug 'folke/snacks.nvim'
+  Plug 'coder/claudecode.nvim'
+endif
 Plug 'vim-test/vim-test'
 Plug 'wesQ3/vim-windowswap'
 Plug 'yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
@@ -193,6 +197,69 @@ cmap W! w !sudo tee % >/dev/null
 map <leader>^ <c-w>_<c-w>\|
 map <leader>= <c-w>=
 
+" Helper to temporarily disable winfixwidth/winfixheight on all windows
+function! s:DisableWinFix()
+  let l:saved = {}
+  for winnr in range(1, winnr('$'))
+    let winid = win_getid(winnr)
+    let l:saved[winid] = {
+          \ 'fixwidth': getwinvar(winnr, '&winfixwidth'),
+          \ 'fixheight': getwinvar(winnr, '&winfixheight')
+          \ }
+    call setwinvar(winnr, '&winfixwidth', 0)
+    call setwinvar(winnr, '&winfixheight', 0)
+  endfor
+  return l:saved
+endfunction
+
+function! s:RestoreWinFix(saved)
+  for winnr in range(1, winnr('$'))
+    let winid = win_getid(winnr)
+    if has_key(a:saved, winid)
+      call setwinvar(winnr, '&winfixwidth', a:saved[winid]['fixwidth'])
+      call setwinvar(winnr, '&winfixheight', a:saved[winid]['fixheight'])
+    endif
+  endfor
+endfunction
+
+" Notify terminal windows of resize
+function! s:RefreshTerminals()
+  let l:curwin = win_getid()
+  for winnr in range(1, winnr('$'))
+    let bufnr = winbufnr(winnr)
+    if getbufvar(bufnr, '&buftype') == 'terminal'
+      call win_gotoid(win_getid(winnr))
+      " Trigger resize by briefly entering and exiting terminal mode
+      if has('nvim')
+        call feedkeys("\<C-\>\<C-n>i\<C-\>\<C-n>", 'n')
+      endif
+    endif
+  endfor
+  call win_gotoid(l:curwin)
+endfunction
+
+" Toggle fullscreen for current split
+let g:fullscreen_window = 0
+function! ToggleSplitFullscreen()
+  let l:saved_fix = s:DisableWinFix()
+
+  if g:fullscreen_window == win_getid()
+    execute "normal! \<C-w>="
+    let g:fullscreen_window = 0
+  elseif g:fullscreen_window != 0
+    execute "normal! \<C-w>=\<C-w>_\<C-w>|"
+    let g:fullscreen_window = win_getid()
+  else
+    execute "normal! \<C-w>_\<C-w>|"
+    let g:fullscreen_window = win_getid()
+  endif
+
+  call s:RestoreWinFix(l:saved_fix)
+  call s:RefreshTerminals()
+endfunction
+nnoremap <C-a> :call ToggleSplitFullscreen()<CR>
+tnoremap <C-a> <C-\><C-n>:call ToggleSplitFullscreen()<CR>i
+
 " Close Window
 map <leader>x :bp \| bd #<CR>
 map <leader>w :clo<CR>
@@ -205,7 +272,6 @@ noremap <silent> <leader>W :call ToggleWrap()<CR>
 
 " Close all non-buffer windows
 nnoremap <silent> <Plug>(close-side-windows) :cclo <bar> :VimuxCloseRunner<CR>
-nmap <C-m> <Plug>(close-side-windows)
 
 " Quit window
 nnoremap <C-q> :execute "normal \<Plug>(close-side-windows)" <bar> :qa<CR>
@@ -223,11 +289,25 @@ vnoremap <leader>v :CreateRegion<CR>
 vnoremap < <gv
 vnoremap > >gv
 
-" Resize splits with arrow keys
-nnoremap <Up> :resize +2<CR>
-nnoremap <Down> :resize -2<CR>
-nnoremap <Left> :vertical resize -2<CR>
-nnoremap <Right> :vertical resize +2<CR>
+" Resize splits with arrow keys (handles winfixwidth/height)
+function! ResizeWindow(dir)
+  let l:saved_fix = s:DisableWinFix()
+  if a:dir == 'up'
+    resize +2
+  elseif a:dir == 'down'
+    resize -2
+  elseif a:dir == 'left'
+    vertical resize -2
+  elseif a:dir == 'right'
+    vertical resize +2
+  endif
+  call s:RestoreWinFix(l:saved_fix)
+  call s:RefreshTerminals()
+endfunction
+nnoremap <Up> :call ResizeWindow('up')<CR>
+nnoremap <Down> :call ResizeWindow('down')<CR>
+nnoremap <Left> :call ResizeWindow('left')<CR>
+nnoremap <Right> :call ResizeWindow('right')<CR>
 
 " Move lines up/down
 nnoremap <A-j> :m .+1<CR>==
@@ -247,7 +327,41 @@ nnoremap <C-u> <C-u>zz
 
 " ClaudeCode {{{
   if has('nvim')
-    lua require('claude-code').setup()
+    lua << EOF
+    require('claudecode').setup({
+      -- Disable default keymaps, we'll set our own with <leader>C
+      keys = { disable = true },
+      diff_opts = {
+        layout = "vertical",
+        open_in_new_tab = false,
+        keep_terminal_focus = true,
+      },
+    })
+EOF
+    " Neovim keybindings using <leader>C prefix
+    nmap <leader>Cc <cmd>ClaudeCode<cr>
+    nmap <leader>Cf <cmd>ClaudeCodeFocus<cr>
+    nmap <leader>Cr <cmd>ClaudeCode --resume<cr>
+    nmap <leader>CC <cmd>ClaudeCode --continue<cr>
+    nmap <leader>Cm <cmd>ClaudeCodeSelectModel<cr>
+    nmap <leader>Cb <cmd>ClaudeCodeAdd %<cr>
+    xmap <leader>Cs <cmd>ClaudeCodeSend<cr>
+    nmap <leader>Ca <cmd>ClaudeCodeDiffAccept<cr>
+    nmap <leader>Cd <cmd>ClaudeCodeDiffDeny<cr>
+
+    " Fix Cmd+hjkl navigation in Claude terminal (macOS sends D-h, D-j, etc.)
+    augroup claudecode_terminal
+      autocmd!
+      autocmd TermOpen *claude* tnoremap <buffer> <c-h> <C-\><C-n>:TmuxNavigateLeft<CR>
+      autocmd TermOpen *claude* tnoremap <buffer> <c-j> <C-\><C-n>:TmuxNavigateDown<CR>
+      autocmd TermOpen *claude* tnoremap <buffer> <c-k> <C-\><C-n>:TmuxNavigateUp<CR>
+      autocmd TermOpen *claude* tnoremap <buffer> <c-l> <C-\><C-n>:TmuxNavigateRight<CR>
+    augroup END
+  else
+    " Vim fallback - basic terminal commands for Claude CLI
+    nmap <leader>Cc :term claude<cr>
+    nmap <leader>Cr :term claude --resume<cr>
+    nmap <leader>CC :term claude --continue<cr>
   endif
 " }}}
 
@@ -611,7 +725,7 @@ nnoremap <C-u> <C-u>zz
 
 " vim-windowswap {{{
   let g:windowswap_map_keys = 0 "prevent default bindings
-  nnoremap <silent> <leader>m :call WindowSwap#EasyWindowSwap()<CR>
+  nnoremap <silent> <leader>s :call WindowSwap#EasyWindowSwap()<CR>
 
 " }}}
 
