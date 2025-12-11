@@ -1,4 +1,29 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npm run typecheck:*)",
+      "Bash(npm run lint)",
+      "Bash(npx eslint:*)",
+      "Bash(forge test:*)",
+      "Bash(npm run sync:*)",
+      "Bash(make:*)",
+      "Bash(cat:*)",
+      "Bash(npx next build:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run tsc:*)",
+      "Bash(find:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(xargs ls:*)",
+      "Bash(yarn tsc:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(grep:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "defaultMode": "default"
+  },
   "statusLine": {
     "type": "command",
     "command": "npx -y ccstatusline@latest",

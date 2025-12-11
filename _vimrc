@@ -8,6 +8,7 @@ Plug 'antoinemadec/coc-fzf', {'branch': 'release'}
 Plug 'AndrewRadev/sideways.vim'
 Plug 'airblade/vim-gitgutter'
 Plug 'chrisbra/NrrwRgn'
+Plug 'chrisbra/matchit'
 Plug 'christoomey/vim-tmux-navigator'
 Plug 'dbeniamine/cheat.sh-vim'
 Plug 'direnv/direnv.vim'
@@ -26,7 +27,6 @@ Plug 'junegunn/fzf.vim' " needed for previews
 Plug 'junegunn/limelight.vim'
 Plug 'junegunn/vim-easy-align'
 Plug 'nvim-lua/plenary.nvim'
-Plug 'greggh/claude-code.nvim'
 Plug 'madox2/vim-ai'
 Plug 'kchmck/vim-coffee-script'
 Plug 'kristijanhusak/vim-dadbod-ui'
@@ -97,11 +97,6 @@ let g:coc_global_extensions = [
 
 " Allow control characters to pass to vim for shortcuts
 silent !stty -ixon > /dev/null 2>/dev/null
-
-" Enable builtin matchit (extended % matching)
-if !has('nvim')
-  packadd! matchit
-endif
 
 let mapleader=" "             " Map leader key to space
 
