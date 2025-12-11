@@ -240,16 +240,72 @@ endfunction
 
 " Toggle fullscreen for current split
 let g:fullscreen_window = 0
+let g:fullscreen_saved_sizes = {}
+
+" Save window sizes before going fullscreen
+function! s:SaveWindowSizes()
+  let l:sizes = {}
+  let l:sizes['_winids'] = []
+  for winnr in range(1, winnr('$'))
+    let winid = win_getid(winnr)
+    call add(l:sizes['_winids'], winid)
+    let l:sizes[winid] = {
+          \ 'width': winwidth(winnr),
+          \ 'height': winheight(winnr)
+          \ }
+  endfor
+  return l:sizes
+endfunction
+
+" Check if window configuration has changed
+function! s:WindowConfigChanged(saved)
+  if empty(a:saved) || !has_key(a:saved, '_winids')
+    return 1
+  endif
+  let l:current_winids = []
+  for winnr in range(1, winnr('$'))
+    call add(l:current_winids, win_getid(winnr))
+  endfor
+  return l:current_winids != a:saved['_winids']
+endfunction
+
+" Restore window sizes
+function! s:RestoreWindowSizes(saved)
+  if s:WindowConfigChanged(a:saved)
+    " Configuration changed, use equal sizes
+    execute "normal! \<C-w>="
+    return
+  endif
+  " Save current window to restore focus later
+  let l:curwin = win_getid()
+  " Restore each window's size
+  for winnr in range(1, winnr('$'))
+    let winid = win_getid(winnr)
+    if has_key(a:saved, winid)
+      call win_gotoid(winid)
+      execute 'resize ' . a:saved[winid]['height']
+      execute 'vertical resize ' . a:saved[winid]['width']
+    endif
+  endfor
+  " Restore focus to original window
+  call win_gotoid(l:curwin)
+endfunction
+
 function! ToggleSplitFullscreen()
   let l:saved_fix = s:DisableWinFix()
 
   if g:fullscreen_window == win_getid()
-    execute "normal! \<C-w>="
+    " Exiting fullscreen - restore previous sizes
+    call s:RestoreWindowSizes(g:fullscreen_saved_sizes)
     let g:fullscreen_window = 0
+    let g:fullscreen_saved_sizes = {}
   elseif g:fullscreen_window != 0
+    " Different window going fullscreen while another was fullscreen
     execute "normal! \<C-w>=\<C-w>_\<C-w>|"
     let g:fullscreen_window = win_getid()
   else
+    " Entering fullscreen - save current sizes first
+    let g:fullscreen_saved_sizes = s:SaveWindowSizes()
     execute "normal! \<C-w>_\<C-w>|"
     let g:fullscreen_window = win_getid()
   endif
