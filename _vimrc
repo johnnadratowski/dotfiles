@@ -358,14 +358,16 @@ function! ResizeWindow(dir)
     vertical resize +2
   endif
   call s:RestoreWinFix(l:saved_fix)
-  call s:RefreshTerminals()
+  " call s:RefreshTerminals()
 endfunction
 nnoremap <Up> :call ResizeWindow('up')<CR>
 nnoremap <Down> :call ResizeWindow('down')<CR>
 nnoremap <Left> :call ResizeWindow('left')<CR>
 nnoremap <Right> :call ResizeWindow('right')<CR>
-tnoremap <Up> <C-\><C-n>:call ResizeWindow('up')<CR>i
-tnoremap <Down> <C-\><C-n>:call ResizeWindow('down')<CR>i
+tnoremap <Up> <C-\><C-n>:call ResizeWindow('up')<CR>:startinsert<CR>
+tnoremap <Down> <C-\><C-n>:call ResizeWindow('down')<CR>:startinsert<CR>
+tnoremap <Left> <C-\><C-n>:call ResizeWindow('left')<CR>:startinsert<CR>
+tnoremap <Right> <C-\><C-n>:call ResizeWindow('right')<CR>:startinsert<CR>
 
 " Move lines up/down
 nnoremap <A-j> :m .+1<CR>==
@@ -415,16 +417,21 @@ EOF
     nmap <leader><Tab>m <cmd>ClaudeCodeSelectModel<cr>
     nmap <leader><Tab>b <cmd>ClaudeCodeAdd %<cr>
     xmap <leader><Tab>s <cmd>ClaudeCodeSend<cr>
+    nmap <leader><Tab>s V<cmd>ClaudeCodeSend<cr>
     nmap <leader><Tab>a <cmd>ClaudeCodeDiffAccept<cr>
     nmap <leader><Tab>d <cmd>ClaudeCodeDiffDeny<cr>
 
     " Fix Cmd+hjkl navigation in Claude terminal (macOS sends D-h, D-j, etc.)
+    " Also disable Leaderf mappings (C-p, C-n, C-f) in Claude terminal
     augroup claudecode_terminal
       autocmd!
       autocmd TermOpen *claude* tnoremap <buffer> <c-h> <C-\><C-n>:TmuxNavigateLeft<CR>
       autocmd TermOpen *claude* tnoremap <buffer> <c-j> <C-\><C-n>:TmuxNavigateDown<CR>
       autocmd TermOpen *claude* tnoremap <buffer> <c-k> <C-\><C-n>:TmuxNavigateUp<CR>
       autocmd TermOpen *claude* tnoremap <buffer> <c-l> <C-\><C-n>:TmuxNavigateRight<CR>
+      autocmd TermOpen *claude* tnoremap <buffer> <c-p> <c-p>
+      autocmd TermOpen *claude* tnoremap <buffer> <c-n> <c-n>
+      autocmd TermOpen *claude* tnoremap <buffer> <c-f> <c-f>
     augroup END
   else
     " Vim fallback - basic terminal commands for Claude CLI
