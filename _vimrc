@@ -308,6 +308,8 @@ nnoremap <Up> :call ResizeWindow('up')<CR>
 nnoremap <Down> :call ResizeWindow('down')<CR>
 nnoremap <Left> :call ResizeWindow('left')<CR>
 nnoremap <Right> :call ResizeWindow('right')<CR>
+tnoremap <Up> <C-\><C-n>:call ResizeWindow('up')<CR>i
+tnoremap <Down> <C-\><C-n>:call ResizeWindow('down')<CR>i
 
 " Move lines up/down
 nnoremap <A-j> :m .+1<CR>==
@@ -336,18 +338,27 @@ nnoremap <C-u> <C-u>zz
         open_in_new_tab = false,
         keep_terminal_focus = true,
       },
+      terminal = {
+        split_side = "left",
+        snacks_win_opts = {
+          position = "bottom",
+          height = 0.4,
+          width = 1.0,
+          border = "single",
+        }
+      },
     })
 EOF
-    " Neovim keybindings using <leader>C prefix
-    nmap <leader>Cc <cmd>ClaudeCode<cr>
-    nmap <leader>Cf <cmd>ClaudeCodeFocus<cr>
-    nmap <leader>Cr <cmd>ClaudeCode --resume<cr>
-    nmap <leader>CC <cmd>ClaudeCode --continue<cr>
-    nmap <leader>Cm <cmd>ClaudeCodeSelectModel<cr>
-    nmap <leader>Cb <cmd>ClaudeCodeAdd %<cr>
-    xmap <leader>Cs <cmd>ClaudeCodeSend<cr>
-    nmap <leader>Ca <cmd>ClaudeCodeDiffAccept<cr>
-    nmap <leader>Cd <cmd>ClaudeCodeDiffDeny<cr>
+    " Neovim keybindings using <leader><Tab> prefix
+    nmap <leader><Tab>c <cmd>ClaudeCode<cr>
+    nmap <leader><Tab>f <cmd>ClaudeCodeFocus<cr>
+    nmap <leader><Tab>r <cmd>ClaudeCode --resume<cr>
+    nmap <leader><Tab><Tab> <cmd>ClaudeCode --continue<cr>
+    nmap <leader><Tab>m <cmd>ClaudeCodeSelectModel<cr>
+    nmap <leader><Tab>b <cmd>ClaudeCodeAdd %<cr><cmd>ClaudeCodeFocus<cr>
+    xmap <leader><Tab>s <cmd>ClaudeCodeSend<cr><cmd>ClaudeCodeFocus<cr>
+    nmap <leader><Tab>a <cmd>ClaudeCodeDiffAccept<cr>
+    nmap <leader><Tab>d <cmd>ClaudeCodeDiffDeny<cr>
 
     " Fix Cmd+hjkl navigation in Claude terminal (macOS sends D-h, D-j, etc.)
     augroup claudecode_terminal
