@@ -476,7 +476,34 @@ EOF
       autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
       autocmd FocusGained * if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
       autocmd CmdlineLeave * call timer_start(0, {-> execute("if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif")})
+      " Rotate diff tab layout to put Claude terminal at bottom
+      autocmd TabEnter * call timer_start(50, {-> s:RotateDiffLayout()})
     augroup END
+
+  function! s:RotateDiffLayout()
+    " Check if any window in this tab has diff mode
+    let l:has_diff = 0
+    let l:claude_win = 0
+    for winnr in range(1, winnr('$'))
+      if getwinvar(winnr, '&diff')
+        let l:has_diff = 1
+      endif
+      " Find Claude terminal: must be a terminal buffer with 'claude' in name
+      let l:bufnr = winbufnr(winnr)
+      if getbufvar(l:bufnr, '&buftype') == 'terminal' && bufname(l:bufnr) =~ 'claude'
+        let l:claude_win = winnr
+      endif
+    endfor
+    " If this is a diff tab with Claude terminal, move terminal to bottom
+    if l:has_diff && l:claude_win > 0
+      execute l:claude_win . 'wincmd w'
+      wincmd J
+      " Resize to 25% of total height
+      execute 'resize ' . (&lines / 4)
+      " Keep focus on Claude terminal
+      startinsert
+    endif
+  endfunction
   else
     " Vim fallback - basic terminal commands for Claude CLI
     nmap <leader>Cc :term claude<cr>
