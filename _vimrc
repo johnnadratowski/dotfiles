@@ -388,6 +388,25 @@ nnoremap <C-u> <C-u>zz
 " ==========================================================
 
 " ClaudeCode {{{
+  " Enter review mode: fullscreen (if not already), go to middle of buffer, stay in normal mode
+  function! ClaudeReviewMode()
+    let b:claude_stay_normal = 1
+    " Only go fullscreen if not already fullscreen
+    if g:fullscreen_window != win_getid()
+      call ToggleSplitFullscreen()
+      " Go to bottom of buffer, then M to middle of screen (delay to run after RefreshTerminals)
+      call timer_start(50, {-> feedkeys("GM", "n")})
+    else
+      lua vim.schedule(function() vim.api.nvim_feedkeys("M", "n", false) end)
+    endif
+  endfunction
+
+  " Exit review mode: return to insert/terminal mode (don't change fullscreen)
+  function! ClaudeExitReviewMode()
+    let b:claude_stay_normal = 0
+    startinsert
+  endfunction
+
   if has('nvim')
     lua << EOF
     require('claudecode').setup({
@@ -435,10 +454,13 @@ EOF
       autocmd TermOpen *claude* tnoremap <buffer> <c-p> <c-p>
       autocmd TermOpen *claude* tnoremap <buffer> <c-n> <c-n>
       autocmd TermOpen *claude* tnoremap <buffer> <c-f> <c-f>
-      autocmd BufEnter *claude* if &buftype == 'terminal' | startinsert | endif
-      autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' | startinsert | endif
-      autocmd FocusGained * if expand('%') =~ 'claude' && &buftype == 'terminal' | startinsert | endif
-      autocmd CmdlineLeave * call timer_start(0, {-> execute("if expand('%') =~ 'claude' && &buftype == 'terminal' | startinsert | endif")})
+      autocmd TermOpen *claude* tnoremap <buffer> <M-Space> <Cmd>let b:claude_stay_normal=1<CR><C-\><C-n><Cmd>call ClaudeReviewMode()<CR>
+      autocmd TermOpen *claude* nnoremap <buffer> <M-Space> <Cmd>call ClaudeExitReviewMode()<CR>
+      autocmd TermOpen *claude* nnoremap <buffer> i <Cmd>call ClaudeExitReviewMode()<CR>
+      autocmd BufEnter *claude* if &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
+      autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
+      autocmd FocusGained * if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
+      autocmd CmdlineLeave * call timer_start(0, {-> execute("if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif")})
     augroup END
   else
     " Vim fallback - basic terminal commands for Claude CLI
