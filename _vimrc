@@ -430,7 +430,7 @@ nnoremap <C-u> <C-u>zz
       focus_after_send = true,
       diff_opts = {
         layout = "vertical",
-        open_in_new_tab = false,
+        open_in_new_tab = true,
         keep_terminal_focus = true,
       },
       terminal = {
