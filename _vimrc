@@ -297,13 +297,15 @@ function! ToggleSplitFullscreen()
   let l:saved_fix = s:DisableWinFix()
 
   if g:fullscreen_window == win_getid()
-    " Exiting fullscreen - restore previous sizes
-    call s:RestoreWindowSizes(g:fullscreen_saved_sizes)
+    " Exiting fullscreen - clear flag first to prevent WinEnter re-triggering
+    let l:saved_sizes = g:fullscreen_saved_sizes
     let g:fullscreen_window = 0
     let g:fullscreen_saved_sizes = {}
+    call s:RestoreWindowSizes(l:saved_sizes)
   elseif g:fullscreen_window != 0
     " Different window going fullscreen while another was fullscreen
-    execute "normal! \<C-w>=\<C-w>_\<C-w>|"
+    " Just maximize this window, keep the original saved sizes
+    execute "normal! \<C-w>_\<C-w>|"
     let g:fullscreen_window = win_getid()
   else
     " Entering fullscreen - save current sizes first
@@ -315,6 +317,19 @@ function! ToggleSplitFullscreen()
   call s:RestoreWinFix(l:saved_fix)
   call s:RefreshTerminals()
 endfunction
+
+" Auto-fullscreen when focusing a different window while in fullscreen mode
+function! s:AutoFullscreenOnFocus()
+  if g:fullscreen_window != 0 && g:fullscreen_window != win_getid()
+    call ToggleSplitFullscreen()
+  endif
+endfunction
+
+augroup fullscreen_auto
+  autocmd!
+  autocmd WinEnter * call s:AutoFullscreenOnFocus()
+augroup END
+
 nnoremap <C-a> :call ToggleSplitFullscreen()<CR>
 tnoremap <C-a> <C-\><C-n>:call ToggleSplitFullscreen()<CR>i
 
