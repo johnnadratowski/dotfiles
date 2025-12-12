@@ -321,6 +321,10 @@ endfunction
 
 " Auto-fullscreen when focusing a different window while in fullscreen mode
 function! s:AutoFullscreenOnFocus()
+  " Skip if in terminal mode - can't execute normal commands from terminal mode
+  if mode() == 't'
+    return
+  endif
   if g:fullscreen_window != 0 && g:fullscreen_window != win_getid()
     call ToggleSplitFullscreen()
   endif
