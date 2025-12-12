@@ -423,6 +423,7 @@ EOF
 
     " Fix Cmd+hjkl navigation in Claude terminal (macOS sends D-h, D-j, etc.)
     " Also disable Leaderf mappings (C-p, C-n, C-f) in Claude terminal
+    " Auto-enter insert mode when entering Claude terminal
     augroup claudecode_terminal
       autocmd!
       autocmd TermOpen *claude* tnoremap <buffer> <c-h> <C-\><C-n>:TmuxNavigateLeft<CR>
@@ -432,6 +433,10 @@ EOF
       autocmd TermOpen *claude* tnoremap <buffer> <c-p> <c-p>
       autocmd TermOpen *claude* tnoremap <buffer> <c-n> <c-n>
       autocmd TermOpen *claude* tnoremap <buffer> <c-f> <c-f>
+      autocmd BufEnter *claude* startinsert
+      autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' | startinsert | endif
+      autocmd FocusGained * if expand('%') =~ 'claude' | startinsert | endif
+      autocmd CmdlineLeave * if expand('%') =~ 'claude' | startinsert | endif
     augroup END
   else
     " Vim fallback - basic terminal commands for Claude CLI
