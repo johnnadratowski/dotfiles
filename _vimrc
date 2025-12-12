@@ -331,8 +331,8 @@ augroup fullscreen_auto
   autocmd WinEnter * call s:AutoFullscreenOnFocus()
 augroup END
 
-nnoremap <C-a> :call ToggleSplitFullscreen()<CR>
-tnoremap <C-a> <C-\><C-n>:call ToggleSplitFullscreen()<CR>i
+nnoremap <C-space> :call ToggleSplitFullscreen()<CR>
+tnoremap <C-space> <C-\><C-n>:call ToggleSplitFullscreen()<CR>i
 
 " Close Window
 map <leader>x :bp \| bd #<CR>
