@@ -172,6 +172,8 @@ set wildmode=longest,list,full             " <Tab> cycles between all matching c
 " Save buffer
 nmap <c-s> :update!<CR>
 imap <c-s> <Esc> :update!<CR>
+nmap <M-s> :noautocmd update!<CR>
+imap <M-s> <Esc>:noautocmd update!<CR>
 nmap <F2> :update<CR>
 imap <F2> <C-O>:update<CR>
 
@@ -433,9 +435,9 @@ EOF
       autocmd TermOpen *claude* tnoremap <buffer> <c-p> <c-p>
       autocmd TermOpen *claude* tnoremap <buffer> <c-n> <c-n>
       autocmd TermOpen *claude* tnoremap <buffer> <c-f> <c-f>
-      autocmd BufEnter *claude* startinsert
-      autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' | startinsert | endif
-      autocmd FocusGained * if expand('%') =~ 'claude' | startinsert | endif
+      autocmd BufEnter *claude* if &buftype == 'terminal' | startinsert | endif
+      autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' | startinsert | endif
+      autocmd FocusGained * if expand('%') =~ 'claude' && &buftype == 'terminal' | startinsert | endif
       autocmd CmdlineLeave * call timer_start(0, {-> execute("if expand('%') =~ 'claude' && &buftype == 'terminal' | startinsert | endif")})
     augroup END
   else

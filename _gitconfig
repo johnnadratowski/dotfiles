@@ -13,7 +13,7 @@
 
 [core]
 	editor = nvim
-    pager = less -R
+	pager = diff-so-fancy | less --tabs=4 -RF
 
 [pager]
     diff = diff-so-fancy | less --tabs=1,5 -RFX
@@ -70,3 +70,7 @@
 	insteadOf = https://github.com/
 [pull]
 	rebase = false
+[interactive]
+	diffFilter = diff-so-fancy --patch
+[diff "nodiff"]
+	command = /usr/bin/true
