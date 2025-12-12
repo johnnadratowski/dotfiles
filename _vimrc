@@ -131,6 +131,7 @@ set modeline                " Allow vim options to be embedded in files;
 set modelines=5             " they must be within the first or last 5 lines.
 set mouse=a                 " Allow mouse
 set mousehide               " Hid emouse when typing
+set autoread                " Auto-reload files changed outside vim
 set nobackup                " No backup file
 set noerrorbells            " No bell on error
 set nofoldenable            " DO NOT enable folds by default
