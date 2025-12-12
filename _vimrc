@@ -364,10 +364,10 @@ nnoremap <Up> :call ResizeWindow('up')<CR>
 nnoremap <Down> :call ResizeWindow('down')<CR>
 nnoremap <Left> :call ResizeWindow('left')<CR>
 nnoremap <Right> :call ResizeWindow('right')<CR>
-tnoremap <Up> <C-\><C-n>:call ResizeWindow('up')<CR>:startinsert<CR>
-tnoremap <Down> <C-\><C-n>:call ResizeWindow('down')<CR>:startinsert<CR>
-tnoremap <Left> <C-\><C-n>:call ResizeWindow('left')<CR>:startinsert<CR>
-tnoremap <Right> <C-\><C-n>:call ResizeWindow('right')<CR>:startinsert<CR>
+tnoremap <Up> <C-\><C-n><Cmd>call ResizeWindow('up')<CR><Cmd>startinsert<CR>
+tnoremap <Down> <C-\><C-n><Cmd>call ResizeWindow('down')<CR><Cmd>startinsert<CR>
+tnoremap <Left> <C-\><C-n><Cmd>call ResizeWindow('left')<CR><Cmd>startinsert<CR>
+tnoremap <Right> <C-\><C-n><Cmd>call ResizeWindow('right')<CR><Cmd>startinsert<CR>
 
 " Move lines up/down
 nnoremap <A-j> :m .+1<CR>==
@@ -436,7 +436,7 @@ EOF
       autocmd BufEnter *claude* startinsert
       autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' | startinsert | endif
       autocmd FocusGained * if expand('%') =~ 'claude' | startinsert | endif
-      autocmd CmdlineLeave * if expand('%') =~ 'claude' | startinsert | endif
+      autocmd CmdlineLeave * call timer_start(0, {-> execute("if expand('%') =~ 'claude' && &buftype == 'terminal' | startinsert | endif")})
     augroup END
   else
     " Vim fallback - basic terminal commands for Claude CLI
