@@ -378,14 +378,14 @@ function! ResizeWindow(dir)
   call s:RestoreWinFix(l:saved_fix)
   " call s:RefreshTerminals()
 endfunction
-nnoremap <Up> :call ResizeWindow('up')<CR>
-nnoremap <Down> :call ResizeWindow('down')<CR>
-nnoremap <Left> :call ResizeWindow('left')<CR>
-nnoremap <Right> :call ResizeWindow('right')<CR>
-tnoremap <Up> <C-\><C-n><Cmd>call ResizeWindow('up')<CR><Cmd>startinsert<CR>
-tnoremap <Down> <C-\><C-n><Cmd>call ResizeWindow('down')<CR><Cmd>startinsert<CR>
-tnoremap <Left> <C-\><C-n><Cmd>call ResizeWindow('left')<CR><Cmd>startinsert<CR>
-tnoremap <Right> <C-\><C-n><Cmd>call ResizeWindow('right')<CR><Cmd>startinsert<CR>
+nnoremap <A-Up> :call ResizeWindow('up')<CR>
+nnoremap <A-Down> :call ResizeWindow('down')<CR>
+nnoremap <A-Left> :call ResizeWindow('left')<CR>
+nnoremap <A-Right> :call ResizeWindow('right')<CR>
+tnoremap <A-Up> <C-\><C-n><Cmd>call ResizeWindow('up')<CR><Cmd>startinsert<CR>
+tnoremap <A-Down> <C-\><C-n><Cmd>call ResizeWindow('down')<CR><Cmd>startinsert<CR>
+tnoremap <A-Left> <C-\><C-n><Cmd>call ResizeWindow('left')<CR><Cmd>startinsert<CR>
+tnoremap <A-Right> <C-\><C-n><Cmd>call ResizeWindow('right')<CR><Cmd>startinsert<CR>
 
 " Move lines up/down
 nnoremap <A-j> :m .+1<CR>==
@@ -440,7 +440,6 @@ nnoremap <C-u> <C-u>zz
           position = "bottom",
           height = 0.4,
           width = 1.0,
-          border = "single",
         }
       },
       terminal_cmd = 'SHELL="$(which bash)" claude'
