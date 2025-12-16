@@ -286,8 +286,11 @@ function! s:RestoreWindowSizes(saved)
     let winid = win_getid(winnr)
     if has_key(a:saved, winid)
       call win_gotoid(winid)
-      execute 'resize ' . a:saved[winid]['height']
-      execute 'vertical resize ' . a:saved[winid]['width']
+      " Ensure height/width are positive integers (at least 1)
+      let l:height = max([1, float2nr(a:saved[winid]['height'])])
+      let l:width = max([1, float2nr(a:saved[winid]['width'])])
+      execute 'resize ' . l:height
+      execute 'vertical resize ' . l:width
     endif
   endfor
   " Restore focus to original window
@@ -522,8 +525,9 @@ EOF
     if l:has_diff && l:claude_win > 0
       execute l:claude_win . 'wincmd w'
       wincmd J
-      " Resize to 25% of total height
-      execute 'resize ' . (&lines / 4)
+      " Resize to 25% of total height (ensure positive integer)
+      let l:height = max([1, float2nr(&lines / 4)])
+      execute 'resize ' . l:height
       " Keep focus on Claude terminal
       startinsert
     endif
