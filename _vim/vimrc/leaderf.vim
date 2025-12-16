@@ -14,7 +14,7 @@ command! -bang -nargs=* -complete=file LeaderfRg exec printf("Leaderf<bang> rg %
 nnoremap <leader>p :call CDRoot() <bar> :Leaderf file --popup<CR>
 nnoremap <C-p> :call CDGitRoot() <bar> :Leaderf file --popup<CR>
 nnoremap <C-n> :call CDRoot() <bar> :Leaderf buffer --popup<CR>
-nnoremap <C-f> :call CDGitRoot() <bar> :Leaderf --stayOpen rg
+nnoremap <C-f> :call CDGitRoot() <bar> :Leaderf --stayOpen rg 
 xnoremap <C-f> :<C-U><C-R>=printf("LeaderfRg! --stayOpen -F -e %s ", leaderf#Rg#visual())<CR>
 
 let g:Lf_WildIgnore = {
