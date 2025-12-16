@@ -461,6 +461,25 @@ EOF
     nmap <leader><Tab>a <cmd>ClaudeCodeDiffAccept<cr>
     nmap <leader><Tab>d <cmd>ClaudeCodeDiffDeny<cr>
 
+    " Diff navigation - buffer-local mappings for diff windows
+    augroup claudecode_diff
+      autocmd!
+      " When entering a diff buffer, set up navigation keybindings
+      autocmd OptionSet diff if &diff | call s:SetupDiffMappings() | endif
+      autocmd BufEnter * if &diff | call s:SetupDiffMappings() | endif
+    augroup END
+
+    function! s:SetupDiffMappings()
+      " Navigate hunks and center screen
+      nnoremap <buffer> ]c ]czz
+      nnoremap <buffer> [c [czz
+      " Quick accept/deny from diff window
+      nnoremap <buffer> <leader>a <cmd>ClaudeCodeDiffAccept<cr>
+      nnoremap <buffer> <leader>d <cmd>ClaudeCodeDiffDeny<cr>
+      " Accept and go to next diff (if any)
+      nnoremap <buffer> <leader>A <cmd>ClaudeCodeDiffAccept<cr>:tabnext<cr>
+    endfunction
+
     " Fix Cmd+hjkl navigation in Claude terminal (macOS sends D-h, D-j, etc.)
     " Also disable Leaderf mappings (C-p, C-n, C-f) in Claude terminal
     " Auto-enter insert mode when entering Claude terminal
