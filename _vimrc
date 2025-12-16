@@ -336,7 +336,19 @@ endfunction
 augroup fullscreen_auto
   autocmd!
   autocmd WinEnter * call s:AutoFullscreenOnFocus()
+  " Exit fullscreen when a new window is created (e.g., LeaderF popup)
+  autocmd WinNew * call s:ExitFullscreenOnNewWindow()
 augroup END
+
+function! s:ExitFullscreenOnNewWindow()
+  if g:fullscreen_window != 0
+    " Exit fullscreen mode and restore sizes
+    let l:saved_sizes = g:fullscreen_saved_sizes
+    let g:fullscreen_window = 0
+    let g:fullscreen_saved_sizes = {}
+    call s:RestoreWindowSizes(l:saved_sizes)
+  endif
+endfunction
 
 nnoremap <C-space> :call ToggleSplitFullscreen()<CR>
 tnoremap <C-space> <C-\><C-n>:call ToggleSplitFullscreen()<CR>i
