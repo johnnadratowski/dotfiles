@@ -43,6 +43,7 @@ brew install  -f      \
   node                \
   noti                \
   npm                 \
+  obsidian            \
   rg                  \
   rust                \
   pipenv              \
