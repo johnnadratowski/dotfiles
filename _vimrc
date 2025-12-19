@@ -341,6 +341,10 @@ augroup fullscreen_auto
 augroup END
 
 function! s:ExitFullscreenOnNewWindow()
+  " Skip if in terminal mode - can't execute normal commands
+  if mode() == 't'
+    return
+  endif
   if g:fullscreen_window != 0
     " Exit fullscreen mode and restore sizes
     let l:saved_sizes = g:fullscreen_saved_sizes
@@ -423,17 +427,35 @@ nnoremap <C-u> <C-u>zz
 " ==========================================================
 
 " ClaudeCode {{{
-  " Enter review mode: fullscreen (if not already), go to middle of buffer, stay in normal mode
+  " Enter review mode: fullscreen (if not already), scroll to last prompt, stay in normal mode
   function! ClaudeReviewMode()
     let b:claude_stay_normal = 1
     " Only go fullscreen if not already fullscreen
     if g:fullscreen_window != win_getid()
       call ToggleSplitFullscreen()
-      " Go to bottom of buffer, then M to middle of screen (delay to run after RefreshTerminals)
-      call timer_start(50, {-> feedkeys("GM", "n")})
+      " Delay to run after RefreshTerminals
+      call timer_start(50, {-> s:ScrollToLastPrompt()})
     else
-      lua vim.schedule(function() vim.api.nvim_feedkeys("M", "n", false) end)
+      call s:ScrollToLastPrompt()
     endif
+  endfunction
+
+  " Scroll to the last user prompt in Claude terminal
+  function! s:ScrollToLastPrompt()
+lua << EOF
+    vim.schedule(function()
+      local bufnr = vim.api.nvim_get_current_buf()
+      local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      for i = #lines, 1, -1 do
+        if lines[i]:match('^> ') then
+          vim.api.nvim_win_set_cursor(0, {i, 0})
+          vim.cmd('normal! zt')
+          return
+        end
+      end
+      vim.cmd('normal! G')
+    end)
+EOF
   endfunction
 
   " Exit review mode: return to insert/terminal mode (don't change fullscreen)
