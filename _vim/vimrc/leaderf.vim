@@ -28,7 +28,8 @@ command! -bang -nargs=* -complete=file LeaderfRg exec printf("Leaderf<bang> rg %
 nnoremap <leader>p :call <SID>ExitFullscreenForLeaderf() <bar> :call CDRoot() <bar> :Leaderf file --popup<CR>
 nnoremap <C-p> :call <SID>ExitFullscreenForLeaderf() <bar> :call CDGitRoot() <bar> :Leaderf file --popup<CR>
 nnoremap <C-b> :call <SID>ExitFullscreenForLeaderf() <bar> :call CDRoot() <bar> :Leaderf buffer --popup<CR>
-nnoremap <C-f> :call <SID>ExitFullscreenForLeaderf() <bar> :call CDGitRoot() <bar> :Leaderf --stayOpen rg 
+nnoremap <C-f> :call <SID>ExitFullscreenForLeaderf() <bar> :call CDGitRoot() <bar> :Leaderf rg 
+nnoremap <leader>f :call <SID>ExitFullscreenForLeaderf() <bar> :call CDGitRoot() <bar> :Leaderf --stayOpen rg 
 xnoremap <C-f> :<C-U>call <SID>ExitFullscreenForLeaderf() <bar> <C-R>=printf("LeaderfRg! --stayOpen -F -e %s ", leaderf#Rg#visual())<CR>
 
 let g:Lf_WildIgnore = {

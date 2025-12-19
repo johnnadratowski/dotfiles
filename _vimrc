@@ -511,6 +511,9 @@ EOF
       autocmd TermOpen *claude* nnoremap <buffer> <M-Space> <Cmd>call ClaudeExitReviewMode()<CR>
       autocmd TermOpen *claude* nnoremap <buffer> i <Cmd>call ClaudeExitReviewMode()<CR>
       autocmd TermOpen *claude* nnoremap <buffer> <Esc> <Cmd>call ClaudeExitReviewMode()<CR>
+      " Tab toggles between terminal mode and normal mode
+      autocmd TermOpen *claude* tnoremap <buffer> <Tab> <C-\><C-n>
+      autocmd TermOpen *claude* nnoremap <buffer> <Tab> i
       autocmd BufEnter *claude* if &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
       autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
       autocmd FocusGained * if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
