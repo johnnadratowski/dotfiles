@@ -517,6 +517,23 @@ EOF
       nnoremap <buffer> <leader>A <cmd>ClaudeCodeDiffAccept<cr>:tabnext<cr>
     endfunction
 
+    " Auto-open Claude terminal when opening claude.md
+    function! s:OpenClaudeIfNeeded()
+      " Check if Claude terminal is already open
+      for bufnr in range(1, bufnr('$'))
+        if bufname(bufnr) =~ 'claude' && getbufvar(bufnr, '&buftype') == 'terminal'
+          return
+        endif
+      endfor
+      " Claude not open, open it
+      ClaudeCode
+    endfunction
+
+    augroup claudecode_auto_open
+      autocmd!
+      autocmd BufRead claude.md call s:OpenClaudeIfNeeded()
+    augroup END
+
     " Fix Cmd+hjkl navigation in Claude terminal (macOS sends D-h, D-j, etc.)
     " Also disable Leaderf mappings (C-p, C-n, C-f) in Claude terminal
     " Auto-enter insert mode when entering Claude terminal

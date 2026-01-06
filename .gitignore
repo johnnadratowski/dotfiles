@@ -18,3 +18,4 @@ _ipython/profile_default/db/
 local-startup/*
 .undodir/
 history.json
+Session.vim
