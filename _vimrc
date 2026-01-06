@@ -198,7 +198,15 @@ cmap W! w !sudo tee % >/dev/null
 
 " Maximize/minimize
 map <leader>^ <c-w>_<c-w>\|
-map <leader>= <c-w>=
+
+" Equalize windows (handles winfixwidth/height)
+function! EqualizeWindows()
+  let l:saved_fix = s:DisableWinFix()
+  execute "normal! \<C-w>="
+  call s:RestoreWinFix(l:saved_fix)
+endfunction
+nnoremap <C-w>= :call EqualizeWindows()<CR>
+map <leader>= :call EqualizeWindows()<CR>
 
 " Helper to temporarily disable winfixwidth/winfixheight on all windows
 function! s:DisableWinFix()
