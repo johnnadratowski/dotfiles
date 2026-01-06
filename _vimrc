@@ -397,17 +397,19 @@ vnoremap > >gv
 " Resize splits with arrow keys (handles winfixwidth/height)
 function! ResizeWindow(dir)
   let l:saved_fix = s:DisableWinFix()
+  " Check if we're in the topmost/leftmost window to invert resize direction
+  let l:is_top = winnr() == winnr('k')
+  let l:is_left = winnr() == winnr('h')
   if a:dir == 'up'
-    resize +2
+    execute 'resize ' . (l:is_top ? '-2' : '+2')
   elseif a:dir == 'down'
-    resize -2
+    execute 'resize ' . (l:is_top ? '+2' : '-2')
   elseif a:dir == 'left'
-    vertical resize -2
+    execute 'vertical resize ' . (l:is_left ? '-2' : '+2')
   elseif a:dir == 'right'
-    vertical resize +2
+    execute 'vertical resize ' . (l:is_left ? '+2' : '-2')
   endif
   call s:RestoreWinFix(l:saved_fix)
-  " call s:RefreshTerminals()
 endfunction
 nnoremap <A-Up> :call ResizeWindow('up')<CR>
 nnoremap <A-Down> :call ResizeWindow('down')<CR>
