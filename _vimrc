@@ -447,7 +447,7 @@ lua << EOF
       local bufnr = vim.api.nvim_get_current_buf()
       local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
       for i = #lines, 1, -1 do
-        if lines[i]:match('^> ') then
+        if lines[i]:match('^> ') or lines[i]:match('Ready to code%?') then
           vim.api.nvim_win_set_cursor(0, {i, 0})
           vim.cmd('normal! zt')
           return
