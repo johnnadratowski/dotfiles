@@ -10,8 +10,8 @@ constants.hammerspoonHome = constants.home .. "/.hammerspoon/"
 
 constants.loglevel = "debug"
 
-constants.diff = "/usr/bin/open"
-constants.diffargs = {"-na", "PyCharm.app", "--args", "diff"}
+constants.diff = "/Applications/MacVim.app/Contents/bin/mvim"
+constants.diffargs = {"-d"}
 
 constants.ocr = constants.home .. '/bin/ocr'
 
@@ -21,15 +21,15 @@ constants.defaultBrowserApp = "org.mozilla.firefox"
 constants.availableBrowsers = {
     ["com.apple.safari"] = {
         name = "Safari",
-        icon = os.getenv("HOME") .. "/.hammerspoon/icons/safari.png"
+        icon = constants.hammerspoonHome .. "icons/safari.png"
     },
     ["org.mozilla.firefox"] = {
         name = "FirefoxDeveloperEdition",
-        icon = os.getenv("HOME") .. "/.hammerspoon/icons/firefox.png"
+        icon = constants.hammerspoonHome .. "icons/firefox.png"
     },
     ["com.google.chrome"] = {
         name = "Google Chrome",
-        icon = os.getenv("HOME") .. "/.hammerspoon/icons/chrome.png"
+        icon = constants.hammerspoonHome .. "icons/chrome.png"
     }
 }
 

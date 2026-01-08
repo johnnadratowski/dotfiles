@@ -1,91 +1,54 @@
 local alerts = require('alerts')
+local constants = require('constants')
+require('str')  -- Adds string:split to string metatable
 
-function string:center(input)
-  local lines = input:split("\n")
-
-  local max = 0
-  for _, line in ipairs(lines) do
-    if line:len() > max then
-      max = line:len()
-    end
-  end
-
-  out = ""
-  for i=1,#lines,1 do
-    if i > 1 then
-      out = out .. "\n"
-    end
-    local line = lines[i]
-    diff = max - line:len() 
-    for j=1,diff/2,1 do
-      line = " " .. line
-    end
-    out = out .. line
-  end
-  return out
-end
-
-function string:split( inSplitPattern, outResults )
-  if not outResults then
-    outResults = { }
-  end
-  local theStart = 1
-  local theSplitStart, theSplitEnd = string.find( self, inSplitPattern, theStart )
-  while theSplitStart do
-    table.insert( outResults, string.sub( self, theStart, theSplitStart-1 ) )
-    theStart = theSplitEnd + 1
-    theSplitStart, theSplitEnd = string.find( self, inSplitPattern, theStart )
-  end
-  table.insert( outResults, string.sub( self, theStart ) )
-  return outResults
-end
-
-function comma_value(amount)
+local function comma_value(amount)
   local formatted = amount
-  while true do  
+  local k
+  while true do
     formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", '%1,%2')
-    if (k==0) then
+    if k == 0 then
       break
     end
   end
   return formatted
 end
 
-function getName(num)
-  single = {'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'}
-  teens = {'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'}
-  doubs = {'', 'Twenty', 'Thirty', 'Fourty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'}
+local function getName(num)
+  local single = {'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'}
+  local teens = {'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'}
+  local doubs = {'', 'Twenty', 'Thirty', 'Fourty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'}
 
   while string.len(num) < 3 do
     num = '0' .. num
   end
 
-  out = ''
-  hundred = string.sub(num, 1, 1)
+  local out = ''
+  local hundred = string.sub(num, 1, 1)
   if hundred ~= '0' then
-    i = tonumber(hundred)
+    local i = tonumber(hundred)
     out = single[i] .. ' hundred'
   end
 
-  isTeens = false
-  tens = string.sub(num, 2, 2)
+  local isTeens = false
+  local tens = string.sub(num, 2, 2)
   if tens ~= '0' then
-    i = tonumber(tens)
+    local i = tonumber(tens)
     isTeens = i == 1
     if out ~= '' then
       out = out .. ' '
     end
     if isTeens then
-      teenI = tonumber(string.sub(num, 3, 3))
+      local teenI = tonumber(string.sub(num, 3, 3))
       out = out .. teens[teenI + 1]
     else
       out = out .. doubs[i]
     end
   end
 
-  ones = string.sub(num, 3, 3)
+  local ones = string.sub(num, 3, 3)
   if not isTeens and ones ~= '0' then
-    i = tonumber(ones)
+    local i = tonumber(ones)
     if out ~= '' then
       out = out .. ' '
     end
@@ -94,22 +57,22 @@ function getName(num)
   return out
 end
 
-function getOutput(ts)
-end
-
-function fmtNum()
-  copy = hs.pasteboard.getContents()
-
-  ts = tonumber(copy)
-  if ts == nil then
-      alerts.alert("Invalid number: " .. copy:sub(0, 15))
-      return
+local function fmtNum()
+  local copy = hs.pasteboard.getContents()
+  if not copy then
+    alerts.alert("Clipboard is empty")
+    return
   end
 
-  val = comma_value(ts)
+  local ts = tonumber(copy)
+  if ts == nil then
+    alerts.alert("Invalid number: " .. copy:sub(0, 15))
+    return
+  end
 
-  parts = val:split(",")
-  names = {
+  local val = comma_value(ts)
+  local parts = val:split(",")
+  local names = {
     '',
     'Thousand',
     'Million',
@@ -133,12 +96,12 @@ function fmtNum()
     'Novemdecillion',
     'Vigintillion'
   }
-  nameI = #parts
-  out = val .. '\n\n'
-  for i=1,#parts,1 do 
+  local nameI = #parts
+  local out = val .. '\n\n'
+  for i = 1, #parts, 1 do
     if parts[i] ~= '000' then
       out = out .. getName(parts[i])
-      curName = names[nameI]
+      local curName = names[nameI]
       if curName ~= '' then
         out = out .. ' ' .. curName .. ' '
       end
@@ -148,4 +111,5 @@ function fmtNum()
 
   alerts.alert(out, #parts)
 end
+
 hs.hotkey.bind(constants.hyper, "n", "Format Number", fmtNum, hs.alert.closeAll)

@@ -38,12 +38,6 @@ configFileWatcher = hs.pathwatcher.new(constants.hammerspoonHome, dbug.reloadCon
 --debug.sethook(debug.lineTraceHook, "l")
 --configFileWatcher:start()
 
--- SPOONS
-
----- EMOJI SPOONS
-hs.loadSpoon("Emojis")
-spoon.Emojis:bindHotkeys({toggle = {constants.hyper, "E"}})
-
 -- WINDOW
 
 --hs.window.animationDuration = 0.1

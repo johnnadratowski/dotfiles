@@ -1,5 +1,5 @@
 local alerts = require('alerts')
-constants = require("constants")
+local constants = require("constants")
 
 -- MOTION
 

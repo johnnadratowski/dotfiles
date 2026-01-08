@@ -1,4 +1,4 @@
-constants = require("constants")
+local constants = require("constants")
 
 -- Show colorpicker
 hs.hotkey.bind(

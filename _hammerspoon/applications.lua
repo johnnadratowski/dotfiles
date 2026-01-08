@@ -1,7 +1,6 @@
 local alerts = require('alerts')
-
-constants = require("constants")
-log = require("log")
+local constants = require("constants")
+local log = require("log")
 
 -- More flexible app searches
 hs.application.enableSpotlightForNameSearches(true)
