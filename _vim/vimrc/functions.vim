@@ -51,6 +51,7 @@ endfunction
 " Toggle fullscreen for current split
 let g:fullscreen_window = 0
 let g:fullscreen_saved_sizes = {}
+let g:fullscreen_in_progress = 0
 
 function! s:SaveWindowSizes()
   let l:sizes = {}
@@ -96,7 +97,22 @@ function! s:RestoreWindowSizes(saved)
   call win_gotoid(l:curwin)
 endfunction
 
+function! s:SetFullscreenStatusline(is_fullscreen)
+  if !exists('g:lightline')
+    return
+  endif
+  if a:is_fullscreen
+    let g:lightline.colorscheme = 'Tomorrow_Night_Blue'
+  else
+    let g:lightline.colorscheme = 'molokai'
+  endif
+  call lightline#init()
+  call lightline#colorscheme()
+  call lightline#update()
+endfunction
+
 function! ToggleSplitFullscreen()
+  let g:fullscreen_in_progress = 1
   let l:saved_fix = s:DisableWinFix()
 
   if g:fullscreen_window == win_getid()
@@ -104,25 +120,40 @@ function! ToggleSplitFullscreen()
     let g:fullscreen_window = 0
     let g:fullscreen_saved_sizes = {}
     call s:RestoreWindowSizes(l:saved_sizes)
+    call s:SetFullscreenStatusline(0)
   elseif g:fullscreen_window != 0
     execute "normal! \<C-w>_\<C-w>|"
     let g:fullscreen_window = win_getid()
+    call s:SetFullscreenStatusline(1)
   else
     let g:fullscreen_saved_sizes = s:SaveWindowSizes()
     execute "normal! \<C-w>_\<C-w>|"
     let g:fullscreen_window = win_getid()
+    call s:SetFullscreenStatusline(1)
   endif
 
   call s:RestoreWinFix(l:saved_fix)
   call s:RefreshTerminals()
+  let g:fullscreen_in_progress = 0
+endfunction
+
+function! s:CurrentWindowIsMinimized()
+  return winwidth(0) <= 3 || winheight(0) <= 3
 endfunction
 
 function! s:AutoFullscreenOnFocus()
   if mode() == 't'
     return
   endif
+  if g:fullscreen_in_progress
+    return
+  endif
   if g:fullscreen_window != 0 && g:fullscreen_window != win_getid()
+    " In fullscreen mode, switching windows maximizes the new window
     call ToggleSplitFullscreen()
+  elseif g:fullscreen_window == 0 && s:CurrentWindowIsMinimized()
+    " Not in fullscreen but current window is minimized - equalize
+    call EqualizeWindows()
   endif
 endfunction
 

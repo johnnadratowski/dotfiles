@@ -226,6 +226,7 @@ EOF
       tnoremap <buffer> <c-j> <C-\><C-n>:TmuxNavigateDown<CR>
       tnoremap <buffer> <c-k> <C-\><C-n>:TmuxNavigateUp<CR>
       tnoremap <buffer> <c-l> <C-\><C-n>:TmuxNavigateRight<CR>
+      tnoremap <buffer> <c-w>= <C-\><C-n>:call EqualizeWindows()<CR>:startinsert<CR>
       tnoremap <buffer> <c-p> <c-p>
       tnoremap <buffer> <c-n> <c-n>
       tnoremap <buffer> <c-f> <c-f>
