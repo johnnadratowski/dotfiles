@@ -1,0 +1,103 @@
+" ==========================================================
+" GVim/MacVim Configuration (Self-contained)
+" ==========================================================
+" This is a standalone configuration for MacVim/GVim.
+" It does NOT source _vimrc to avoid nvim-specific code.
+
+" ==========================================================
+" Plugins (Vim-compatible only, no nvim plugins)
+" ==========================================================
+
+call plug#begin()
+
+Plug 'AndrewRadev/sideways.vim'
+Plug 'airblade/vim-gitgutter'
+Plug 'chrisbra/NrrwRgn'
+Plug 'chrisbra/matchit'
+Plug 'christoomey/vim-tmux-navigator'
+Plug 'dbeniamine/cheat.sh-vim'
+Plug 'direnv/direnv.vim'
+Plug 'editorconfig/editorconfig-vim'
+Plug 'fatih/vim-go'
+Plug 'heavenshell/vim-pydocstring', { 'do': 'make install', 'for': 'python' }
+Plug 'itchyny/landscape.vim'
+Plug 'itchyny/lightline.vim'
+Plug 'itchyny/vim-gitbranch'
+Plug 'johnnadratowski/molokai'
+Plug 'johnnadratowski/vim-pug'
+Plug 'johnnadratowski/vim-stylus'
+Plug 'junegunn/fzf', {'dir': '~/.fzf','do': './install --all'}
+Plug 'junegunn/fzf.vim'
+Plug 'junegunn/limelight.vim'
+Plug 'junegunn/vim-easy-align'
+Plug 'madox2/vim-ai'
+Plug 'kchmck/vim-coffee-script'
+Plug 'kristijanhusak/vim-dadbod-ui'
+Plug 'leafgarland/typescript-vim'
+Plug 'leafOfTree/vim-vue-plugin'
+Plug 'maxbrunsfeld/vim-emacs-bindings'
+Plug 'mbbill/undotree'
+Plug 'mhinz/vim-startify'
+Plug 'pbogut/vim-dadbod-ssh'
+Plug 'preservim/vim-colors-pencil'
+Plug 'preservim/vim-wordchipper'
+Plug 'preservim/vimux'
+Plug 'prettier/vim-prettier'
+Plug 'reedes/vim-lexical'
+Plug 'reedes/vim-litecorrect'
+Plug 'reedes/vim-pencil'
+Plug 'reedes/vim-textobj-sentence'
+Plug 'reedes/vim-textobj-quote'
+Plug 'reedes/vim-wordy'
+Plug 'ryanoasis/vim-devicons'
+Plug 'sebdah/vim-delve'
+Plug 'sheerun/vim-wombat-scheme'
+Plug 'stephpy/vim-yaml'
+Plug 'thaerkh/vim-indentguides'
+Plug 'thaerkh/vim-workspace'
+Plug 'tpope/vim-abolish'
+Plug 'tpope/vim-commentary'
+Plug 'tpope/vim-dadbod'
+Plug 'tpope/vim-dotenv'
+Plug 'tpope/vim-fugitive'
+Plug 'tpope/vim-repeat'
+Plug 'tpope/vim-sensible'
+Plug 'tpope/vim-surround'
+Plug 'tpope/vim-vinegar'
+Plug 'vim-test/vim-test'
+Plug 'wesQ3/vim-windowswap'
+Plug 'yggdroot/LeaderF', { 'do': ':LeaderfInstallCExtension' }
+
+call plug#end()
+
+" ==========================================================
+" Source Shared Modules (vim-compatible)
+" ==========================================================
+
+source ~/.vim/vimrc/settings.vim
+source ~/.vim/vimrc/functions.vim
+source ~/.vim/vimrc/keymaps.vim
+source ~/.vim/vimrc/plugins-shared.vim
+source ~/.vim/vimrc/leaderf.vim
+source ~/.vim/vimrc/theme.vim
+
+" ==========================================================
+" GVim/MacVim-specific Settings
+" ==========================================================
+
+" GUI font (override from theme.vim for macOS format)
+set guifont=Hack\ Regular\ Nerd\ Font\ Complete\ Mono:h14
+
+" GUI options - remove toolbar, menu, scrollbars
+set guioptions-=T  " Remove toolbar
+set guioptions-=m  " Remove menu bar
+set guioptions-=r  " Remove right scrollbar
+set guioptions-=L  " Remove left scrollbar
+
+" Cursor blinking off
+set guicursor+=a:blinkon0
+
+" Basic terminal commands for Claude CLI (vim fallback)
+nmap <leader>Cc :term claude<cr>
+nmap <leader>Cr :term claude --resume<cr>
+nmap <leader>CC :term claude --continue<cr>
