@@ -17,6 +17,7 @@ EXTRA_FILES = {
     'claude-config/settings.json': '.claude/settings.json',
     'claude-config/agents': '.claude/agents',
     'claude-config/scripts': '.claude/scripts',
+    'ccstatusline-config/settings.json': '.config/ccstatusline/settings.json',
 }
 
 DIRS = [
