@@ -5,7 +5,7 @@
 " Save buffer
 nmap <c-s> :update!<CR>
 imap <c-s> <Esc> :update!<CR>
-nmap <M-s> :noautocmd update!<CR>
+nnoremap <M-s> :noautocmd update!<CR>
 imap <M-s> <Esc>:noautocmd update!<CR>
 nmap <F2> :update<CR>
 imap <F2> <C-O>:update<CR>
@@ -73,11 +73,11 @@ nnoremap <A-Down> :call ResizeWindow('down')<CR>
 nnoremap <A-Left> :call ResizeWindow('left')<CR>
 nnoremap <A-Right> :call ResizeWindow('right')<CR>
 
-" Move lines up/down
-nnoremap <A-j> :m .+1<CR>==
-nnoremap <A-k> :m .-2<CR>==
-vnoremap <A-j> :m '>+1<CR>gv=gv
-vnoremap <A-k> :m '<-2<CR>gv=gv
+" Resize splits with hjkl (handles winfixwidth/height)
+nnoremap <A-h> :call ResizeWindow('left')<CR>
+nnoremap <A-j> :call ResizeWindow('down')<CR>
+nnoremap <A-k> :call ResizeWindow('up')<CR>
+nnoremap <A-l> :call ResizeWindow('right')<CR>
 
 " Keep cursor centered when scrolling/searching
 nnoremap n nzzzv
