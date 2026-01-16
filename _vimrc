@@ -105,6 +105,10 @@ if has('nvim')
   tnoremap <A-Down> <C-\><C-n><Cmd>call ResizeWindow('down')<CR><Cmd>startinsert<CR>
   tnoremap <A-Left> <C-\><C-n><Cmd>call ResizeWindow('left')<CR><Cmd>startinsert<CR>
   tnoremap <A-Right> <C-\><C-n><Cmd>call ResizeWindow('right')<CR><Cmd>startinsert<CR>
+  tnoremap <A-h> <C-\><C-n><Cmd>call ResizeWindow('left')<CR><Cmd>startinsert<CR>
+  tnoremap <A-j> <C-\><C-n><Cmd>call ResizeWindow('down')<CR><Cmd>startinsert<CR>
+  tnoremap <A-k> <C-\><C-n><Cmd>call ResizeWindow('up')<CR><Cmd>startinsert<CR>
+  tnoremap <A-l> <C-\><C-n><Cmd>call ResizeWindow('right')<CR><Cmd>startinsert<CR>
   tnoremap <Esc> <C-\><C-n>
   tnoremap <C-h> <C-\><C-N><C-w>h
   tnoremap <C-j> <C-\><C-N><C-w>j
