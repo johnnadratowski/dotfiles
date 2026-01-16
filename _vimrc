@@ -157,6 +157,21 @@ EOF
       startinsert
     endfunction
 
+    " Save cursor position when leaving Claude buffer in review mode
+    function! s:SaveClaudeView()
+      if expand('%') =~ 'claude' && &buftype == 'terminal' && get(b:, 'claude_stay_normal', 0)
+        let b:claude_saved_view = winsaveview()
+      endif
+    endfunction
+
+    " Restore cursor position when entering Claude buffer in review mode
+    function! s:RestoreClaudeView()
+      if expand('%') =~ 'claude' && &buftype == 'terminal' && get(b:, 'claude_stay_normal', 0) && exists('b:claude_saved_view')
+        let l:view = b:claude_saved_view
+        call timer_start(10, {-> winrestview(l:view)})
+      endif
+    endfunction
+
 lua << EOF
     require('claudecode').setup({
       keys = { disable = true },
@@ -246,8 +261,10 @@ EOF
       autocmd!
       autocmd TermOpen *claude* call s:SetupClaudeTerminalMappings()
       autocmd BufEnter * if expand('%') =~ 'claude' && &buftype == 'terminal' | call s:SetupClaudeTerminalMappings() | endif
-      autocmd BufEnter *claude* if &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
-      autocmd WinEnter * if expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
+      autocmd BufLeave * call s:SaveClaudeView()
+      autocmd BufEnter *claude* if &buftype == 'terminal' && get(b:, 'claude_stay_normal', 0) | call s:RestoreClaudeView() | elseif &buftype == 'terminal' | startinsert | endif
+      autocmd WinLeave * call s:SaveClaudeView()
+      autocmd WinEnter * if expand('%') =~ 'claude' && &buftype == 'terminal' && get(b:, 'claude_stay_normal', 0) | call s:RestoreClaudeView() | elseif expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' | startinsert | endif
       autocmd FocusGained * if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif
       autocmd CmdlineLeave * call timer_start(0, {-> execute("if expand('%') =~ 'claude' && &buftype == 'terminal' && !get(b:, 'claude_stay_normal', 0) | startinsert | endif")})
       autocmd TabEnter * call timer_start(50, {-> s:RotateDiffLayout()})
