@@ -31,5 +31,6 @@
   },
   "enabledPlugins": {
     "claude-notifications-go@claude-notifications-go": true
-  }
+  },
+  "model": "opus"
 }
