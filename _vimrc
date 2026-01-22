@@ -253,7 +253,8 @@ EOF
       nnoremap <buffer> <M-Space> <Cmd>call ClaudeExitReviewMode()<CR>
       nnoremap <buffer> i <Cmd>call ClaudeExitReviewMode()<CR>
       nnoremap <buffer> <Esc> <Cmd>call ClaudeExitReviewMode()<CR>
-      tnoremap <buffer> <Tab> <Cmd>let b:claude_stay_normal=1<CR><C-\><C-n>M
+      nnoremap <buffer> <c-]> <Cmd>call ClaudeExitReviewMode()<CR>
+      tnoremap <buffer> <c-]> <Cmd>let b:claude_stay_normal=1<CR><C-\><C-n>M
       nnoremap <buffer> <Tab> <Cmd>call ClaudeExitReviewMode()<CR>
     endfunction
 
