@@ -12,32 +12,77 @@ function move_window(direction)
         local screen = win:screen()
         local max = screen:frame()
 
+        -- Helper to check if two values are approximately equal (within 2 pixels)
+        local function approx(a, b)
+            return math.abs(a - b) < 2
+        end
+
         if direction == "left" then
-            if f.x == max.x + (max.w / 2) and f.w == max.w / 2 then
-                f.x = max.x + (max.w * (1 / 4))
-                f.w = max.w * (3 / 4)
-            elseif f.x == max.x + ((max.w / 4) * 3) and f.w == max.w / 4 then
-                f.x = max.x + (max.w / 2)
+            -- Window on right half → expand left to 2/3
+            if approx(f.x, max.x + max.w / 2) and approx(f.w, max.w / 2) then
+                f.x = max.x + max.w / 3
+                f.w = max.w * 2 / 3
+            -- Window on right 2/3 → expand left to 3/4
+            elseif approx(f.x, max.x + max.w / 3) and approx(f.w, max.w * 2 / 3) then
+                f.x = max.x + max.w / 4
+                f.w = max.w * 3 / 4
+            -- Window on right quarter → expand left to 1/3
+            elseif approx(f.x, max.x + max.w * 3 / 4) and approx(f.w, max.w / 4) then
+                f.x = max.x + max.w * 2 / 3
+                f.w = max.w / 3
+            -- Window on right 1/3 → expand left to half
+            elseif approx(f.x, max.x + max.w * 2 / 3) and approx(f.w, max.w / 3) then
+                f.x = max.x + max.w / 2
                 f.w = max.w / 2
-            elseif f.w == max.w / 2 and f.x == max.x then
+            -- Window on left half → shrink to 1/3
+            elseif approx(f.x, max.x) and approx(f.w, max.w / 2) then
+                f.x = max.x
+                f.w = max.w / 3
+            -- Window on left 1/3 → shrink to quarter
+            elseif approx(f.x, max.x) and approx(f.w, max.w / 3) then
                 f.x = max.x
                 f.w = max.w / 4
+            -- Window on left 2/3 → shrink to half
+            elseif approx(f.x, max.x) and approx(f.w, max.w * 2 / 3) then
+                f.x = max.x
+                f.w = max.w / 2
+            -- Default → left half
             else
                 f.x = max.x
                 f.w = max.w / 2
             end
         elseif direction == "right" then
-            if f.x == max.x and f.w == max.w / 2 then
+            -- Window on left half → expand right to 2/3
+            if approx(f.x, max.x) and approx(f.w, max.w / 2) then
                 f.x = max.x
-                f.w = max.w * (3 / 4)
-            elseif f.x == max.x and f.w == max.w / 4 then
+                f.w = max.w * 2 / 3
+            -- Window on left 2/3 → expand right to 3/4
+            elseif approx(f.x, max.x) and approx(f.w, max.w * 2 / 3) then
+                f.x = max.x
+                f.w = max.w * 3 / 4
+            -- Window on left quarter → expand right to 1/3
+            elseif approx(f.x, max.x) and approx(f.w, max.w / 4) then
+                f.x = max.x
+                f.w = max.w / 3
+            -- Window on left 1/3 → expand right to half
+            elseif approx(f.x, max.x) and approx(f.w, max.w / 3) then
                 f.x = max.x
                 f.w = max.w / 2
-            elseif f.w == max.w / 2 and f.x == max.x + (max.w / 2) then
-                f.x = max.x + ((max.w / 4) * 3)
+            -- Window on right half → shrink to 1/3
+            elseif approx(f.x, max.x + max.w / 2) and approx(f.w, max.w / 2) then
+                f.x = max.x + max.w * 2 / 3
+                f.w = max.w / 3
+            -- Window on right 1/3 → shrink to quarter
+            elseif approx(f.x, max.x + max.w * 2 / 3) and approx(f.w, max.w / 3) then
+                f.x = max.x + max.w * 3 / 4
                 f.w = max.w / 4
+            -- Window on right 2/3 → shrink to half
+            elseif approx(f.x, max.x + max.w / 3) and approx(f.w, max.w * 2 / 3) then
+                f.x = max.x + max.w / 2
+                f.w = max.w / 2
+            -- Default → right half
             else
-                f.x = max.x + (max.w / 2)
+                f.x = max.x + max.w / 2
                 f.w = max.w / 2
             end
         elseif direction == "up" then

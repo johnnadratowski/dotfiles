@@ -220,8 +220,18 @@ EOF
       nnoremap <buffer> <leader>A <cmd>ClaudeCodeDiffAccept<cr>:tabnext<cr>
     endfunction
 
-    " Auto-open Claude terminal when opening claude.md
+    " Auto-open Claude terminal when opening claude.md or todo.md (if claude.md exists in repo root)
     function! s:OpenClaudeIfNeeded()
+      " Check if claude.md exists in repo root
+      let l:git_root = trim(system('git rev-parse --show-toplevel 2>/dev/null'))
+      if v:shell_error || empty(l:git_root)
+        return
+      endif
+      if !filereadable(l:git_root . '/claude.md')
+        return
+      endif
+
+      " Check if Claude terminal is already open
       for bufnr in range(1, bufnr('$'))
         if bufname(bufnr) =~ 'claude' && getbufvar(bufnr, '&buftype') == 'terminal'
           return
@@ -232,7 +242,7 @@ EOF
 
     augroup claudecode_auto_open
       autocmd!
-      autocmd BufRead claude.md call s:OpenClaudeIfNeeded()
+      autocmd BufRead claude.md,todo.md call s:OpenClaudeIfNeeded()
     augroup END
 
     " Setup Claude terminal mappings (called from TermOpen and BufEnter)

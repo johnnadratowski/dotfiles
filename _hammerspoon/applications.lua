@@ -81,21 +81,21 @@ hs.hotkey.bind(
 
 hs.hotkey.bind(
     constants.hyper,
-    "return",
-    "VSCode",
-    function()
-        hs.application.launchOrFocus("/Applications/Visual Studio Code.app")
-    end
-)
-
-hs.hotkey.bind(
-    constants.hyper,
     "tab",
     "Browser",
     function()
         hs.application.launchOrFocus(constants.defaultBrowser)
     end
 )
+
+-- hs.hotkey.bind(
+--     constants.hyper,
+--     "return",
+--     "VSCode",
+--     function()
+--         hs.application.launchOrFocus("/Applications/Visual Studio Code.app")
+--     end
+-- )
 
 -- hs.hotkey.bind(
 --     constants.hyper,
