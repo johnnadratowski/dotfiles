@@ -273,6 +273,7 @@ EOF
       autocmd TermOpen *claude* call s:SetupClaudeTerminalMappings()
       autocmd BufEnter * if expand('%') =~ 'claude' && &buftype == 'terminal' | call s:SetupClaudeTerminalMappings() | endif
       autocmd BufLeave * call s:SaveClaudeView()
+      autocmd BufEnter *claude* if &buftype == 'terminal' | mode | endif
       autocmd BufEnter *claude* if &buftype == 'terminal' && get(b:, 'claude_stay_normal', 0) | call s:RestoreClaudeView() | elseif &buftype == 'terminal' | startinsert | endif
       autocmd WinLeave * call s:SaveClaudeView()
       autocmd WinEnter * if expand('%') =~ 'claude' && &buftype == 'terminal' && get(b:, 'claude_stay_normal', 0) | call s:RestoreClaudeView() | elseif expand('%') =~ 'claude' && mode() != 't' && &buftype == 'terminal' | startinsert | endif
