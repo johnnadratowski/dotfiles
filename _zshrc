@@ -86,8 +86,8 @@ if [[ $OSTYPE == 'darwin'* ]]; then
 fi
 
 if [[ "$TMUX" = "" && "$SSH_CLIENT" == "" && "$SSH_TTY" == "" ]]; then 
-	if $(which tmux); then
-		exec tmux -2 new-session -A -s main; 
+	if command -v tmux &>/dev/null; then
+		exec tmux -2 new-session -A -s main
 	fi
 fi
 
