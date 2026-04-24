@@ -22,7 +22,7 @@
     ],
     "deny": [],
     "ask": [],
-    "defaultMode": "default"
+    "defaultMode": "auto"
   },
   "statusLine": {
     "type": "command",
@@ -30,7 +30,23 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "claude-notifications-go@claude-notifications-go": true
+    "claude-notifications-go@claude-notifications-go": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true
   },
-  "model": "opus"
+  "extraKnownMarketplaces": {
+    "chrome-devtools-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "ChromeDevTools/chrome-devtools-mcp"
+      }
+    }
+  },
+  "effortLevel": "high",
+  "skipDangerousModePermissionPrompt": true,
+  "skipAutoPermissionPrompt": true
 }

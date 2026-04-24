@@ -112,4 +112,4 @@ local function fmtNum()
   alerts.alert(out, #parts)
 end
 
-hs.hotkey.bind(constants.hyper, "n", "Format Number", fmtNum, hs.alert.closeAll)
+hs.hotkey.bind(constants.hyper, "f", "Format Number", fmtNum, hs.alert.closeAll)
