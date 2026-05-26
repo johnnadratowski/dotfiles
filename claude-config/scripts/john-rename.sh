@@ -52,9 +52,19 @@ done
 
 mv "$self_file" "$reg/$new_name.$pid"
 
-# Rename tmux window
+# Set the tmux pane title (right granularity — survives split-pane setups).
+tmux select-pane -t "$TMUX_PANE" -T "$new_name" 2>/dev/null || true
+
+# Also rename the window for convenience on single-pane windows.
 if window_id=$(tmux display-message -t "$TMUX_PANE" -p '#{window_id}' 2>/dev/null); then
+  tmux set-window-option -t "$window_id" automatic-rename off 2>/dev/null || true
   tmux rename-window -t "$window_id" "$new_name" 2>/dev/null || true
 fi
 
-echo "renamed: $old_name -> $new_name"
+# Also rename the Claude session itself via its built-in /rename slash
+# command. We're inside the running session, so just type it into our
+# own prompt — it'll fire on the next turn.
+tmux send-keys -t "$TMUX_PANE" -l "/rename $new_name"
+tmux send-keys -t "$TMUX_PANE" Enter
+
+echo "renamed: $old_name -> $new_name (both tmux window and Claude session)"
