@@ -26,6 +26,11 @@
         "type": "model"
       },
       {
+        "id": "2303120f-0250-44a6-a0e9-141f01aad151",
+        "type": "thinking-effort",
+        "backgroundColor": "bgBrightBlack"
+      },
+      {
         "id": "14480d40-bf3a-45e2-ad7b-17a4ec73e29c",
         "type": "context-percentage-usable",
         "metadata": {
@@ -33,8 +38,22 @@
         }
       },
       {
-        "id": "bcaff3df-9411-4f7d-aa29-1e7526bf8b97",
-        "type": "input-speed"
+        "id": "dfd10cf0-7553-4a88-b27b-c296ca442258",
+        "type": "session-usage",
+        "backgroundColor": "bgBrightYellow"
+      },
+      {
+        "id": "f0240312-e8cf-4b64-a70e-2f2e452f9ff6",
+        "type": "weekly-usage",
+        "backgroundColor": "bgBrightRed",
+        "metadata": {
+          "display": "time"
+        }
+      },
+      {
+        "id": "a120244f-cf4d-4c3a-a3f0-7084e2a105c8",
+        "type": "skills",
+        "backgroundColor": "bgBrightBlue"
       }
     ]
   ],
@@ -44,6 +63,7 @@
   "defaultPadding": " ",
   "inheritSeparatorColors": false,
   "globalBold": false,
+  "gitCacheTtlSeconds": 5,
   "minimalistMode": false,
   "powerline": {
     "enabled": true,
@@ -56,7 +76,7 @@
     "startCaps": [],
     "endCaps": [],
     "theme": "monokai",
-    "autoAlign": false,
+    "autoAlign": true,
     "continueThemeAcrossLines": false
   }
 }
