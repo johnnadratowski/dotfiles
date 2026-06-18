@@ -22,9 +22,8 @@
     ],
     "deny": [],
     "ask": [],
-    "defaultMode": "default"
+    "defaultMode": "auto"
   },
-  "model": "opus",
   "statusLine": {
     "type": "command",
     "command": "npx -y ccstatusline@latest",
@@ -32,5 +31,6 @@
   },
   "enabledPlugins": {
     "claude-notifications-go@claude-notifications-go": true
-  }
+  },
+  "skipAutoPermissionPrompt": true
 }
