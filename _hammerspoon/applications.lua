@@ -88,6 +88,16 @@ hs.hotkey.bind(
     end
 )
 
+hs.hotkey.bind(
+  constants.hyper, 
+  "K", 
+  "KeepassXC", 
+  function()
+    -- Attempts to launch or focus the app
+    hs.application.launchOrFocus("KeePassXC")
+  end
+)
+
 -- hs.hotkey.bind(
 --     constants.hyper,
 --     "return",
