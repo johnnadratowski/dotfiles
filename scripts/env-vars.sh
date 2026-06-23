@@ -2,6 +2,10 @@
 # Contains all of the environment variables that should
 # be exported in a new bash session
 
+# Homebrew before system/local so brew binaries win over them
+export PATH=/opt/homebrew/bin:$PATH:/usr/local/bin
+
+# ...but ~/bin wins over everything, including brew
 if [ -d $HOME/bin ]
 then
 	export PATH=$HOME/bin:$PATH
@@ -12,9 +16,9 @@ TIMEFMT=$'\nreal\t%E\nuser\t%U\nsys\t%S'
 unset GREP_OPTIONS
 export HISTTIMEFORMAT="%d/%m/%y %T "
 export PAGER="less"
-export EDITOR="vim"
-export GIT_EDITOR="vim"
-export VISUAL="vim"
+export EDITOR="nvim"
+export GIT_EDITOR="nvim"
+export VISUAL="nvim"
 
 export LESSCHARSET='latin1'
 
@@ -48,6 +52,10 @@ fi
 # Node.js Stuff
 export NODE_PATH='/usr/lib/node_modules/'
 export NVM_DIR="$HOME/.nvm"
+
+# Bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
 
 # Java stuff
 if [ -f /usr/libexec/java_home ]

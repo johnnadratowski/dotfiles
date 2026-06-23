@@ -1,3 +1,5 @@
+# Early Homebrew bootstrap so oh-my-zsh plugins (direnv, fzf) find brew tools.
+# Canonical PATH ordering lives in scripts/env-vars.sh.
 export PATH=/opt/homebrew/bin:$PATH:/usr/local/bin
 
 # Path to your oh-my-zsh configuration.
@@ -93,13 +95,5 @@ fi
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-# bun completions
-[ -s "/Users/john/.bun/_bun" ] && source "/Users/john/.bun/_bun"
-
-# bun
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
+# bun completions (BUN_INSTALL set in env-vars.sh; nvm loaded via init.sh)
+[ -s "$BUN_INSTALL/_bun" ] && source "$BUN_INSTALL/_bun"
