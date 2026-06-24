@@ -18,6 +18,13 @@
         }
       },
       {
+        "id": "fleet-behind-base",
+        "type": "custom-command",
+        "commandPath": "sh -c '[ -x .claude/scripts/statusline-behind-base.sh ] && .claude/scripts/statusline-behind-base.sh || true'",
+        "timeout": 2000,
+        "maxWidth": 8
+      },
+      {
         "id": "sep-l1",
         "type": "separator"
       },
@@ -68,6 +75,10 @@
         }
       },
       {
+        "id": "sep-l2b",
+        "type": "separator"
+      },
+      {
         "id": "a120244f-cf4d-4c3a-a3f0-7084e2a105c8",
         "type": "skills",
         "backgroundColor": "bgBrightBlue"
@@ -76,13 +87,6 @@
         "id": "fleet-unread",
         "type": "custom-command",
         "commandPath": "sh -c '[ -x .claude/scripts/statusline-unread.sh ] && .claude/scripts/statusline-unread.sh || true'",
-        "timeout": 2000,
-        "maxWidth": 8
-      },
-      {
-        "id": "fleet-behind-base",
-        "type": "custom-command",
-        "commandPath": "sh -c '[ -x .claude/scripts/statusline-behind-base.sh ] && .claude/scripts/statusline-behind-base.sh || true'",
         "timeout": 2000,
         "maxWidth": 8
       }
