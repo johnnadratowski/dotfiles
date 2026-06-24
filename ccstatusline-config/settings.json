@@ -18,6 +18,10 @@
         }
       },
       {
+        "id": "sep-l1",
+        "type": "separator"
+      },
+      {
         "id": "b67f891a-22a4-4b09-9741-977a68735223",
         "type": "version"
       },
@@ -31,6 +35,15 @@
         "backgroundColor": "bgBrightBlack"
       },
       {
+        "id": "lastmsg-ago",
+        "type": "custom-command",
+        "commandPath": "~/.claude/scripts/last-msg-ago.sh",
+        "timeout": 2000,
+        "maxWidth": 14
+      }
+    ],
+    [
+      {
         "id": "14480d40-bf3a-45e2-ad7b-17a4ec73e29c",
         "type": "context-percentage-usable",
         "metadata": {
@@ -41,6 +54,10 @@
         "id": "dfd10cf0-7553-4a88-b27b-c296ca442258",
         "type": "session-usage",
         "backgroundColor": "bgBrightYellow"
+      },
+      {
+        "id": "sep-l2",
+        "type": "separator"
       },
       {
         "id": "f0240312-e8cf-4b64-a70e-2f2e452f9ff6",
@@ -54,6 +71,20 @@
         "id": "a120244f-cf4d-4c3a-a3f0-7084e2a105c8",
         "type": "skills",
         "backgroundColor": "bgBrightBlue"
+      },
+      {
+        "id": "fleet-unread",
+        "type": "custom-command",
+        "commandPath": "sh -c '[ -x .claude/scripts/statusline-unread.sh ] && .claude/scripts/statusline-unread.sh || true'",
+        "timeout": 2000,
+        "maxWidth": 8
+      },
+      {
+        "id": "fleet-behind-base",
+        "type": "custom-command",
+        "commandPath": "sh -c '[ -x .claude/scripts/statusline-behind-base.sh ] && .claude/scripts/statusline-behind-base.sh || true'",
+        "timeout": 2000,
+        "maxWidth": 8
       }
     ]
   ],
@@ -76,7 +107,7 @@
     "startCaps": [],
     "endCaps": [],
     "theme": "monokai",
-    "autoAlign": true,
-    "continueThemeAcrossLines": false
+    "autoAlign": false,
+    "continueThemeAcrossLines": true
   }
 }
