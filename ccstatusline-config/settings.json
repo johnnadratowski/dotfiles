@@ -116,7 +116,24 @@
         "type": "custom-command",
         "commandPath": "sh -c '[ -x .claude/scripts/statusline-todo.sh ] && .claude/scripts/statusline-todo.sh || true'",
         "timeout": 2000,
-        "maxWidth": 20
+        "preserveColors": true
+      }
+    ],
+    [
+      {
+        "id": "sep-l3a",
+        "type": "flex-separator"
+      },
+      {
+        "id": "fleet-summary",
+        "type": "custom-command",
+        "commandPath": "sh -c '[ -x .claude/scripts/statusline-summary.sh ] && .claude/scripts/statusline-summary.sh || true'",
+        "timeout": 2000,
+        "preserveColors": true
+      },
+      {
+        "id": "sep-l3b",
+        "type": "flex-separator"
       }
     ]
   ],
@@ -140,6 +157,6 @@
     "endCaps": [],
     "theme": "monokai",
     "autoAlign": false,
-    "continueThemeAcrossLines": true
+    "continueThemeAcrossLines": false
   }
 }

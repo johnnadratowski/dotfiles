@@ -16,7 +16,9 @@ EXTRA_FILES = {
     'zsh-custom/themes/agkozak.zsh-theme': "./agkozak-zsh-prompt/agkozak-zsh-prompt.plugin.zsh",
     'claude-config/settings.json': '.claude/settings.json',
     'claude-config/agents': '.claude/agents',
+    'claude-config/commands/challenge.md': '.claude/commands/challenge.md',
     'claude-config/scripts': '.claude/scripts',
+    'claude-config/output-styles': '.claude/output-styles',
     'ccstatusline-config/settings.json': '.config/ccstatusline/settings.json',
 }
 

@@ -38,6 +38,8 @@
     "ask": [],
     "defaultMode": "auto"
   },
+  "model": "opus[1m]",
+  "outputStyle": "Concise",
   "hooks": {
     "SessionStart": [
       {
@@ -46,27 +48,6 @@
           {
             "type": "command",
             "command": "bash -c 'r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -x \"$r/.claude/hooks/register-agent.sh\" ] || exit 0; exec bash \"$r/.claude/hooks/register-agent.sh\" sessionstart'"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx -y ccstatusline@latest --hook"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "npx -y ccstatusline@latest --hook"
           }
         ]
       }
@@ -96,7 +77,12 @@
       }
     }
   },
-  "effortLevel": "high",
+  "effortLevel": "xhigh",
+  "tui": "fullscreen",
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
   "skipDangerousModePermissionPrompt": true,
   "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
@@ -104,5 +90,5 @@
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "tui": "fullscreen"
+  "voiceEnabled": true
 }
