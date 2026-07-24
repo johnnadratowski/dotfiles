@@ -19,6 +19,7 @@ EXTRA_FILES = {
     'claude-config/commands/challenge.md': '.claude/commands/challenge.md',
     'claude-config/scripts': '.claude/scripts',
     'claude-config/output-styles': '.claude/output-styles',
+    'claude-config/skills/monocle-pr-review': '.claude/skills/monocle-pr-review',
     'ccstatusline-config/settings.json': '.config/ccstatusline/settings.json',
 }
 
