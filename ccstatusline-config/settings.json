@@ -47,6 +47,31 @@
         "type": "flex-separator"
       },
       {
+        "id": "usage-ctx",
+        "type": "custom-command",
+        "commandPath": "~/.claude/scripts/statusline-usage.sh ctx",
+        "timeout": 2000,
+        "maxWidth": 8
+      },
+      {
+        "id": "usage-session",
+        "type": "custom-command",
+        "commandPath": "~/.claude/scripts/statusline-usage.sh session",
+        "timeout": 2000,
+        "maxWidth": 8,
+        "backgroundColor": "bgBrightYellow"
+      },
+      {
+        "id": "usage-weekly",
+        "type": "custom-command",
+        "commandPath": "~/.claude/scripts/statusline-usage.sh weekly",
+        "timeout": 2000,
+        "maxWidth": 8,
+        "backgroundColor": "bgBrightRed"
+      }
+    ],
+    [
+      {
         "id": "b67f891a-22a4-4b09-9741-977a68735223",
         "type": "version"
       },
@@ -65,28 +90,6 @@
         "commandPath": "~/.claude/scripts/last-msg-ago.sh",
         "timeout": 2000,
         "maxWidth": 14
-      }
-    ],
-    [
-      {
-        "id": "14480d40-bf3a-45e2-ad7b-17a4ec73e29c",
-        "type": "context-percentage-usable",
-        "metadata": {
-          "inverse": "false"
-        }
-      },
-      {
-        "id": "dfd10cf0-7553-4a88-b27b-c296ca442258",
-        "type": "session-usage",
-        "backgroundColor": "bgBrightYellow"
-      },
-      {
-        "id": "f0240312-e8cf-4b64-a70e-2f2e452f9ff6",
-        "type": "weekly-usage",
-        "backgroundColor": "bgBrightRed",
-        "metadata": {
-          "display": "time"
-        }
       },
       {
         "id": "sep-l2b",
@@ -107,14 +110,9 @@
         "maxWidth": 16
       },
       {
-        "id": "a120244f-cf4d-4c3a-a3f0-7084e2a105c8",
-        "type": "skills",
-        "backgroundColor": "bgBrightBlue"
-      },
-      {
         "id": "fleet-todo",
         "type": "custom-command",
-        "commandPath": "sh -c '[ -x .claude/scripts/statusline-todo.sh ] && .claude/scripts/statusline-todo.sh || true'",
+        "commandPath": "sh -c '[ -x .claude/scripts/statusline-todo.sh ] || exit 0; out=$(.claude/scripts/statusline-todo.sh) || exit 0; [ -n \"$out\" ] && printf \"\\033[38;5;16m%s\\033[39m\" \"$out\"'",
         "timeout": 2000,
         "preserveColors": true
       }
@@ -157,6 +155,6 @@
     "endCaps": [],
     "theme": "monokai",
     "autoAlign": false,
-    "continueThemeAcrossLines": false
+    "continueThemeAcrossLines": true
   }
 }
