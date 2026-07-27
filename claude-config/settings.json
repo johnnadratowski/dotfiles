@@ -38,8 +38,9 @@
     "ask": [],
     "defaultMode": "auto"
   },
-  "model": "opus[1m]",
-  "outputStyle": "Concise",
+  "skillOverrides": {
+    "unblock": "off"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -77,6 +78,7 @@
       }
     }
   },
+  "outputStyle": "Concise",
   "effortLevel": "xhigh",
   "tui": "fullscreen",
   "voice": {
@@ -87,8 +89,10 @@
   "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
   "editorMode": "normal",
+  "autoScrollEnabled": false,
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "model": "opus[1m]"
 }
