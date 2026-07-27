@@ -5,7 +5,7 @@
     {
       "context": "Scroll",
       "bindings": {
-        "cmd+down": "scroll:bottom"
+        "ctrl+e": "scroll:bottom"
       }
     }
   ]
