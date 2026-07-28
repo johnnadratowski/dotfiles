@@ -136,9 +136,15 @@ def iter_glob_links():
                 yield rel, os.path.join(target_dir, f)
 
 
+# Entries that start with "_" but are NOT dotfiles to link. The leading-underscore
+# convention collides with Python's own artifacts: `__pycache__` was being linked to
+# `~/._pycache__` on every run.
+SKIP_UNDERSCORE = {'__pycache__'}
+
+
 def run_files(fn, **extra):
     for f in os.listdir(SOURCE_BASE):
-        if f.startswith("_"):
+        if f.startswith("_") and f not in SKIP_UNDERSCORE:
             fn(f)
 
     for extra_source, extra_target in extra.items():

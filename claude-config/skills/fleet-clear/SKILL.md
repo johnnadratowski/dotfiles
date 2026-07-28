@@ -1,14 +1,21 @@
 ---
 name: fleet-clear
-description: Clear a fleet agent's context AND restore its session name in one step. Use when the user says "clear feature-2", "clear the fleet", "clear and rename <agent>" — a bare /clear silently drops the agent's name and the SessionStart auto-rename structurally cannot restore it. Drives /clear then /rename from another pane, so the keystrokes never race the human's typing.
+description: Clear THIS agent's context and restore its session name, or just restore the name after a manual /clear. Run it in the agent's own pane — a bare /clear silently drops the name and the SessionStart auto-rename structurally cannot restore it. Self-targeting only; nothing ever types into a pane you are using.
 ---
 
-# fleet-clear — clear an agent without losing its name
+# fleet-clear — clear without losing your name
 
-`/clear` drops the agent's session name, and nothing puts it back. This does both halves in
-one sequenced action.
+`/clear` drops the agent's session name and nothing puts it back. Run this **in the agent's
+own pane** to do the clear and the rename together, or to fix the name after clearing by
+hand.
 
-## Why a bare `/clear` loses the name
+```bash
+~/.claude/scripts/fleet-clear.sh              # /clear + /rename <name>, one step
+~/.claude/scripts/fleet-clear.sh --name-only  # just the rename, after you cleared yourself
+~/.claude/scripts/fleet-clear.sh --dry-run    # print what it would send, touch nothing
+```
+
+## Why `/clear` loses the name
 
 `register-agent.sh`'s settle re-check reads the session name from
 `~/.claude/sessions/<pid>.json` — **keyed by PID**. `/clear` starts a new session inside the
@@ -20,65 +27,42 @@ Code's actual new session is unnamed.
 Observed on `feature-2`: cleared at `12:44:19`, settle at `12:44:24` logged
 `settled name matches boot name 'feature-2' — no-op`, name gone.
 
-That is also why the fix is not "make the auto-rename more patient". The keystroke fallback
-it would use is fragile for a second reason: after clearing an agent you are usually typing
-into that pane, and a delayed `tmux send-keys` interleaves with your keystrokes.
+The name itself is read from the **fleet registry**, which `register-agent.sh` rewrites on
+every SessionStart — including the one `/clear` fires. So the registry is correct even
+though the session file is stale. That staleness is the bug; the registry is the truth.
 
-## Invocation
+## Self-targeting, deliberately
 
-```
-/fleet-clear <agent> [<agent> ...]     # clear + rename the named agents
-/fleet-clear --role feature            # every agent of a role
-/fleet-clear <agent> --dry-run         # show what would happen, touch nothing
-```
+The obvious design — have the coordinator drive `/clear` + `/rename` into the agent's pane —
+reintroduces the problem it is meant to solve. Right after clearing an agent you are
+normally typing to it, and an external `tmux send-keys` interleaves with your keystrokes.
+That fragility is why the delayed auto-rename keystroke was unreliable even in the cases
+where it did fire.
 
-**Run it from a different pane than the target** — normally the coordinator's. That is what
-removes the typing race: you issue the command in one pane, the sends land in another.
+So this sends **only to its own pane**, **only when you invoke it**, and **only while you
+are waiting for it**. No timer, no daemon, no cross-agent path. If you want to clear a
+different agent, run it in that agent's pane.
 
-## What the backing script does
+## What it does
 
-```bash
-~/.claude/scripts/fleet-clear.sh <agent> [...] [--role R] [--dry-run]
-```
-
-Per target, in order:
-
-1. **Resolve** the pane + pid from `~/.claude/running-agents/`; skip if not live.
-2. **Refuse self.** Clearing the caller would destroy the session issuing the command, and
-   leave nothing to send the `/rename` or verify it.
-3. **Idle-gate** — skip a BUSY agent (fresh `agent-busy` marker) or a pane in copy-mode.
-   Clearing mid-turn discards in-flight work. Wait for idle and re-run.
-4. **Send `/clear`.**
-5. **Wait for the SessionStart** that the clear fires — detected as a new line in
-   `~/.claude/debug/register-agent.log` — so the rename lands on the *new* session and not
-   in the teardown window. On timeout (`WORKFLOW_CLEAR_SETTLE_TIMEOUT`, default 15s) it
-   sends the rename anyway and says so: the clear already happened, and an unnamed session
-   is the worse outcome.
-6. **Send `/rename <name>`.**
-7. **Verify** against `~/.claude/sessions/<pid>.json` (the pid is unchanged across a clear,
-   so the path is stable). Reports `OK`, or `WARN` with what to fix by hand.
-
-Exit non-zero if any target was skipped or failed to verify.
+1. Resolve this agent's name from `~/.claude/running-agents/` via the pane token.
+   **Fails loudly if it cannot** — a guessed name would be typed into a live pane, and
+   renaming an agent to something the fleet does not expect breaks message delivery to it.
+2. Queue `/clear` (unless `--name-only`), then `/rename <name>`, into this pane.
+3. They run in order as ordinary input once the turn ends: the clear wipes the
+   conversation, the rename names the session the clear created.
 
 ## What this skill will NOT do
 
-- Clear the calling agent (always skipped).
-- Clear a BUSY agent or a scrolled-back pane (idle-gated, like `restart`/`compact`).
-- Restart anything — the process is untouched, only the conversation is cleared. To reload
-  machinery from disk use `agent-fanout.sh restart`.
+- Type into any pane but its own.
+- Clear or rename another agent.
+- Restart anything — the process is untouched, only the conversation is cleared. Use
+  `agent-fanout.sh restart` to reload machinery from disk.
 - Touch git or origin.
 
 ## Companion skills
 
-- **`agent-fanout`** — `restart` (kill + `claude --continue`), `compact`, `status`.
-  `restart` preserves history; this discards it.
-- **`agent-rename`** — rename an agent (branch, registry, tmux, session) without clearing.
-
-## Note on `WORKFLOW_AGENT_SKIP_RENAME`
-
-`agent-fanout restart` launches with `WORKFLOW_AGENT_SKIP_RENAME=1 claude --continue --name
-"<name>"`. The `--name` sets the name at launch, so the settle never reaches its keystroke
-fallback and the flag is redundant on that path. It is also actively harmful: the env var
-persists in the pane's shell, so a later `/clear` inherits it — which is why
-`register-agent.sh` carries a special case clearing it for `clear` sources. Dropping the
-flag from the restart command removes the root cause rather than patching around it.
+- **`agent-fanout`** — `restart` (kill + `claude --continue`, preserves history), `compact`,
+  `status`.
+- **`agent-rename`** — rename an agent for real (branch, registry, tmux, session) rather
+  than restoring the name it already has.

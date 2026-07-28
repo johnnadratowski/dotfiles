@@ -71,7 +71,7 @@ Basenames must therefore stay unique across subdirectories.
 | `settings.json` | user-level Claude Code settings, incl. the `SessionStart` hook that registers an agent in every project |
 | `keybindings.json` | key bindings |
 | `scripts/_fleet.sh` | canonical fleet helpers (`fleet_find_self`, `fleet_busy`, `fleet_resolve_role`, …) |
-| `scripts/fleet-clear.sh` | clear an agent's context **and** restore its session name (`/clear` alone silently drops it) |
+| `scripts/fleet-clear.sh` | run in an agent's **own** pane: clear its context and restore its session name (`/clear` alone silently drops it), or `--name-only` after clearing by hand. Self-targeting by design — nothing types into a pane you are using |
 | `scripts/last-msg-ago.sh`, `notify-end.sh`, `statusline-usage.sh` | statusline + notification helpers |
 | `skills/fleet-clear/` | the skill wrapping `fleet-clear.sh` |
 | `skills/monocle-pr-review/` | Monocle PR review skill |
