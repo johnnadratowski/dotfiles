@@ -5,7 +5,7 @@
       {
         "id": "fleet-role",
         "type": "custom-command",
-        "commandPath": "sh -c '[ -x .claude/scripts/statusline-role.sh ] && .claude/scripts/statusline-role.sh || true'",
+        "commandPath": "sh -c 'for p in \"$HOME/.claude/scripts/statusline-role.sh\" .claude/scripts/statusline-role.sh; do [ -x \"$p\" ] && exec \"$p\"; done; true'",
         "timeout": 2000,
         "maxWidth": 14
       },
@@ -98,14 +98,14 @@
       {
         "id": "fleet-unread",
         "type": "custom-command",
-        "commandPath": "sh -c '[ -x .claude/scripts/statusline-unread.sh ] && .claude/scripts/statusline-unread.sh || true'",
+        "commandPath": "sh -c 'for p in \"$HOME/.claude/scripts/statusline-unread.sh\" .claude/scripts/statusline-unread.sh; do [ -x \"$p\" ] && exec \"$p\"; done; true'",
         "timeout": 2000,
         "maxWidth": 8
       },
       {
         "id": "fleet-liveness",
         "type": "custom-command",
-        "commandPath": "sh -c '[ -x .claude/scripts/statusline-fleet.sh ] && .claude/scripts/statusline-fleet.sh || true'",
+        "commandPath": "sh -c 'for p in \"$HOME/.claude/scripts/statusline-fleet.sh\" .claude/scripts/statusline-fleet.sh; do [ -x \"$p\" ] && exec \"$p\"; done; true'",
         "timeout": 2000,
         "maxWidth": 16
       },
