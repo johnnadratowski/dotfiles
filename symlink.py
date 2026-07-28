@@ -9,6 +9,8 @@ import shutil
 SOURCE_BASE = os.path.abspath(os.path.curdir)
 TARGET_BASE = os.path.expanduser("~")
 
+# Whole-file / whole-directory links. A directory may only appear here when EVERYTHING
+# inside it is machinery -- see GLOB_LINKS below for the state/machinery rule.
 EXTRA_FILES = {
     'scripts': None,
     'nvim': '.config/nvim',
@@ -16,12 +18,39 @@ EXTRA_FILES = {
     'zsh-custom/themes/agkozak.zsh-theme': "./agkozak-zsh-prompt/agkozak-zsh-prompt.plugin.zsh",
     'claude-config/settings.json': '.claude/settings.json',
     'claude-config/keybindings.json': '.claude/keybindings.json',
-    'claude-config/agents': '.claude/agents',
     'claude-config/commands/challenge.md': '.claude/commands/challenge.md',
     'claude-config/scripts': '.claude/scripts',
     'claude-config/output-styles': '.claude/output-styles',
     'claude-config/skills/monocle-pr-review': '.claude/skills/monocle-pr-review',
+    'claude-config/skills/fleet-clear': '.claude/skills/fleet-clear',
     'ccstatusline-config/settings.json': '.config/ccstatusline/settings.json',
+}
+
+# Per-FILE links for directories that mix machinery with runtime state.
+#
+# THE RULE: dotfiles carries machinery; runtime state stays on the local machine. When a
+# directory holds both, it must NOT be whole-dir linked -- link the machinery files
+# individually and leave everything else alone.
+#
+# `~/.claude/agents` is the case that forced this. Claude Code reads subagent definitions
+# from `<name>.md` there, but the fleet tooling ALSO writes its per-agent runtime records
+# into the same directory: `<name>` (home branch), plus `<name>.cwd` / `<name>.transcript`
+# / `<name>.role` sidecars that `register-agent.sh` rewrites on every SessionStart. That
+# state is specific to one machine's fleet and must never land in this repo.
+#
+# This used to be `'claude-config/agents': '.claude/agents'` in EXTRA_FILES. Running it
+# would have moved the live fleet state aside to `.dotfiles.bak` and pointed the directory
+# at this repo -- silently breaking `agent-fanout status`, the base-branch drift warnings,
+# and the CTX column, and thereafter dumping runtime writes into a tracked git tree. It had
+# never actually run (the target was still a real directory), so the damage was pending
+# rather than done.
+#
+# Definitions are FLATTENED into the target: the subdirectories here are for human
+# organisation, and only top-level `*.md` is reliably discovered. Verified collision-free.
+#
+#   source-dir: (target-dir, glob, {basenames to skip})
+GLOB_LINKS = {
+    'claude-config/agents': ('.claude/agents', '*.md', {'README.md'}),
 }
 
 DIRS = [
@@ -86,6 +115,27 @@ def unlink_file(name, target_name=None):
             shutil.move(bak_file, target)
 
 
+def iter_glob_links():
+    """Yield (source_rel, target_rel) for every GLOB_LINKS match, flattened.
+
+    Walks recursively so organisational subdirectories work, but the link always lands at
+    the top level of the target -- that is the only place Claude Code reliably discovers
+    `*.md` definitions.
+    """
+    import fnmatch
+
+    for source_dir, (target_dir, pattern, skip) in GLOB_LINKS.items():
+        abs_source_dir = os.path.join(SOURCE_BASE, source_dir)
+        if not os.path.isdir(abs_source_dir):
+            continue
+        for root, _dirs, files in os.walk(abs_source_dir):
+            for f in sorted(files):
+                if f in skip or not fnmatch.fnmatch(f, pattern):
+                    continue
+                rel = os.path.relpath(os.path.join(root, f), SOURCE_BASE)
+                yield rel, os.path.join(target_dir, f)
+
+
 def run_files(fn, **extra):
     for f in os.listdir(SOURCE_BASE):
         if f.startswith("_"):
@@ -93,6 +143,9 @@ def run_files(fn, **extra):
 
     for extra_source, extra_target in extra.items():
         fn(extra_source, target_name=extra_target)
+
+    for glob_source, glob_target in iter_glob_links():
+        fn(glob_source, target_name=glob_target)
 
 
 def update_submodules():
