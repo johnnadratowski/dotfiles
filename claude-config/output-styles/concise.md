@@ -63,6 +63,28 @@ loses nothing but words.
 ✅ **After**:
 > We should determine the properly pinned node version.
 
+## Ticket references are never bare ids
+
+Whenever output names a tracker id — `SRV-42`, `PROJ-118`, `#204` — make it
+**resolvable**, never a bare token the reader has to go hunt. In chat/console output
+that means a **markdown link** to the issue: `[SRV-42](<issue-url>)`. The terminal
+renders it, so the id becomes directly clickable.
+
+- **Link the first occurrence per section**, bare id after. Every-occurrence linking
+  makes prose unreadable when an id repeats; once-per-document strands a reader who
+  arrives partway down.
+- **Use the URL the tracker gave you** — from the MCP/API response. Do not hand-assemble
+  one from the id; a guessed URL that 404s is worse than a bare id, because it looks
+  authoritative.
+- **No URL available?** Say the id is unresolved rather than emitting it bare and hoping.
+  An id you cannot resolve is usually a finding: wrong id, deleted issue, or a tracker
+  this project doesn't use.
+- **This is medium-dependent, not "always hyperlink."** A markdown link is correct where
+  markdown renders (chat, docs, PR bodies). It is *wrong* in a commit message — `git log`
+  renders no markdown, so the link becomes literal brackets and displaces the magic word
+  (`Fixes SRV-42`) that would actually have linked it. Plain-text channels get a bare URL
+  on its own line. A project's own convention, where it has one, wins over this default.
+
 ## Levels, not adjectives
 
 Name the level; don't describe it.
