@@ -51,6 +51,118 @@
             "command": "bash -c 'h=\"$HOME/.claude/hooks/register-agent.sh\"; if [ ! -x \"$h\" ]; then r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$r/.claude/hooks/register-agent.sh\"; fi; [ -x \"$h\" ] || exit 0; exec bash \"$h\" sessionstart'"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/cc-watcher-keepalive.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks exit-plan --agent claude",
+            "type": "command",
+            "timeout": 3600
+          }
+        ],
+        "matcher": "ExitPlanMode"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks mark-activity --agent claude",
+            "type": "command",
+            "timeout": 5
+          }
+        ],
+        "matcher": "Edit|Write|NotebookEdit|MultiEdit"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks enter-plan --agent claude",
+            "type": "command",
+            "timeout": 5
+          }
+        ],
+        "matcher": "ExitPlanMode"
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/unregister-agent.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/drain-inbox.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.claude/hooks/cc-watcher-keepalive.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks on-stop --agent claude",
+            "type": "command",
+            "timeout": 3600
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\"",
+            "type": "command"
+          },
+          {
+            "command": "bash \"$HOME/.claude/hooks/suppress-spent-agent-msg.sh\"",
+            "type": "command",
+            "timeout": 5
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$HOME/.claude/hooks/mark-error.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ]
   },
