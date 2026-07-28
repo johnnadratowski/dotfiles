@@ -20,6 +20,7 @@ EXTRA_FILES = {
     'claude-config/keybindings.json': '.claude/keybindings.json',
     'claude-config/commands/challenge.md': '.claude/commands/challenge.md',
     'claude-config/scripts': '.claude/scripts',
+    'claude-config/hooks': '.claude/hooks',
     'claude-config/output-styles': '.claude/output-styles',
     'claude-config/skills/monocle-pr-review': '.claude/skills/monocle-pr-review',
     'claude-config/skills/fleet-clear': '.claude/skills/fleet-clear',

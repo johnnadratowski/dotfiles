@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -x \"$r/.claude/hooks/register-agent.sh\" ] || exit 0; exec bash \"$r/.claude/hooks/register-agent.sh\" sessionstart'"
+            "command": "bash -c 'h=\"$HOME/.claude/hooks/register-agent.sh\"; if [ ! -x \"$h\" ]; then r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$r/.claude/hooks/register-agent.sh\"; fi; [ -x \"$h\" ] || exit 0; exec bash \"$h\" sessionstart'"
           }
         ]
       }
@@ -89,7 +89,6 @@
   "skipWorkflowUsageWarning": true,
   "theme": "dark-daltonized",
   "editorMode": "normal",
-  "autoScrollEnabled": false,
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
