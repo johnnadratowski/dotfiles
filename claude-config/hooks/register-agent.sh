@@ -137,6 +137,25 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # point at ~/.claude/scripts/_config.sh and ~/.claude/agent-roles/, neither of which exists.
 # Same resolution unregister-agent.sh already uses.
 _repo_root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")}"
+
+# --- FLEET OPT-IN GATE (every entry point, not just SessionStart) ---
+# A repo joins the fleet by carrying .claude/workflow.config. Without it this
+# session is somebody else's -- a dotfiles checkout, a scratch repo, an editor
+# session -- and must NOT be registered, renamed, or given fleet role context.
+#
+# This gate lives HERE, in the script, because the SessionStart wiring in
+# settings.json is only ONE of the ways this file runs. `send-selfheal` (from
+# agent-send.sh / agent-rename.sh) and `settle-recheck` re-enter directly and
+# skip that wiring entirely. Gating the caller therefore gated nothing: on
+# 2026-07-28 a send-selfheal in ~/git/dotfiles registered that session as
+# "master" (its session name looked auto-generated, so the name fell back to the
+# branch) and it showed up in `agent-fanout status` as a fleet peer. Gate the
+# shared entry, not one of its callers.
+if [ ! -f "$_repo_root/.claude/workflow.config" ]; then
+  log "exit: $_repo_root has no .claude/workflow.config — not a fleet repo, skipping registration"
+  exit 0
+fi
+
 config_loader="$_repo_root/.claude/scripts/_config.sh"
 [ -r "$config_loader" ] || config_loader="${script_dir%/hooks}/scripts/_config.sh"
 if [ -r "$config_loader" ]; then
