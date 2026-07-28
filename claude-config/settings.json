@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'h=\"$HOME/.claude/hooks/register-agent.sh\"; if [ ! -x \"$h\" ]; then r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$r/.claude/hooks/register-agent.sh\"; fi; [ -x \"$h\" ] || exit 0; exec bash \"$h\" sessionstart'"
+            "command": "bash -c 'r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; h=\"$HOME/.claude/hooks/register-agent.sh\"; [ -x \"$h\" ] || h=\"$r/.claude/hooks/register-agent.sh\"; [ -x \"$h\" ] || exit 0; exec bash \"$h\" sessionstart'"
           }
         ]
       },
