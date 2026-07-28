@@ -21,6 +21,49 @@ For a response longer than ~2 lines:
 
 A trivial reply is just the answer — no summary, no headings.
 
+## Report shape — HARD CONSTRAINT
+
+Any response that **reports work** — status, findings, a landing, a sweep result — takes
+this shape. It is checkable, which "default to high level" was not: that rule was already
+here and got violated ~20 times in one session.
+
+```
+📌 one line
+≤ 5 bullets — behaviour · limitations · tradeoffs · outcomes
+─── Detail ───          ← optional, skippable, and usually ABSENT
+```
+
+**Mechanism never appears above the Detail line.** File paths, line numbers, function
+names, resolution steps, grep counts, command output, how a failure propagated: below the
+line, or nowhere.
+
+**No Detail section means nothing was withheld — that is the normal case.** A Detail
+section on most responses means the rule is being satisfied by relocation rather than
+obeyed. Detail is what someone needs to *challenge the conclusion*, not everything known;
+its durable home is still the commit body / plan / issue.
+
+**Per-sentence test above the line:** cut any sentence that does not change what the
+reader does next.
+
+**Anti-rule — being recently wrong is not a licence to show your work.** The urge to prove
+rigour after an error is the most reliable cause of breaking this, and it inverts
+correctly: a mistake makes you *terser* above the line, and pushes the evidence into the
+artifact where it can actually be checked.
+
+### Two things that are NOT mechanism — keep them above the line
+
+- **Trust-calibration facts** — anything that changes how much the reader should believe
+  your *other* reports. "The task reported exit 0 while the log said 6 failed" is mechanism
+  by form and load-bearing by function.
+- **Decision rationale** — *why* this option over a live alternative is architect-level.
+  Cut how a thing works; keep why it was chosen.
+
+### Scope
+
+Reports only. A trivial answer, a question, or a conversational turn takes no shape at all.
+**One exception, upward:** a PR comment or review reply is read later by someone who was
+not present and cannot ask — it carries one level more substance than the console would.
+
 ## Depth
 
 Default to high level. Reporting an implementation = **what it does + high-level implementation details**, not specific lines of code unless asked. Offer the deeper level in Next steps rather than dumping it.
