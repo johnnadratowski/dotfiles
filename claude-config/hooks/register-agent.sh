@@ -181,7 +181,18 @@ _sanitize() { tr -c 'A-Za-z0-9_-' '-' | sed -E 's/-+/-/g; s/^-//; s/-$//'; }
 # name (a genuine user name matching it gets branch-derived registration — the
 # documented limitation).
 _is_transient_name() { # $1 = sanitized candidate
-  local _cb; _cb="$(basename "$PWD" | _sanitize)"
+  # Claude Code derives its auto-name from the PROJECT ROOT, so the expected
+  # prefix must come from the repo root -- NOT from $PWD, which is wherever the
+  # agent's shell happens to sit when the hook fires.
+  #
+  # This used to read `basename "$PWD"`, and the difference is not cosmetic:
+  # feature-2's shell was in .../goals-onchain-2/server when a send-selfheal
+  # fired, so this looked for "server-XX" while the actual auto-name was
+  # "goals-onchain-2-7a". No match => the name was treated as REAL and the agent
+  # registered permanently as goals-onchain-2-7a, losing its fleet identity.
+  # Any agent that has cd'd into a subdirectory hits this.
+  local _root="${_repo_root:-$PWD}"
+  local _cb; _cb="$(basename "$_root" | _sanitize)"
   case "$1" in
     "$_cb"-[0-9a-f][0-9a-f]) return 0 ;;
   esac
