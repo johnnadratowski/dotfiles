@@ -22,7 +22,12 @@ case "$1" in
          + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0)) as $used
       | if $usable > 0 and $used > 0
         then "C:\([$used / $usable * 100, 100] | min | round)%"
-        else "" end'
+        else "C:0%" end'
+    # ALWAYS emits, never "". $used is 0 immediately after a /clear or /compact and
+    # on the first turn of a session, which used to blank the widget entirely — so
+    # context disappeared exactly when it had just been reset, i.e. when confirming
+    # the reset was the point. "C:0%" is a real reading, not a placeholder; a widget
+    # that vanishes is indistinguishable from one that is broken.
     ;;
   session)
     printf '%s' "$json" | jq -r '
