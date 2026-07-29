@@ -163,10 +163,16 @@ else
   # the marker is touched once per call, so a shorter one reads a working agent as idle. Canonical
   # predicate (fleet_busy, _fleet.sh) when sourced; the inline copy is the fallback for a clone
   # without it — never an undefined function, which would fail OPEN into nudge duplication.
-  if command -v fleet_busy >/dev/null 2>&1; then
-    fleet_busy "$target" && target_busy=1
+  # STRICT for the nudge: marker present at ANY AGE ⇒ do not type into this pane.
+  # The staleness window above is documented for restart/compact, NOT for keystrokes.
+  # An agent parked on an AskUserQuestion / permission prompt / plan approval is
+  # mid-turn with nothing re-touching its marker; past the window it read as idle,
+  # the nudge fired, and `send-keys … Enter` submitted an answer into the open
+  # selector. Observed. See fleet_turn_open in _fleet.sh for the full reasoning.
+  if command -v fleet_turn_open >/dev/null 2>&1; then
+    fleet_turn_open "$target" && target_busy=1
   else
-    [ -f "$busy_marker" ] && [ -n "$(find "$busy_marker" -mmin "-${WORKFLOW_BUSY_STALE_MIN:-30}" 2>/dev/null)" ] && target_busy=1
+    [ -f "$busy_marker" ] && target_busy=1
   fi
   # HOLD marker (DX-jn-8-031): target is blocked on a Monocle interactive verdict wait — a
   # single long tool call whose busy marker can still go stale, so the staleness rule above could let the

@@ -529,6 +529,18 @@ fi
 # (from the SessionStart payload) is the direct, heuristic-free pointer. Both are
 # refreshed every SessionStart (incl. `--continue`).
 printf '%s\n' "$PWD" > "$HOME/.claude/agents/$name.cwd"
+
+# Self-heal a stale busy marker for THIS name. A session that is starting has no open
+# turn by definition, so any marker here is debris from a previous session that died
+# without SessionEnd (crash, or the `kill` fallback agent-fanout uses when C-c doesn't
+# exit). unregister-agent.sh clears it on a clean exit; this covers the unclean ones.
+#
+# This became load-bearing when the nudge gate switched to fleet_turn_open (marker
+# present at ANY age ⇒ never type into the pane). Under that rule an orphaned marker
+# whose name is later REUSED would suppress every nudge to the new agent, permanently
+# and silently. Clearing at registration makes the marker's lifetime match the session's.
+rm -f "$HOME/.claude/agent-busy/$name" 2>/dev/null || true
+
 transcript_path=$(printf '%s' "$stdin_payload" | jq -r '.transcript_path // empty' 2>/dev/null)
 if [ -n "$transcript_path" ]; then
   printf '%s\n' "$transcript_path" > "$HOME/.claude/agents/$name.transcript"

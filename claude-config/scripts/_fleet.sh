@@ -95,6 +95,31 @@ fleet_busy() {
   [ -f "$m" ] && [ -n "$(find "$m" -mmin "-${WORKFLOW_BUSY_STALE_MIN:-30}" 2>/dev/null)" ]
 }
 
+# fleet_turn_open <name> — is the target's turn OPEN (started, not yet ended)?
+# Marker present, ANY AGE. This is the predicate for "may I type into this pane",
+# and it is deliberately STRICTER than fleet_busy.
+#
+# fleet_busy applies a staleness window so a stuck marker cannot suppress a restart
+# forever — correct for restart/compact, whose whole purpose is recovering a wedged
+# agent. It is WRONG for the keystroke nudge, and the failure is not theoretical:
+# an agent parked on an AskUserQuestion / permission prompt / plan approval is
+# MID-TURN, so nothing re-touches its marker while it waits for a human. Past
+# WORKFLOW_BUSY_STALE_MIN it reads as idle, the nudge fires, and
+# `send-keys … Enter` lands on the OPEN SELECTOR — submitting an answer nobody
+# chose. Observed in this fleet.
+#
+# A healthy live agent has NO marker between turns (Stop clears it), so a marker
+# that exists means the turn genuinely never ended — and "blocked on a human" is by
+# far its commonest cause. Same reasoning the Monocle hold marker already documents:
+# a human can take hours, so it applies no staleness test either.
+#
+# Fails CLOSED. Worst case a message waits for the target's Stop-drain, which is
+# durable and always delivers — trading a cheap failure (latency) to avoid an
+# expensive one (an unintended answer, an auto-approved permission or plan).
+fleet_turn_open() {
+  [ -f "$HOME/.claude/agent-busy/$1" ]
+}
+
 # fleet_resolve_role <name> — canonical agent-name → role classifier
 # (coordinator|test|review|feature). THE single source of these name patterns;
 # register-agent.sh's resolve_role() and agent-fanout.sh's role_of() delegate here so
