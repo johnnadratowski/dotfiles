@@ -50,7 +50,13 @@ chmod +x "$STUB/ps" "$STUB/tmux"
 
 # --- Harness ---------------------------------------------------------------
 newhome(){ local h; h="$(mktemp -d)"; mkdir -p "$h/.claude/sessions" "$h/.claude/running-agents" "$h/.claude/agents"; mkdir -p "$h/.claude/scripts"; cp "$REAL_FLEET" "$h/.claude/scripts/_fleet.sh" 2>/dev/null || true; cp "$REAL_LAYOUT" "$h/.claude/scripts/fleet-layout.sh" 2>/dev/null || true; printf '%s' "$h"; }
-newrepo(){ local r; r="$(mktemp -d)"; git init -q -b feature-1 "$r"; printf '%s' "$r"; }
+# A FLEET repo. The hook's opt-in gate requires .claude/workflow.config — without it
+# registration exits 0 before doing anything, which is correct behaviour (a dotfiles or
+# scratch checkout must never register) but silently invalidated 31 assertions here when
+# the gate landed. `newrepo_nofleet` below is the un-opted-in counterpart, so the gate
+# itself is now covered rather than merely tripped over.
+newrepo(){ local r; r="$(mktemp -d)"; git init -q -b feature-1 "$r"; mkdir -p "$r/.claude"; : > "$r/.claude/workflow.config"; printf '%s' "$r"; }
+newrepo_nofleet(){ local r; r="$(mktemp -d)"; git init -q -b feature-1 "$r"; printf '%s' "$r"; }
 
 # run_hook HOME REPO PAYLOAD SOURCE [VAR=val ...] — headless (no tmux vars).
 # The caller's environment is a guard input too: a `--name`-launched session
@@ -115,10 +121,32 @@ H="$(newhome)"; R="$(newrepo)"
 run_hook "$H" "$R" "$(payload resume)" sessionstart >/dev/null
 ok "no session file -> branch" 'reg_ls "$H" | grep -q "^feature-1\."'
 rm -rf "$H" "$R"
-H="$(newhome)"; D="$(mktemp -d)"
+# Non-git, but opted in: the naming fallback we are pinning here sits DOWNSTREAM of the
+# fleet gate, so the directory needs .claude/workflow.config or the hook exits first and
+# the assertion passes vacuously for the wrong reason.
+H="$(newhome)"; D="$(mktemp -d)"; mkdir -p "$D/.claude"; : > "$D/.claude/workflow.config"
 run_hook "$H" "$D" "$(payload resume)" sessionstart >/dev/null
 ok "no git -> cwd basename" 'reg_ls "$H" | grep -q "^$(sanitize "$(basename "$D")")\."'
 rm -rf "$H" "$D"
+
+echo "== 3b. fleet opt-in gate (.claude/workflow.config) =="
+# A repo without workflow.config is somebody else's checkout — dotfiles, a scratch clone,
+# an editor session — and must NOT be registered, renamed, or given role context. This gate
+# is what stopped a send-selfheal in ~/git/dotfiles from registering as the peer "master".
+H="$(newhome)"; R="$(newrepo_nofleet)"
+session_json "$H" "researcher"
+run_hook "$H" "$R" "$(payload resume)" sessionstart >/dev/null
+ok "non-fleet repo registers NOTHING"        '[ -z "$(reg_ls "$H")" ]'
+ok "…and says why in the log"                'grep -q "not a fleet repo" "$H/.claude/debug/register-agent.log"'
+ok "…and still exits 0 (never breaks a non-fleet session)" \
+   '( cd "$R" && env -u TMUX -u TMUX_PANE HOME="$H" PATH="$STUB:$PATH" bash "$HOOK" sessionstart <<<"$(payload resume)" >/dev/null 2>&1 )'
+rm -rf "$H" "$R"
+# The same gate must hold on the direct re-entry paths, which skip the settings.json wiring.
+H="$(newhome)"; R="$(newrepo_nofleet)"
+session_json "$H" "researcher"
+run_hook "$H" "$R" "$(payload resume)" send-selfheal >/dev/null
+ok "send-selfheal is gated too (the path that leaked 'master')" '[ -z "$(reg_ls "$H")" ]'
+rm -rf "$H" "$R"
 
 echo "== 4. guard boundaries =="
 for nm_kind in "3hex" "upper" "wrongbase"; do

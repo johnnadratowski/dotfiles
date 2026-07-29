@@ -37,6 +37,19 @@ here="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="$here/fleet-layout.sh"
 [ -f "$SCRIPT" ] || { echo "FATAL: fleet-layout.sh not found at $SCRIPT"; exit 1; }
 
+# _config.sh is PROJECT content — it ships in the consuming repo's .claude/scripts/, not
+# alongside this file. The scratch-repo tests below need the real loader (a stub would prove
+# nothing about whether fleet-layout reads workflow.config), so resolve it from the invoking
+# project and SKIP those tests loudly if it cannot be found. Previously these lines copied
+# "$here/_config.sh", which never exists: one site swallowed the error with `|| true` and its
+# assertion then failed for the wrong reason, the other printed a bare `cp: No such file`.
+CONFIG_SH=""
+for _c in "$here/_config.sh" \
+          "$(git rev-parse --show-toplevel 2>/dev/null)/.claude/scripts/_config.sh"; do
+  [ -f "$_c" ] && { CONFIG_SH="$_c"; break; }
+done
+[ -n "$CONFIG_SH" ] || echo "NOTE: _config.sh not resolvable — workflow.config-loading tests will SKIP"
+
 # --- GIT ISOLATION TRIPWIRE (DX-jn-cc-020) — the THIRD hermetic axis ------------------------
 # This test builds SCRATCH git repos (git init/commit/worktree-add in mktemp dirs). A setup
 # escape once let those MUTATIONS hit the CALLER'S real repo: on 2026-07-20 a push ran this
@@ -1390,7 +1403,8 @@ CFH="$(cd "$(mktemp -d)" && pwd -P)"; mkdir -p "$CFH/.config" "$CFH/wt"
 ( cd "$CFH/wt" && git init -q . && git commit -q --allow-empty -m x ) 2>/dev/null
 printf '{ "worktrees": [ {"agent":"c-1","active":true,"path":"%s"} ] }\n' "$CFH/wt" > "$CFH/.config/from-config.json"
 CFG_REPO="$(cd "$(mktemp -d)" && pwd -P)"; mkdir -p "$CFG_REPO/.claude/scripts"
-cp "$SCRIPT" "$here/_fleet.sh" "$here/_config.sh" "$CFG_REPO/.claude/scripts/" 2>/dev/null || true
+cp "$SCRIPT" "$here/_fleet.sh" "$CFG_REPO/.claude/scripts/"
+cp "$CONFIG_SH" "$CFG_REPO/.claude/scripts/_config.sh"
 ( cd "$CFG_REPO" && git init -q . && git commit -q --allow-empty -m x ) 2>/dev/null
 printf 'WORKFLOW_WORKTREES_MANIFEST="%s"\n' "$CFH/.config/from-config.json" > "$CFG_REPO/.claude/workflow.config"
 cfg_out="$(cd "$CFG_REPO" && env -u WORKFLOW_WORKTREES_MANIFEST HOME="$CFH" WORKFLOW_FLEET_HOME_SESSION=bootsess FLEET_TMUX_SOCKET="$SOCKET" bash "$CFG_REPO/.claude/scripts/fleet-layout.sh" boot --dry-run 2>&1 || true)"
@@ -1511,7 +1525,8 @@ echo "DX-jn-cc-014 — the persisted session identity reaches a separate process
 
 PH="$(cd "$(mktemp -d)" && pwd -P)"; bmk "$PH"
 PMAIN="$(cd "$(mktemp -d)" && pwd -P)"; mkdir -p "$PMAIN/.claude/scripts"
-cp "$SCRIPT" "$here/_fleet.sh" "$here/_config.sh" "$PMAIN/.claude/scripts/"
+cp "$SCRIPT" "$here/_fleet.sh" "$PMAIN/.claude/scripts/"
+cp "$CONFIG_SH" "$PMAIN/.claude/scripts/_config.sh"
 # COMMIT them: a linked worktree's checkout contains only TRACKED files. (That is the same fact the
 # .local hazard rests on — .local is gitignored, so it never arrives via git at all.)
 ( cd "$PMAIN" && git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -q -m x ) 2>/dev/null
