@@ -127,9 +127,15 @@ fleet_turn_open() {
 # match — callers that ALSO honor a per-agent ~/.claude/agents/<name>.role override
 # (register-agent.sh, agent-rename.sh, statusline-role.sh) apply that override first and
 # only fall back to this.
+# `team-lead` is the ONLY name Claude Code will let the lead answer to — it is a
+# hardcoded constant there, so this is the canonical spelling, not a preference. The
+# legacy `cc` / `*-cc` / `coordinator` spellings still MATCH (old sessions, old
+# per-agent .role overrides, historical ids) but they all RESOLVE to `team-lead`, so
+# there is exactly one role name downstream and one role doc: agent-roles/team-lead.md.
 fleet_resolve_role() {
   case "$1" in
-    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo coordinator ;;
+    team-lead|*-team-lead|team-lead-*) echo team-lead ;;
+    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo team-lead ;;
     test|*-test|*-test-*|test-*)                                       echo test ;;
     review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)           echo review ;;
     *)                                                                 echo feature ;;
@@ -154,7 +160,7 @@ fleet_agent_id() {
   role="$(fleet_resolve_role "$name")"
   num="$(printf '%s' "$name" | grep -oE '[0-9]+$' 2>/dev/null || true)"
   case "$role" in
-    coordinator) printf 'cc' ;;
+    team-lead)   printf '0' ;;   # lane 0, singular — no instance number
     feature)     printf 'f%s'    "${num:-1}" ;;
     review)      printf 'pr%s'   "${num:-1}" ;;
     test)        printf 'test%s' "${num:-1}" ;;

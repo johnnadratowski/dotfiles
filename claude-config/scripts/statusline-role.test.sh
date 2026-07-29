@@ -46,7 +46,7 @@ printf '%s\n' "$T/wt" > "$FAKEHOME/.claude/agents/4afe6cdd.cwd"
 printf '%s\n' "$T/wt" > "$FAKEHOME/.claude/agents/wf-cc.cwd"
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/wf-cc.$$"
 eq "a LIVE registration beats alphabetically-earlier stale debris (the 4afe6cdd shadow)" \
-   "cc" "$(run "$T/wt")"
+   "lead" "$(run "$T/wt")"
 
 # Same debris, but the registration is DEAD → the live pass yields nothing and the
 # sidecar-glob fallback (first match) is the documented behavior.
@@ -76,7 +76,7 @@ eq "…and exits 0"                    "0" "$rc"
 # before wf-cc, so a picker that trips on the missing sidecar would misresolve or die.
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/aa-no-sidecar.$$"
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/wf-cc.$$"
-eq "a registration with no .cwd sidecar is skipped, not fatal" "cc" "$(run "$T/wt")"
+eq "a registration with no .cwd sidecar is skipped, not fatal" "lead" "$(run "$T/wt")"
 
 # ---------------------------------------------------------------- DX-jn-cc-014: lane fallback
 # The manifest path is resolved by fleet_manifest_path (_fleet.sh) — no hardcoded project

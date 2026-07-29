@@ -42,7 +42,8 @@ role=""
 [ -f "$HOME/.claude/agents/$self.role" ] && role="$(tr -dc 'A-Za-z0-9_-' < "$HOME/.claude/agents/$self.role")"
 if [ -z "$role" ]; then
   case "$self" in
-    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) role=coordinator ;;
+    team-lead|*-team-lead|team-lead-*)                               role=team-lead ;;
+    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) role=team-lead ;;
     test|*-test|*-test-*|test-*)                                     role=test ;;
     review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)          role=review ;;
     *)                                                               role=feature ;;
@@ -51,7 +52,7 @@ fi
 
 # Short label.
 case "$role" in
-  coordinator) label=cc ;;
+  team-lead) label=lead ;;
   feature)     label=feat ;;
   review)      label=rev ;;
   test)        label=test ;;

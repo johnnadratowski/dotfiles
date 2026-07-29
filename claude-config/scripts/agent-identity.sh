@@ -12,7 +12,7 @@
 #
 # Usage:
 #   agent-identity.sh name   # agent name  (empty + exit 1 when not a registered agent)
-#   agent-identity.sh role   # coordinator | review | test | feature  (exit 1 if no name)
+#   agent-identity.sh role   # team-lead | review | test | feature  (exit 1 if no name)
 #   agent-identity.sh tag    # the comment prefix — ALWAYS exit 0, callers just prepend it:
 #                            #   registered → **[AGENT RESPONSE · <name> / <role>]**
 #                            #   otherwise  → **[AGENT RESPONSE]**
@@ -33,7 +33,8 @@ role_of() {  # KEEP IN SYNC — see header.
     return 0
   fi
   case "$name" in
-    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo coordinator ;;
+    team-lead|*-team-lead|team-lead-*)                               echo team-lead ;;
+    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo team-lead ;;
     test|*-test|*-test-*|test-*)                                     echo test ;;
     review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)          echo review ;;
     *)                                                               echo feature ;;

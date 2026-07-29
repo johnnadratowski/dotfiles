@@ -207,6 +207,7 @@
   "voiceEnabled": true,
   "model": "opus[1m]",
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_RETRY_WATCHDOG": "1"
   }
 }
