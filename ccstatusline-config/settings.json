@@ -31,14 +31,14 @@
       {
         "id": "fleet-behind-base",
         "type": "custom-command",
-        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -x \"$r/.claude/scripts/statusline-behind-base.sh\" ] || exit 0; \"$r/.claude/scripts/statusline-behind-base.sh\"; exit 0'",
+        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -x \"$r/.claude/scripts/statusline-behind-target.sh\" ] || exit 0; \"$r/.claude/scripts/statusline-behind-target.sh\"; exit 0'",
         "timeout": 2000,
         "maxWidth": 10
       },
       {
         "id": "fleet-unpushed-base",
         "type": "custom-command",
-        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -x \"$r/.claude/scripts/statusline-unpushed-base.sh\" ] || exit 0; \"$r/.claude/scripts/statusline-unpushed-base.sh\"; exit 0'",
+        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -x \"$r/.claude/scripts/statusline-unpushed-target.sh\" ] || exit 0; \"$r/.claude/scripts/statusline-unpushed-target.sh\"; exit 0'",
         "timeout": 2000,
         "maxWidth": 10
       },
