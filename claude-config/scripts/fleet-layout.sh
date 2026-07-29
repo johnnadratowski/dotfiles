@@ -306,7 +306,11 @@ _window_rank() {   # <current-index> <agent-name…>
   local n role has_feature=0
   for n in "$@"; do
     role="$(_role_of "$n")"
-    [ "$role" = "coordinator" ] && { printf '0'; return; }
+    # `team-lead` is canonical. `coordinator` is still accepted because _role_of returns a
+    # per-agent ~/.claude/agents/<name>.role override VERBATIM, and overrides written before
+    # the rename still say it — matching only the new spelling silently demoted lane 0 from
+    # rank 0 to rank 200, i.e. its window stopped sorting first.
+    { [ "$role" = "team-lead" ] || [ "$role" = "coordinator" ]; } && { printf '0'; return; }
     [ "$role" = "feature" ] && has_feature=1
   done
   if [ "$has_feature" = "1" ]; then printf '%s' $(( 100 + $(_min_agent_num "$@") ))

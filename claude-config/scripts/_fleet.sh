@@ -168,6 +168,31 @@ fleet_agent_id() {
   esac
 }
 
+# fleet_lanes_dir — echo the lane container directory. THE single resolver, so
+# lanes.sh and fleet-layout.sh cannot disagree about where lanes live (the same
+# duplication that produced three drifting copies of the role patterns).
+#
+# WORKFLOW_LANES_DIR (env, or workflow.config[.local]) wins. Otherwise it derives from
+# the MAIN CLONE's basename + "-worktrees", via the shared git common dir — so it is
+# worktree-invariant by construction. A linked worktree's own toplevel basename differs
+# per worktree and would fork the default from every lane.
+#
+# Return status is a CONTRACT, matching fleet_manifest_path: resolvable → 0 + the path
+# on stdout; unresolvable (not a repo, degenerate basename) → non-zero + NO output.
+# Callers that mutate treat a failed resolution as a loud refusal.
+fleet_lanes_dir() {
+  if [ -n "${WORKFLOW_LANES_DIR:-}" ]; then
+    printf '%s' "$WORKFLOW_LANES_DIR"; return 0
+  fi
+  local common parent base
+  common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [ -n "$common" ] || return 1
+  parent="$(dirname "$common")"
+  base="$(basename "$parent")"
+  case "$base" in ''|'/'|'.') return 1 ;; esac
+  printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
+}
+
 # fleet_manifest_path — echo the machine-local worktrees-manifest path (DX-jn-cc-014).
 # THE single resolver: fleet-layout's boot/down, statusline-role's lane fallback, and any
 # consuming project's config all route through here rather than hardcoding a path (one
