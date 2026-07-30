@@ -28,6 +28,7 @@ EXTRA_FILES = {
     'claude-config/skills/fleet-layout': '.claude/skills/fleet-layout',
     'claude-config/skills/monocle-review': '.claude/skills/monocle-review',
     'claude-config/skills/shutdown': '.claude/skills/shutdown',
+    'claude-config/skills/staff': '.claude/skills/staff',
     'ccstatusline-config/settings.json': '.config/ccstatusline/settings.json',
 }
 

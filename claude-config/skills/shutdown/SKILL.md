@@ -1,6 +1,6 @@
 ---
 name: shutdown
-description: Shut the fleet down cleanly and in order — ask each teammate to stop itself via the native shutdown_request protocol (so IT decides when its work is safe), verify each one actually died, then the lead closes its own companion panes and exits last, leaving its tmux window alive at a shell. Use for "shut down the fleet", "shut everything down", "close all the agents", "kill the fleet".
+description: Shut agents down cleanly and in order — ask each teammate to stop itself via the native shutdown_request protocol (so IT decides when its work is safe), verify each one actually died, then, only when shutting down everything, the lead closes its own companion panes and exits last, leaving its tmux window alive at a shell. Takes targets, so one agent can be stopped without touching the fleet. Use for "shut down the fleet", "stop feature-2", "close all the agents", "kill the fleet".
 ---
 
 # shutdown — stop the fleet in order, without orphans
@@ -15,6 +15,16 @@ doesn't own or leaves agents running that nothing can ever address again.
 call** — `{"type": "shutdown_request"}` — which only an agent can make. So the orchestration
 has to live in an agent's turn, with the script doing the shell-side halves (`status`,
 `down --force`). Don't try to move this into `team-boot.sh`; it can't get there.
+
+## Targets
+
+`/shutdown` with no argument means **everything, lead included**. `/shutdown feature-2` (or
+`/shutdown feature-1 feature-3`) means exactly those, and **the lead is never implied** — step
+4 is skipped entirely, so the fleet keeps running minus those agents. That is the form to use
+for cycling one agent; [`/staff`](../staff/SKILL.md) brings it back.
+
+Naming the lead explicitly (`/shutdown team-lead`) still stops teammates first — the ordering
+invariant below is not something a target list can opt out of.
 
 ## The two invariants
 
@@ -79,7 +89,10 @@ tmux list-windows -t main
 
 ## Step 4 — The lead exits last
 
-Only once every teammate reads `-`:
+**Skip this entire step when the run was scoped to named targets** — a partial shutdown leaves
+the lead running by definition. Report the remaining fleet and stop.
+
+Otherwise, only once every teammate reads `-`:
 
 1. **Save your own work first.** Commit to the lane branch — never push, never PR; shipping
    is user-gated and you are about to stop existing. If there is nothing to commit, say so.
@@ -105,6 +118,8 @@ Only once every teammate reads `-`:
 
 ## Companions
 
+- **[`/staff`](../staff/SKILL.md)** — the other direction: spawns agents into lanes, verifies
+  each entered its own worktree, and places them in their own windows.
 - **`/fleet-layout`** (user-level skill, `~/.claude/skills/fleet-layout/`) — owns window/pane
   topology while the fleet is *up*. This skill is its counterpart on the way down; neither
   starts or stops an agent except through the paths above.
@@ -113,7 +128,7 @@ Only once every teammate reads `-`:
 
 ---
 
-**Skill Version**: 1.0.0
+**Skill Version**: 1.1.0
 **Category**: Fleet / Lifecycle
 
 _Version history: see [CHANGELOG.md](./CHANGELOG.md)._

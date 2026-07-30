@@ -1,5 +1,11 @@
 # shutdown — changelog
 
+- **1.1.0** — **Takes targets.** `/shutdown feature-2` stops exactly that agent and skips step 4
+  entirely, so the lead and the rest of the fleet keep running. Cycling one agent is now
+  `/shutdown <lane>` then [`/staff`](../staff/SKILL.md) `<lane>`, with no fleet-wide restart.
+  The ordering invariant is not opt-out-able by a target list: naming the lead still stops
+  teammates first.
+
 - **1.0.0** — Initial. Codifies the ordered fleet shutdown first run by hand on 2026-07-30,
   after `tmux kill-server` was rejected as the blunt instrument it is (it would have taken
   two unrelated Claude sessions in other windows).
