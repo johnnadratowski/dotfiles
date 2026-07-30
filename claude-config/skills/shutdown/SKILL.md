@@ -77,9 +77,13 @@ turn, instead of the lead guessing from outside.
 tmux list-windows -t main
 ```
 
-- **Teammate windows close by themselves.** `remain-on-exit` is `off`, so a pane dies with
-  its process and the last pane closing takes the window. No `kill-window` for teammates —
-  if a window lingers, its process did **not** exit and the fleet is not down.
+- **A teammate's window does NOT close by itself — its companion outlives it.** `remain-on-exit`
+  is `off`, so the agent's own pane dies with its process; but every agent window now carries a
+  **companion column** (built by `fleet-layout agent-windows`) running `WORKFLOW_CELL_COMMAND`,
+  and that pane survives and holds the window open. **A lingering window is therefore NOT
+  evidence the agent is alive.** Trust `status`, which resolves by process cwd, then close the
+  orphaned companions by **pane id**. This bullet used to say the opposite, and would now
+  produce a confident, false "the fleet is not down".
 - **No reply within ~60s** ⇒ that agent is genuinely mid-turn or wedged. Escalate only that
   one: `~/.claude/scripts/team-boot.sh down --force`, which SIGTERMs and then **verifies death
   by observation** rather than trusting `kill`'s exit status. Report anything it can't prove
