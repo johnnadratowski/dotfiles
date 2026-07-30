@@ -2,7 +2,7 @@
 # Register / re-sync this Claude session in ~/.claude/running-agents.
 #
 # Idempotent: safe to call from SessionStart and as a self-heal prelude
-# from agent-rename.sh. All paths converge on the same
+# from the settle-recheck. All paths converge on the same
 # end state.
 #
 # Registry: ~/.claude/running-agents/<name>.<claude_pid>  (content: $TMUX_PANE)
@@ -144,7 +144,7 @@ _repo_root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null ||
 #
 # This gate lives HERE, in the script, because the SessionStart wiring in
 # settings.json is only ONE of the ways this file runs. `send-selfheal` (from
-# agent-rename.sh) and `settle-recheck` re-enter directly and
+# `settle-recheck` re-enters directly and
 # skip that wiring entirely. Gating the caller therefore gated nothing: on
 # 2026-07-28 a send-selfheal in ~/git/dotfiles registered that session as
 # "master" (its session name looked auto-generated, so the name fell back to the
@@ -393,11 +393,48 @@ fi
 # Priority:
 #   1. Session file's `name` field (set by `/rename`; persists across resumes).
 #   2. WORKFLOW_AGENT_DEFAULT_BRANCH from .claude/workflow.config (if set).
+#   0. --agent-name from the process tree (teammates/subagents) — see below.
 #   3. Current git branch (sanitized).
 #   4. cwd basename.
 name=""
+
+# 0. --agent-name from the process tree. AUTHORITATIVE, and it must come first.
+#
+# A teammate or subagent is launched by the harness with `--agent-name <n>`, and it boots in the
+# LEAD'S WORKTREE, ON THE LEAD'S BRANCH — a teammate only moves itself with EnterWorktree
+# afterwards, and a reviewer/tester subagent never moves at all. So every source below resolves
+# such a process to the LEAD's identity:
+#
+#   OBSERVED, 2026-07-29 23:11: subagent `rev-a2` (pane %31, pid 75021) registered as
+#   `running-agents/team-lead.75021`, because its session name looked auto-generated and the
+#   branch fallback returned `team-lead`. When it exited, unregister-agent.sh matched the
+#   `team-lead.*` entry and removed it — DEREGISTERING THE LIVE LEAD. The registry was empty
+#   with the lead running, so every registry-first liveness query saw an empty fleet.
+#
+# The harness told us the name. Ask it before guessing from the filesystem. The walk mirrors
+# lane-guard.sh's: the hook runs as a grandchild and the depth is not contractual.
+_agent_name_from_argv() {
+  local pid=$$ cmd
+  for _ in 1 2 3 4 5 6 7 8; do
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+    [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ] || break
+    cmd="$(ps -o command= -p "$pid" 2>/dev/null)"
+    case "$cmd" in
+      *--agent-name*)
+        printf '%s' "$cmd" | sed -n 's/.*--agent-name[ =]\([^ ]*\).*/\1/p'
+        return 0 ;;
+    esac
+  done
+  return 1
+}
+argv_name="$(_agent_name_from_argv || true)"
+if [ -n "$argv_name" ]; then
+  name="$argv_name"
+  log "name from --agent-name argv: $name (authoritative; not branch-derived)"
+fi
+
 session_name=""
-if [ -n "$claude_pid" ] && [ -f "$HOME/.claude/sessions/$claude_pid.json" ] && command -v jq >/dev/null 2>&1; then
+if [ -z "$name" ] && [ -n "$claude_pid" ] && [ -f "$HOME/.claude/sessions/$claude_pid.json" ] && command -v jq >/dev/null 2>&1; then
   session_name=$(jq -r '.name // empty' "$HOME/.claude/sessions/$claude_pid.json" 2>/dev/null)
   # DX-jn-cc-006: never trust a transient auto-name here — on `claude --continue`
   # it's what the file holds until the real name lands (~2s after this hook).

@@ -129,6 +129,53 @@ run_hook "$H" "$D" "$(payload resume)" sessionstart >/dev/null
 ok "no git -> cwd basename" 'reg_ls "$H" | grep -q "^$(sanitize "$(basename "$D")")\."'
 rm -rf "$H" "$D"
 
+echo "== 3a. --agent-name from argv WINS over the branch (the lead-deregistration bug) =="
+# A teammate or subagent boots in the LEAD's worktree, on the LEAD's branch, and only moves
+# itself afterwards (a reviewer/tester never moves at all). Every filesystem-derived source
+# therefore resolves it to the LEAD's identity.
+#
+# OBSERVED 2026-07-29: subagent `rev-a2` registered as `running-agents/team-lead.75021`, and
+# its SessionEnd then matched `team-lead.*` and DEREGISTERED THE LIVE LEAD — leaving an empty
+# registry with the lead running, so every registry-first liveness query saw an empty fleet.
+#
+# Simulated the way lane-guard.test.sh does it: invoke the hook from a parent whose argv really
+# contains `--agent-name`, so the process-tree walk under test runs for real rather than stubbed.
+# DELIBERATELY NOT ON $STUB's PATH — and this is the point of the case, so do not "fix" it by
+# adding $STUB back. That stub replaces `ps`, and its tree-walk form answers a hard-coded
+# `1 bash` dead end while the plain `-o ppid=` form is not implemented at all. Under it the
+# process-tree walk cannot find anything, so the assertions below would fail against a WORKING
+# hook — which is exactly what happened when this case was first written.
+#
+# The walk is the behaviour under test, so it runs against the REAL `ps`. Only tmux is stubbed
+# (via TMUX_ONLY_STUB), because the hook's tmux cosmetics are not what we are pinning here and
+# a live tmux call would reach the developer's actual session.
+TMUX_ONLY_STUB="$(mktemp -d)"; cp "$STUB/tmux" "$TMUX_ONLY_STUB/tmux"; chmod +x "$TMUX_ONLY_STUB/tmux"
+as_agent(){ # as_agent HOME REPO NAME
+  local h="$1" repo="$2" nm="$3" wrapper
+  wrapper="$(mktemp -d)/fake-claude.sh"
+  cat > "$wrapper" <<EOF
+#!/bin/bash
+cd "$repo" || exit 99
+env -u TMUX -u TMUX_PANE HOME="$h" PATH="$TMUX_ONLY_STUB:\$PATH" WORKFLOW_AGENT_SETTLE_SECONDS=3600 \
+  bash "$HOOK" sessionstart <<<'$(payload resume)'
+EOF
+  chmod +x "$wrapper"
+  /bin/bash "$wrapper" --agent-name "$nm" >/dev/null 2>&1
+}
+H="$(newhome)"; R="$(newrepo)"          # branch is feature-1; pretend it is the lead's tree
+as_agent "$H" "$R" reviewer-x
+ok "registers under --agent-name, NOT the branch" 'reg_ls "$H" | grep -q "^reviewer-x\."'
+ok "…and does NOT claim the branch-derived name"  '! reg_ls "$H" | grep -q "^feature-1\."'
+ok "…and says so in the log"                      'hlog "$H" | grep -q "authoritative"'
+rm -rf "$H" "$R"
+
+# NON-VACUITY: without --agent-name in the tree, the branch fallback must still win. Otherwise
+# the two assertions above would pass for a hook that simply never registered anything.
+H="$(newhome)"; R="$(newrepo)"
+run_hook "$H" "$R" "$(payload resume)" sessionstart >/dev/null
+ok "no --agent-name -> branch fallback still applies" 'reg_ls "$H" | grep -q "^feature-1\."'
+rm -rf "$H" "$R"
+
 echo "== 3b. fleet opt-in gate (.claude/workflow.config) =="
 # A repo without workflow.config is somebody else's checkout — dotfiles, a scratch clone,
 # an editor session — and must NOT be registered, renamed, or given role context. This gate
