@@ -6,7 +6,7 @@ description: Rearrange the agent fleet's tmux panes for the monitors you have, (
 # fleet-layout — retopologize the fleet for the monitors you have
 
 ```bash
-~/.claude/scripts/fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents> [--dry-run]
+~/.claude/scripts/fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|lead-window> [--dry-run]
 ```
 
 An agent's identity is its **tmux pane id**, and `join-pane` / `move-window` *move* panes rather
@@ -44,6 +44,7 @@ across. `single` brings them home and closes that window. You do not need `attac
 | `attach` | Re-open the external-monitor window for an already-built `wide`/`dual` layout. |
 | `balance` | Re-split each cell 60/40. Run after the terminal changes size. |
 | `subagents` | Restack a lead's subagent panes below the lead's own pane. See below. |
+| `lead-window` | Build the lead's OWN window: a companion column beside its chat, sized 60/40 and seeded with `WORKFLOW_CELL_COMMAND`. `--pane=%N` names the lead's pane (default `$TMUX_PANE`). Called by `team-boot.sh boot`; idempotent by pane count, so re-running is free. |
 
 ## `subagents` — put a lead's helpers where they can be read
 

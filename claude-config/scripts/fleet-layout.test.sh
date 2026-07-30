@@ -750,6 +750,47 @@ eq "the review/test co-tenant window is untouched by single" "1" \
    "$(t list-windows -a -F '#{window_name}' | grep -cx review-test)"
 
 
+echo; echo "lead-window: the lead's own window is built, not left bare"
+# build_cell gives every FEATURE agent a companion column. The lead's window is not a cell, so
+# nothing ever created its second pane — and both downstream steps silently no-op on a lone
+# pane: _normalize_lead_window only resizes when a second column exists, _seed_companion only
+# seeds a pane that is already there. So the lead alone ran without its tool.
+t new-window -d -t main -n wlead -c "$T/pr" 'sleep 600'
+LEADP="$(t list-panes -t main:wlead -F '#{pane_id}' | head -1)"
+lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
+eq "a one-pane lead window gains exactly one companion" "2" \
+   "$(t list-panes -t main:wlead -F x | wc -l | tr -d ' ')"
+eq "the companion is a SECOND COLUMN, not a stacked row" "yes" \
+   "$(t list-panes -t main:wlead -F '#{pane_id} #{pane_left}' | awk -v l="$LEADP" '$1==l{x=$2} $1!=l{y=$2} END{print (y>x)?"yes":"no"}')"
+eq "…and focus stays on the lead, which is mid-boot" "$LEADP" \
+   "$(t display-message -p -t main:wlead '#{pane_id}')"
+
+# IDEMPOTENT BY COUNT is the whole safety story — boot calls this every time, and a window that
+# already has a companion (or a subagent stack) must not gain another pane per boot.
+lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
+lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
+eq "re-running never splits the window again" "2" \
+   "$(t list-panes -t main:wlead -F x | wc -l | tr -d ' ')"
+
+# THE SEED MUST LAND ON THE FIRST CALL. A pane reports the exec'ing process for a few hundred
+# ms after it is created, which _pane_is_shell reads as "busy — hands off". Boot calls this
+# ONCE, so without the settle-wait the lead's companion came up at a bare prompt and only ever
+# got its tool if someone re-ran a layout verb later. Observed live on 2026-07-30.
+t new-window -d -t main -n wlead2 -c "$T/test" 'sleep 600'
+LEADP2="$(t list-panes -t main:wlead2 -F '#{pane_id}' | head -1)"
+export WORKFLOW_CELL_COMMAND=":"
+seedout="$(lib "ensure_lead_window '$LEADP2'" 2>&1)"
+unset WORKFLOW_CELL_COMMAND
+eq "the companion is seeded on the FIRST call, not on a later re-run" "1" \
+   "$(printf '%s' "$seedout" | grep -c 'companion .* started')"
+
+# A pane id that is not live is a caller error, not something to guess at: splitting "the
+# current window" would build the column in whatever window happened to be active.
+lib "ensure_lead_window '%99999'" >/dev/null 2>&1
+eq "a dead pane id is refused, not guessed at" "2" "$?"
+lib "ensure_lead_window ''" >/dev/null 2>&1
+eq "an empty pane id is refused too" "2" "$?"
+
 echo
 echo "  $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

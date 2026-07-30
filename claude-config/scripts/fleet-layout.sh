@@ -9,6 +9,10 @@
 #   fleet-layout.sh balance      [--dry-run]   # re-split each cell 60/40 after a resize
 #   fleet-layout.sh name-windows [--dry-run]   # label every window from its resident agents
 #   fleet-layout.sh subagents    [--dry-run]   # restack a lead's subagent panes below its own
+#   fleet-layout.sh lead-window  [--dry-run] [--pane=%N]
+#                                              # build the lead's own window: companion column
+#                                              #   beside its chat, sized and seeded (boot calls
+#                                              #   this; idempotent, so re-running is free)
 #
 # THIS SCRIPT NEVER STARTS OR STOPS AN AGENT. It only moves and labels panes, which is what
 # makes every verb safe to re-run. `boot` and `down` used to live here and do exactly that;
@@ -1203,6 +1207,49 @@ _seed_companion() {  # <window> <lead-pane>
   echo "  companion    started '$FL_CELL_COMMAND' in $top_right (was an idle shell)"
 }
 
+# Build the lead's window: claude on the left, a companion column on the right.
+#
+# WHY THIS EXISTS. `build_cell` gives every FEATURE agent a companion column; the lead's window
+# is not a cell and nothing ever built it, so the lead came up as one bare pane. Everything
+# downstream then quietly no-opped on it: `_normalize_lead_window` only resizes when a second
+# column already exists, and `_seed_companion` only seeds a pane that is already there. So the
+# lead alone had no monocle, and its chat kept whatever width the window happened to have.
+#
+# IDEMPOTENT BY COUNT, which is what makes it safe to call on every boot: a window that already
+# has more than one pane is left structurally alone. It never splits a window twice, and it
+# never touches a companion that is running something — _seed_companion owns that judgement.
+ensure_lead_window() {  # <lead-pane>
+  local p="$1" win n cwd
+  [ -n "$p" ] || { echo "fleet-layout lead-window: no pane given and \$TMUX_PANE is unset" >&2; return 2; }
+  win="$(_win_of "$p")"
+  [ -n "$win" ] || { echo "fleet-layout lead-window: '$p' is not a live pane" >&2; return 2; }
+  n="$(tmux list-panes -t "$win" -F x 2>/dev/null | wc -l | tr -d ' ')"
+  case "$n" in ''|*[!0-9]*) n=1 ;; esac
+  if [ "$n" -eq 1 ]; then
+    # -d keeps focus on the lead: this runs while claude is starting there, and stealing the
+    # active pane would send the boot keystrokes to a shell.
+    cwd="$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)"
+    local new=""
+    if [ "$DRY_RUN" = "1" ]; then
+      _rw split-window -h -d -P -F '#{pane_id}' ${cwd:+-c "$cwd"} -t "$p"
+    elif [ -n "$cwd" ]; then new="$(tmux split-window -h -d -P -F '#{pane_id}' -c "$cwd" -t "$p" 2>/dev/null)"
+    else                     new="$(tmux split-window -h -d -P -F '#{pane_id}' -t "$p" 2>/dev/null)"
+    fi
+    [ "$DRY_RUN" = "1" ] || [ -n "$new" ] || {
+      echo "fleet-layout lead-window: split failed — leaving $win as it was" >&2; return 1; }
+    echo "  lead-window  added the companion column beside $p"
+    # WAIT FOR THE SHELL. A pane is not a shell the instant it exists — for a few hundred ms
+    # tmux still reports whatever is exec'ing, and _seed_companion reads that as "busy, hands
+    # off" and skips. On the single call boot makes, that is the difference between a seeded
+    # companion and a bare prompt: the seed only ever worked because someone re-ran a layout
+    # verb later. Bounded, and a timeout just means no seed — never a keystroke into a live
+    # process, which is the risk _pane_is_shell exists to avoid.
+    local i=0
+    while [ -n "$new" ] && [ "$i" -lt 40 ] && ! _pane_is_shell "$new"; do sleep 0.05; i=$((i + 1)); done
+  fi
+  _normalize_lead_window "$p"
+}
+
 layout_subagents() {
   fleet_tmux_ok || { echo "fleet-layout subagents: not inside tmux — nothing to place" >&2; return 0; }
   local target="$TMUX_PANE" leadcwd rows n=0
@@ -1236,13 +1283,19 @@ EOF
 
 [ -n "${FLEET_LAYOUT_LIB:-}" ] && return 0
 
-USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply> [--dry-run] [--label-only (name-windows)]"
+USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window> [--dry-run] [--label-only (name-windows)] [--pane=%N (lead-window)]"
 verb=""
+FL_PANE=""
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --label-only) FL_LABEL_ONLY=1 ;;   # name-windows: relabel only, skip _order_windows (settle-recheck)
-    single|dual|wide|attach|balance|name-windows|subagents|reapply)
+    # lead-window: the pane to build around. `--pane=%N` rather than a positional, because this
+    # loop never shifts — a bare `%1` would be rejected as an unknown verb. Defaults to
+    # $TMUX_PANE, which is right when a lead calls it for itself and wrong when boot calls it
+    # from another pane, so boot passes it explicitly.
+    --pane=*) FL_PANE="${arg#--pane=}" ;;
+    single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window)
       [ -z "$verb" ] || { echo "$USAGE" >&2; exit 2; }
       verb="$arg" ;;
     *) echo "$USAGE" >&2; exit 2 ;;
@@ -1294,4 +1347,5 @@ case "$verb" in
   attach)       attach_external ;;
   subagents)    layout_subagents ;;
   reapply)      layout_reapply ;;
+  lead-window)  ensure_lead_window "${FL_PANE:-${TMUX_PANE:-}}" ;;
 esac

@@ -331,6 +331,54 @@ bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
 has "boot: a lane with a transcript resumes it" "$(cat "$TMUXLOG")" "--name team-lead --continue"
 
 echo
+echo "cmd_boot — --fresh opts out of resuming"
+
+# A context worth abandoning is a real state — wedged, poisoned, or just a new line of work.
+# Without the flag the only way out was deleting a transcript by hand.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot --fresh" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+hasnt "boot --fresh: the transcript is ignored"  "$log" "--continue"
+has   "boot --fresh: …but the lead still launches" "$log" "send-keys -t %99 -l claude"
+
+err="$(bootlib "$EMPTY" 'cmd_boot --fresh --bogus' 2>&1 >/dev/null)"
+has "boot: --fresh does not swallow the next flag" "$err" "unknown flag: --bogus"
+
+echo
+echo "cmd_boot — the lead's window is built before the lead starts"
+
+# The lead's window is not a cell, so build_cell never gave it a companion column and it came
+# up as one bare pane. fleet-layout owns pane topology, so boot ASKS rather than splitting here.
+#
+# The stub logs into $TMUXLOG, the same file the tmux stub writes — one interleaved transcript
+# is what makes the ORDER assertion below able to fail. Two logs concatenated would put
+# lead-window first no matter what the code did.
+FLSTUB="$TMP/fleet-layout-stub.sh"
+cat > "$FLSTUB" <<'STUB'
+#!/bin/bash
+echo "fleet-layout $*" >> "$TMUXLOG"
+STUB
+chmod +x "$FLSTUB"
+export WORKFLOW_FLEET_LAYOUT_SH="$FLSTUB"
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has "boot: fleet-layout is asked to build the lead's window" "$log" "fleet-layout lead-window --pane=%99"
+
+# ORDER IS THE POINT: the split resizes the pane, and a TUI started at its final size never
+# reflows. Both calls succeed in either order, so only position can catch a regression.
+ok "boot: …before the launch keystrokes, not after" \
+   '[ "$(printf %s "$log" | grep -n "fleet-layout lead-window" | cut -d: -f1)" -lt "$(printf %s "$log" | grep -n "send-keys -t %99 -l claude" | cut -d: -f1)" ]'
+
+# A machine without fleet-layout gets a bare-pane lead — which is what every boot produced
+# before this existed — and must still boot.
+export WORKFLOW_FLEET_LAYOUT_SH="$TMP/does-not-exist.sh"
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "send-keys -t %99 -l claude"
+unset WORKFLOW_FLEET_LAYOUT_SH
+
+echo
 echo "resolve_lanes_sh — project content is never a sibling of this script"
 
 # team-boot.sh lives in dotfiles and travels; lanes.sh is one product's. Resolving it as

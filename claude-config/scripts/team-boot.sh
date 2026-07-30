@@ -12,8 +12,9 @@
 # lane, start the lead, and have the lead spawn teammates fresh. No work is lost,
 # because the work lives in the lane on disk, not in the team.
 #
-#   boot [--with-team [N]]  start the lead in lane 0 (tmux window of its own); --with-team
-#                           then asks the LEAD to staff N lanes (default: all of them)
+#   boot [--with-team [N]] [--fresh]  start the lead in lane 0 (tmux window of its own);
+#                           --with-team then asks the LEAD to staff N lanes (default: all of
+#                           them); --fresh starts a NEW conversation instead of resuming
 #   spawn-prompt <lane>   print the exact prompt to hand the lead for one teammate
 #   status       what is actually alive, verified against processes not config
 #   down         stop every agent occupying a lane (idle-gated)
@@ -181,10 +182,11 @@ lane_has_transcript() {  # <lane-path>
 }
 
 cmd_boot() {
-  WITH_TEAM=""; WITH_TEAM_N=""
+  WITH_TEAM=""; WITH_TEAM_N=""; FRESH=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --with-team) WITH_TEAM=1; case "${2:-}" in ""|-*) ;; *) WITH_TEAM_N="$2"; shift ;; esac ;;
+      --fresh) FRESH=1 ;;
       *) die "unknown flag: $1" ;;
     esac; shift
   done
@@ -250,8 +252,36 @@ cmd_boot() {
   #
   # Guarded, because a first boot into a freshly-created lane has no transcript, and there
   # `claude --continue` exits on the spot — leaving an empty pane where the lead should be.
-  lane_has_transcript "$p" && launch="$launch --continue"
+  #
+  # --fresh is the deliberate opt-out: a context worth abandoning (wedged, poisoned, or simply
+  # a new line of work) is a real state, and the alternative was deleting transcripts by hand.
+  if [ -z "$FRESH" ] && lane_has_transcript "$p"; then launch="$launch --continue"; fi
   [ -n "$reuse" ] && launch="cd $(printf '%q' "$p") && $launch"
+
+  # WINDOW SHAPE BEFORE THE PROCESS. fleet-layout owns pane topology — this asks it to build the
+  # lead's window (companion column, sizing, seed) rather than reproducing any of that here.
+  #
+  # BEFORE the launch keystrokes, deliberately: the split resizes the pane, and a TUI that
+  # starts at its final size never has to reflow. It also means the companion exists from the
+  # first frame instead of appearing whenever someone remembered to run a layout verb.
+  #
+  # Non-fatal in every direction. A machine with no fleet-layout.sh, or a split that fails, gets
+  # a bare-pane lead — which is exactly what every boot produced before this line existed.
+  #
+  # Resolution mirrors resolve_lanes_sh: an explicit override wins, then the installed copy,
+  # then a sibling of THIS FILE — never of $0, which is "bash" whenever this script is sourced.
+  local layout_sh="${WORKFLOW_FLEET_LAYOUT_SH:-}"
+  [ -n "$layout_sh" ] || layout_sh="$HOME/.claude/scripts/fleet-layout.sh"
+  [ -x "$layout_sh" ] || layout_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fleet-layout.sh"
+  if [ -x "$layout_sh" ]; then
+    # CLAUDE_PROJECT_DIR is passed because fleet-layout loads the PROJECT's workflow.config to
+    # learn what the companion runs (WORKFLOW_CELL_COMMAND), and it resolves that from the repo
+    # root of its own cwd. boot is typically run from somewhere else entirely, where the lookup
+    # finds nothing and the companion silently comes up as a bare shell. The lane IS the project.
+    CLAUDE_PROJECT_DIR="$p" "$layout_sh" lead-window --pane="$pane" ||
+      echo "  (lead-window failed — continuing with a bare pane)"
+  fi
+
   tmux send-keys -t "$pane" -l "$launch"
   tmux send-keys -t "$pane" Enter
   echo "lead booting in $pane ($SESSION:$LEAD_LANE${reuse:+, reused}), cwd $p"
@@ -293,7 +323,21 @@ the lane-guard hook.
 Confirm with a single command: pwd && git rev-parse --abbrev-ref HEAD
 Expect: $p and branch $name.
 
-Then report readiness and stand by.
+THEN RESUME — you are re-occupying a lane, not starting one. A teammate is spawned fresh
+every time (no \`--continue\` exists for you: the lead creates you through the Agent tool,
+and a CLI relaunch would put you outside its team and make you unaddressable). Your
+continuity is on disk instead. Read it, in this order:
+
+  cat .claude/current-work        # <ID>\\t<url> per Linear issue left In Progress — may be empty
+  git log --oneline -5            # what you last landed on this branch
+  git status --short              # what you left uncommitted
+
+If current-work names an issue, pick it up through the /todo skill — it is already In
+Progress, and its plan is the issue's \`## Plan\` comment, so resume that plan rather than
+drafting a new one. If it is empty, you were idle; say so.
+
+Report: your lane, your branch, and either the issue you are resuming or "no work in
+flight" — then stand by.
 --- end ---
 EOF
 }
