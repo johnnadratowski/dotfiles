@@ -37,7 +37,8 @@ invariant below is not something a target list can opt out of.
 ## Step 1 — Pre-flight: what would be lost, and what must not be touched
 
 ```bash
-for d in ~/git/goals-onchain-worktrees/*/; do
+LANES="$(bash -c '. ~/.claude/scripts/_fleet.sh; fleet_lanes_dir')"
+for d in "$LANES"/*/; do
   n="$(basename "$d")"; [ "$n" = team-lead ] && continue
   printf '=== %s ===\n' "$n"
   /usr/bin/git -C "$d" status --short

@@ -30,7 +30,18 @@
 
 set -u
 
-LANES_DIR="${WORKFLOW_LANES_DIR:-$HOME/git/goals-onchain-worktrees}"
+# DERIVED, never a project name — this hook lives in dotfiles and runs in every repo, so a
+# hardcoded product path silently measured one product's lanes against another's writes.
+# Unresolvable leaves it empty, which the fail-open contract above already handles.
+_lanes_dir() {
+  local common parent base
+  common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [ -n "$common" ] || return 1
+  parent="$(dirname "$common")"; base="$(basename "$parent")"
+  case "$base" in ''|'/'|'.') return 1 ;; esac
+  printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
+}
+LANES_DIR="${WORKFLOW_LANES_DIR:-$(_lanes_dir 2>/dev/null || true)}"
 
 # Walk up the process tree to find the claude process and read its --agent-name.
 # The hook runs as a grandchild (claude -> shell -> this), and the depth is not

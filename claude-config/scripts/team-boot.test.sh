@@ -383,6 +383,45 @@ has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "se
 unset WORKFLOW_FLEET_LAYOUT_SH
 
 echo
+echo "LANES_DIR — derived from the repo, never a hardcoded project"
+
+# This file ships in dotfiles and runs in every repo. It used to fall back to one product's
+# worktree directory by name, so any OTHER project's fleet silently resolved to that product's
+# lanes — a path that exists on this machine, so nothing ever complained.
+SCRATCH="$TMP/scratchrepo"; mkdir -p "$SCRATCH/myproj"
+# GIT_DIR leaks in from the hook environment and would point every scratch git call at the real
+# repo. Unset it for the whole block.
+( unset GIT_DIR GIT_WORK_TREE; cd "$SCRATCH/myproj" && git init -q . ) >/dev/null 2>&1
+PHOME="$TMP/ptrhome"; mkdir -p "$PHOME/.claude"
+
+lanes_from() {  # <cwd>
+  ( unset GIT_DIR GIT_WORK_TREE WORKFLOW_LANES_DIR; cd "$1" 2>/dev/null || return 1
+    env HOME="$PHOME" TEAM_BOOT_LIB=1 bash -c '. "'"$SCRIPT"'"; printf "%s" "$LANES_DIR"' )
+}
+
+eq "derives <parent>/<basename>-worktrees from the main clone" "$SCRATCH/myproj-worktrees" \
+   "$(lanes_from "$SCRATCH/myproj")"
+
+# The pointer is what lets `boot` run from $HOME, which is how it is actually invoked — the
+# hardcoded path used to cover that up. Written on a successful resolve, read when there is no
+# repo to derive from.
+mkdir -p "$SCRATCH/myproj-worktrees"
+( unset GIT_DIR GIT_WORK_TREE WORKFLOW_LANES_DIR; cd "$SCRATCH/myproj" && \
+  env HOME="$PHOME" bash "$SCRIPT" status ) >/dev/null 2>&1
+eq "…and caches it machine-locally, outside dotfiles" "$SCRATCH/myproj-worktrees" \
+   "$(cat "$PHOME/.claude/fleet-lanes-dir" 2>/dev/null)"
+eq "the cache answers when there is no repo to derive from" "$SCRATCH/myproj-worktrees" \
+   "$(lanes_from "$TMP")"
+
+# THE FAILURE THAT MATTERS: an empty LANES_DIR globs "$LANES_DIR"/*/ as /*/ — every top-level
+# directory on the machine — which `status` would print as a fleet and `down` would walk.
+rm -f "$PHOME/.claude/fleet-lanes-dir"
+out="$( ( unset GIT_DIR GIT_WORK_TREE WORKFLOW_LANES_DIR; cd "$TMP" && \
+          env HOME="$PHOME" bash "$SCRIPT" status ) 2>&1 )"
+has   "unresolvable refuses outright"        "$out" "cannot resolve the lanes directory"
+hasnt "…and never enumerates the filesystem" "$out" "Applications"
+
+echo
 echo "resolve_lanes_sh — project content is never a sibling of this script"
 
 # team-boot.sh lives in dotfiles and travels; lanes.sh is one product's. Resolving it as

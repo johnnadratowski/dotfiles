@@ -34,8 +34,9 @@
 # deterministic and identical for EVERY agent, so a peer agent's diff-review send
 # groups the files exactly the same as the author's would. The agent pipes this
 # JSON into the MCP `set_file_groups` tool (the script can't call the MCP itself).
-# Canonical bottom-up order (group_order): infra → contracts → subgraph → db →
-# types → shared → api → sdk → ui → docs → tests — substrate first, surface last.
+# Canonical bottom-up order (group_order) runs substrate first, surface last: infra, then
+# the project's own layers (schema/data, shared types, service, client, ui), then docs and
+# tests. The concrete layer names are the consuming project's, not this script's.
 #
 # This is the CATEGORY level only (the inner level under Monocle's N-level grouping).
 # For a multi-TODO diff review the AUTHOR wraps each file's category under its TODO id

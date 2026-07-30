@@ -25,7 +25,8 @@
       "Bash(gh pr diff:*)",
       "Bash(gh pr checkout:*)",
       "Bash(gh pr list:*)",
-      "Bash(gh pr status:*)"
+      "Bash(gh pr status:*)",
+      "EnterWorktree"
     ],
     "deny": [],
     "ask": [],

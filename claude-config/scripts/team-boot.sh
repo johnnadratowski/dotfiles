@@ -35,15 +35,51 @@ if [ -r "$HOME/.claude/scripts/_fleet.sh" ]; then
   # shellcheck disable=SC1091
   . "$HOME/.claude/scripts/_fleet.sh"
 fi
+# The no-_fleet.sh fallback DERIVES the directory; it never names a project. This file lives
+# in dotfiles and travels to any repo, so a hardcoded `goals-onchain-worktrees` meant every
+# other product's fleet resolved to one particular product's lanes — silently, since the path
+# exists on this machine. Same derivation as fleet_lanes_dir: the main clone's basename plus
+# `-worktrees`, taken from the shared git common dir so it is worktree-invariant.
+_derive_lanes_dir() {
+  local common parent base
+  common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  [ -n "$common" ] || return 1
+  parent="$(dirname "$common")"; base="$(basename "$parent")"
+  case "$base" in ''|'/'|'.') return 1 ;; esac
+  printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
+}
 if command -v fleet_lanes_dir >/dev/null 2>&1; then
-  LANES_DIR="$(fleet_lanes_dir 2>/dev/null || printf '%s' "$HOME/git/goals-onchain-worktrees")"
+  LANES_DIR="$(fleet_lanes_dir 2>/dev/null || _derive_lanes_dir 2>/dev/null || true)"
 else
-  LANES_DIR="${WORKFLOW_LANES_DIR:-$HOME/git/goals-onchain-worktrees}"
+  LANES_DIR="${WORKFLOW_LANES_DIR:-$(_derive_lanes_dir 2>/dev/null || true)}"
+fi
+
+# LAST RESORT: a machine-local pointer, because `boot` is normally run from $HOME.
+#
+# Every resolution above needs a repo to stand in, and the one verb that matters most is
+# invoked from outside one — which the old hardcoded project path quietly covered up. The
+# pointer restores that convenience without putting any product's name in a file that ships to
+# every machine: it is written the first time we DO resolve from inside a repo, and it lives in
+# ~/.claude (machine-local runtime state, beside fleet-layout-mode), never in dotfiles.
+_LANES_PTR="$HOME/.claude/fleet-lanes-dir"
+if [ -n "$LANES_DIR" ]; then
+  [ "$(cat "$_LANES_PTR" 2>/dev/null || true)" = "$LANES_DIR" ] ||
+    printf '%s\n' "$LANES_DIR" > "$_LANES_PTR" 2>/dev/null || true
+elif [ -r "$_LANES_PTR" ]; then
+  LANES_DIR="$(cat "$_LANES_PTR" 2>/dev/null || true)"
+  [ -d "$LANES_DIR" ] || LANES_DIR=""
 fi
 SESSION="${WORKFLOW_FLEET_SESSION:-main}"
 LEAD_LANE="team-lead"
 
 die() { echo "team-boot: $*" >&2; exit 1; }
+
+# An UNRESOLVED lanes dir is fatal, not empty. `"$LANES_DIR"/*/` with an empty value globs
+# `/*/` — every top-level directory on the machine — which `status` would print as a fleet and
+# `down` would walk. Library mode is exempt: the test suite supplies its own scratch dir, and a
+# `die` at source time would take the harness with it.
+[ -n "${TEAM_BOOT_LIB:-}" ] || [ -n "$LANES_DIR" ] ||
+  die "cannot resolve the lanes directory — run this inside the repo, or set WORKFLOW_LANES_DIR"
 lane_path() { printf '%s/%s' "$LANES_DIR" "$1"; }
 
 # Who is alive in a lane — by PROCESS CWD, never by team config. The team config survives a
