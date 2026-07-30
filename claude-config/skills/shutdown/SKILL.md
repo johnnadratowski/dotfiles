@@ -100,13 +100,21 @@ Otherwise, only once every teammate reads `-`:
    as panes die, ids don't. Companions are the MCP daemons and idle shells the lead started
    (e.g. `monocle`, `zsh`). **A pane running something unrecognized is left alone and
    reported** — it is more likely the user's than yours.
-3. **Respawn your own pane instead of killing it:**
+3. **Give up the `team-lead` name, then respawn your own pane.** Both, in this order — the
+   respawn never returns, so a rename after it never runs:
    ```bash
-   tmux respawn-pane -k -t '%<lead-pane-id>'
+   tmux rename-window -t '%<lead-pane-id>' zsh
+   tmux respawn-pane  -k -t '%<lead-pane-id>'
    ```
    `kill-pane` on the last pane destroys the window; `respawn-pane -k` kills the process and
-   starts a fresh shell in place, so **the window survives at a command line** with its name
-   intact. That command never returns — it is the last thing that happens.
+   starts a fresh shell in place, so **the window survives at a command line**.
+
+   The rename matters because the window outlives you. A shell still called `team-lead` is a
+   lie about what is running there, and it used to be an active hazard: `team-boot.sh` looked
+   its new pane up by window *name*, tmux answered with the lowest-index match — this stale
+   window — and the next lead booted into it, in the wrong cwd. Boot resolves pane ids
+   directly now, so this is no longer load-bearing, but leaving the name behind is what makes
+   the window honest, and it keeps any future name lookup unambiguous.
 
 ## What this skill will NOT do
 

@@ -1,5 +1,13 @@
 # shutdown — changelog
 
+- **1.1.1** — **The lead drops the `team-lead` window name on its way out**, renaming to `zsh`
+  before the respawn (which never returns, so the order is the whole trick). The window
+  outlives the agent, and a shell still advertising itself as the lead was not merely untidy:
+  `team-boot.sh` resolved its new pane by window *name*, tmux returned the lowest-index match
+  — this one — and the next lead booted into the stale window in the wrong cwd. Boot now takes
+  its pane id from `new-window` directly, so the rename is no longer load-bearing; it is what
+  keeps the window honest about what is running in it.
+
 - **1.1.0** — **Takes targets.** `/shutdown feature-2` stops exactly that agent and skips step 4
   entirely, so the lead and the rest of the fleet keep running. Cycling one agent is now
   `/shutdown <lane>` then [`/staff`](../staff/SKILL.md) `<lane>`, with no fleet-wide restart.
