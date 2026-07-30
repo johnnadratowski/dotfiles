@@ -14,7 +14,7 @@
 # makes every verb safe to re-run. `boot` and `down` used to live here and do exactly that;
 # they enumerated the fleet from a worktrees manifest the lanes migration stopped maintaining,
 # so both had been failing with "manifest missing or unreadable" on every call. They now live
-# in `.claude/scripts/team-boot.sh`, which enumerates the lane directory — a lane is on disk by
+# in `~/.claude/scripts/team-boot.sh`, which enumerates the lane directory — a lane is on disk by
 # definition, so there is no manifest to go stale.
 #
 # `wide` and `dual` are the external-monitor modes: their windows live in a DEDICATED tmux
@@ -1254,7 +1254,7 @@ done
 # simpler. Both enumerated the fleet from the machine-local worktrees manifest, which the
 # lanes migration stopped maintaining — so both had been exiting 1 with "manifest missing or
 # unreadable" for every invocation. Their replacements are lanes-native, in
-# `.claude/scripts/team-boot.sh` (`boot`, `status`, `spawn-prompt`, `down`), which enumerates
+# `~/.claude/scripts/team-boot.sh` (`boot`, `status`, `spawn-prompt`, `down`), which enumerates
 # the lane directory itself; a lane is on disk by definition, so there is no manifest to go
 # stale. `down`'s guards travelled with it: fail-closed busy, never-target-self, and a death
 # claim earned by observation rather than by kill's exit status.

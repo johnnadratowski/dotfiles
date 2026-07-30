@@ -27,6 +27,7 @@ EXTRA_FILES = {
     'claude-config/skills/agent-fanout': '.claude/skills/agent-fanout',
     'claude-config/skills/fleet-layout': '.claude/skills/fleet-layout',
     'claude-config/skills/monocle-review': '.claude/skills/monocle-review',
+    'claude-config/skills/shutdown': '.claude/skills/shutdown',
     'ccstatusline-config/settings.json': '.config/ccstatusline/settings.json',
 }
 

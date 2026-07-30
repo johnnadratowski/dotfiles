@@ -1,0 +1,119 @@
+---
+name: shutdown
+description: Shut the fleet down cleanly and in order — ask each teammate to stop itself via the native shutdown_request protocol (so IT decides when its work is safe), verify each one actually died, then the lead closes its own companion panes and exits last, leaving its tmux window alive at a shell. Use for "shut down the fleet", "shut everything down", "close all the agents", "kill the fleet".
+---
+
+# shutdown — stop the fleet in order, without orphans
+
+**Request, verify, then the lead exits last.** Every step below exists because the obvious
+shortcut (`tmux kill-server`, or SIGTERM to everything) either kills processes the fleet
+doesn't own or leaves agents running that nothing can ever address again.
+
+## Why this is a skill and not a script
+
+`team-boot.sh down` can only send a **signal**. The graceful path is a **`SendMessage` tool
+call** — `{"type": "shutdown_request"}` — which only an agent can make. So the orchestration
+has to live in an agent's turn, with the script doing the shell-side halves (`status`,
+`down --force`). Don't try to move this into `team-boot.sh`; it can't get there.
+
+## The two invariants
+
+1. **Teammates first, lead last.** A lead that exits first doesn't take its teammates with
+   it — they keep running, and **no relaunched lead can ever re-adopt them** (membership is
+   rebuilt in-process at startup). Killing the lead first converts a fleet into orphans.
+2. **A send is not a shutdown.** `SendMessage` returning `success: true` means the inbox
+   accepted the write. Liveness is proven by `team-boot.sh status`, never by the send.
+
+## Step 1 — Pre-flight: what would be lost, and what must not be touched
+
+```bash
+for d in ~/git/goals-onchain-worktrees/*/; do
+  n="$(basename "$d")"; [ "$n" = team-lead ] && continue
+  printf '=== %s ===\n' "$n"
+  /usr/bin/git -C "$d" status --short
+done
+tmux list-panes -s -t main -F '#{window_index}:#{window_name} #{pane_id} #{pane_current_command} #{pane_current_path}'
+```
+
+- **Report uncommitted work per lane before sending anything.** Nothing is *lost* to a
+  shutdown — the working tree stays on disk — but work that dies uncommitted comes back as
+  an unlabelled diff nobody remembers, so it's worth one round trip.
+- **Fix the blast radius here.** In scope: panes whose cwd is a lane, plus the lead's own
+  window. **Everything else is the user's** — other windows routinely hold unrelated Claude
+  sessions and shells. A `tmux kill-server` takes all of them; it is never the right verb.
+
+## Step 2 — Send the request to every teammate
+
+One `SendMessage` per teammate, **all in one message** so they wrap up concurrently:
+
+```json
+{"to": "feature-N", "message": {"type": "shutdown_request", "reason": "<why, plus: commit anything you want to keep on your OWN lane branch — do not push, do not open a PR, do not merge>"}}
+```
+
+The teammate replies `shutdown_response`; **approving terminates its own process.** That is
+the whole point — the agent answers "is it safe to stop me?" for itself, from inside its own
+turn, instead of the lead guessing from outside.
+
+> **This is strictly better than SIGTERM, and not for politeness.** `team-boot.sh down` gates
+> on the busy marker, fail-closed, and markers go stale: on the 2026-07-30 run all four
+> teammates carried markers ~4 hours old yet were idle and answered immediately. `down` would
+> have skipped every one of them. **The only accurate liveness signal is the agent's own
+> reply.**
+
+## Step 3 — Verify, and clean up the stragglers
+
+```bash
+~/.claude/scripts/team-boot.sh status     # every teammate's AGENT column must read "-"
+tmux list-windows -t main
+```
+
+- **Teammate windows close by themselves.** `remain-on-exit` is `off`, so a pane dies with
+  its process and the last pane closing takes the window. No `kill-window` for teammates —
+  if a window lingers, its process did **not** exit and the fleet is not down.
+- **No reply within ~60s** ⇒ that agent is genuinely mid-turn or wedged. Escalate only that
+  one: `~/.claude/scripts/team-boot.sh down --force`, which SIGTERMs and then **verifies death
+  by observation** rather than trusting `kill`'s exit status. Report anything it can't prove
+  dead.
+- **A rejected request (`approve: false`) is an answer, not an obstacle.** Relay the reason
+  and stop — the user decides whether to force it.
+
+## Step 4 — The lead exits last
+
+Only once every teammate reads `-`:
+
+1. **Save your own work first.** Commit to the lane branch — never push, never PR; shipping
+   is user-gated and you are about to stop existing. If there is nothing to commit, say so.
+2. **Close your companion panes**, addressing them by **pane id** (`%N`) — indices renumber
+   as panes die, ids don't. Companions are the MCP daemons and idle shells the lead started
+   (e.g. `monocle`, `zsh`). **A pane running something unrecognized is left alone and
+   reported** — it is more likely the user's than yours.
+3. **Respawn your own pane instead of killing it:**
+   ```bash
+   tmux respawn-pane -k -t '%<lead-pane-id>'
+   ```
+   `kill-pane` on the last pane destroys the window; `respawn-pane -k` kills the process and
+   starts a fresh shell in place, so **the window survives at a command line** with its name
+   intact. That command never returns — it is the last thing that happens.
+
+## What this skill will NOT do
+
+- Run `tmux kill-server`, or kill any pane outside a lane or the lead's own window.
+- Kill the lead before the teammates, or claim the fleet is down on a `success: true` send.
+- Push, open a PR, or merge anything while "saving work".
+- Force-kill an agent that answered `approve: false`, or one it never heard from, without
+  saying so first.
+
+## Companions
+
+- **`/fleet-layout`** (user-level skill, `~/.claude/skills/fleet-layout/`) — owns window/pane
+  topology while the fleet is *up*. This skill is its counterpart on the way down; neither
+  starts or stops an agent except through the paths above.
+- **`~/.claude/scripts/team-boot.sh`** — `boot` · `status` · `spawn-prompt` · `down`. This
+  skill drives `status` and, only as a fallback, `down --force`.
+
+---
+
+**Skill Version**: 1.0.0
+**Category**: Fleet / Lifecycle
+
+_Version history: see [CHANGELOG.md](./CHANGELOG.md)._

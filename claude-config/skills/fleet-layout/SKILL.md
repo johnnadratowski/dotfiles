@@ -76,7 +76,7 @@ machine-local **worktrees manifest** that the lanes migration stopped maintainin
 been exiting 1 with `manifest missing or unreadable` on every invocation — including `down`, the
 verb you would reach for in a hurry.
 
-They now live in **`.claude/scripts/team-boot.sh`** (`boot` · `status` · `spawn-prompt` ·
+They now live in **`~/.claude/scripts/team-boot.sh`** (`boot` · `status` · `spawn-prompt` ·
 `down [--force] [--dry-run]`), which enumerates the **lane directory** instead. A lane is on
 disk by definition, so there is no manifest to go stale.
 
