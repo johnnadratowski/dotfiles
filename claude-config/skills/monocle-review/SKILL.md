@@ -23,7 +23,7 @@ verdict round-trip.
 ## When to Use
 
 - A workflow review gate is offering Monocle: the `/todo` **plan-review** step, the
-  **user-review-before-commit** gate (coordinator / feature flow), or `base-pr`'s
+  **user-review-before-commit** gate (team-lead / feature flow), or `/review`'s
   review point.
 - The user says "send this to monocle", "review this in monocle", "send the plan to
   monocle".
@@ -181,7 +181,7 @@ review, and declining agent review must NEVER drop the Monocle human review:**
 > MODEL-DIVERSE:** `rev-a` runs `WORKFLOW_REVIEW_MODEL_A` (**empty by default ⇒ inherits this
 > session's model**), `rev-b` runs `WORKFLOW_REVIEW_MODEL_B` (**pinned `sonnet`**) — that pin is
 > the whole mechanism making the two reviewers audit on **different** models. A **single**
-> reviewer (Q2 = One, and the range/PR audits in `/base-pr` / `/pr-comments`) runs
+> reviewer (Q2 = One, and the range/PR audits in `/review` / `/pr-comments`) runs
 > **`WORKFLOW_REVIEW_MODEL_B`**, so a lone reviewer is never left on whatever the session
 > happens to be. Pass each as the Agent `model` param; an **empty** knob ⇒ omit ⇒ inherit.
 > **Fix rounds RESUME the same named reviewer** (SendMessage with the fix SHA) — a fresh
@@ -215,7 +215,7 @@ rather than sent as an artifact.
 - **`/review-plan` / `/review-plan-wait` / `/get-feedback` / `/get-feedback-wait`** —
   the lower-level MCP commands; this skill is the issue-context-aware, detection-gated
   layer on top.
-- **`/todo`**, **`base-pr`** — the gates that call into this skill.
+- **`/todo`**, **`/review`** — the gates that call into this skill.
 
 ---
 

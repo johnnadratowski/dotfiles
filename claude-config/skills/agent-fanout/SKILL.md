@@ -181,4 +181,3 @@ Worth considering (ask the user before adding — out of scope unless requested)
 
 - **`fleet-layout`** — owns the pane/window topology and every tmux window name; `boot` and `down`.
 - **`fleet-clear`** — restore an agent's own session name after a `/clear` (self-targeting).
-- **`agent-rename`** — rename an agent for real (branch, registry, tmux, session).

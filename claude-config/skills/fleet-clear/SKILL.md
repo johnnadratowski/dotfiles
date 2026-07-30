@@ -64,5 +64,3 @@ different agent, run it in that agent's pane.
 
 - **`agent-fanout`** — `restart` (kill + `claude --continue`, preserves history), `compact`,
   `status`.
-- **`agent-rename`** — rename an agent for real (branch, registry, tmux, session) rather
-  than restoring the name it already has.

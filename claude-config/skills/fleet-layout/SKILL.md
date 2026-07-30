@@ -1,12 +1,12 @@
 ---
 name: fleet-layout
-description: Rearrange the agent fleet's tmux panes for the monitors you have, (re)label every tmux window from its resident agents, boot the fleet from cold, and bring it down cleanly. Three layout modes — `wide` (ultra-wide: all 4 feature agents in one 2x2 window), `dual` (ordinary 2nd monitor: 2 agents per window, two windows), `single` (laptop: one window per agent) — plus `boot` (crash recovery: create windows for dead manifest agents and launch claude, dry-runnable) and `down` (stop every fleet agent and remove its panes — path-keyed, idle-gated, fail-closed guards, dry-runnable). Use when the user says "switch to my double-wide", "I'm on one monitor now", "put the agents on the second screen", "fix the tab names", "relayout the fleet", "boot the fleet", "bring the fleet back up", "bring the fleet down", "stop all agents". The LAYOUT verbs restructure only — they never kill a pane, never restart an agent, never drop a message; `down` is the single deliberate, guarded exception.
+description: Rearrange the agent fleet's tmux panes for the monitors you have, (re)label every tmux window from its resident agents, and restack a lead's subagent panes so they are readable. Three layout modes — `wide` (ultra-wide: all 4 feature agents in one 2x2 window), `dual` (ordinary 2nd monitor: 2 agents per window, two windows), `single` (laptop: one window per agent) — plus `subagents` (restack a lead's reviewer/tester panes beneath its own pane). Starting and stopping agents lives in `team-boot.sh`, not here. Use when the user says "switch to my double-wide", "I'm on one monitor now", "put the agents on the second screen", "fix the tab names", "relayout the fleet", "my subagent panes are unreadable", "move the subagents". Every verb here restructures only — it never kills a pane, never starts or stops an agent.
 ---
 
 # fleet-layout — retopologize the fleet for the monitors you have
 
 ```bash
-~/.claude/scripts/fleet-layout.sh <single|dual|wide|attach|balance|name-windows|boot|down> [--dry-run] [--force]
+~/.claude/scripts/fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents> [--dry-run]
 ```
 
 An agent's identity is its **tmux pane id**, and `join-pane` / `move-window` *move* panes rather
@@ -40,132 +40,52 @@ across. `single` brings them home and closes that window. You do not need `attac
 
 | Verb | What it does |
 |---|---|
-| `name-windows` | Label every window from **all** of its resident live agents, then put the windows in canonical order. No pane moves. Called automatically by the SessionStart hook and `/agent-rename`. |
+| `name-windows` | Label every window from **all** of its resident live agents, then put the windows in canonical order. No pane moves. Called automatically by the SessionStart hook. |
 | `attach` | Re-open the external-monitor window for an already-built `wide`/`dual` layout. |
 | `balance` | Re-split each cell 60/40. Run after the terminal changes size. |
-| `boot` | Bring the fleet up from cold (crash recovery). See below. |
-| `down` | Stop every fleet agent and remove its panes. The inverse of `boot`; the only verb that kills. See below. |
+| `subagents` | Restack a lead's subagent panes below the lead's own pane. See below. |
 
-## `boot` — one command brings the fleet up from cold
+## `subagents` — put a lead's helpers where they can be read
 
-Enumerates the fleet from the **machine-local worktrees manifest** — its path comes from
-`fleet_manifest_path` (`_fleet.sh`): `WORKFLOW_WORKTREES_MANIFEST` when set, else
-`~/.config/<main-clone-basename>-worktrees.json` (derived from the git common dir, so every
-worktree of a clone resolves to the same file). Entries carrying an `agent` field; schema
-documented in [`list-worktrees`](../list-worktrees/SKILL.md). Then per agent, in canonical
-(agent-number) order:
-
-- **`active: false`** → reported `held` (parked lane), skipped.
-- **Self** (the invoking agent) → `skipped (self)` — boot never touches its own window.
-- **Dead same-name registry entries** are swept (pid-only check — a live-pid/dead-pane
-  entry is deliberately left for the registration-time prune; sweeping a live pid is the
-  riskier error).
-- **Live registration** (pid + pane) → reported `live`, untouched.
-- **Manifest path missing on disk** → warned, others still boot.
-- **A window already named for the agent** → `window-exists`, left untouched — boot
-  NEVER types into a pane it did not just create (its state is unknown; it could be
-  showing a resume prompt or a running claude).
-- Otherwise: create the window at the worktree (`new-window -n <agent> -c <path>`) and
-  type the launch into the pane id captured from that very call — `claude --continue`
-  when `~/.claude/projects/` has prior sessions for the worktree, plain `claude` when
-  not. The new window is then built into the full **cell** (DX-jn-cc-012): claude
-  full-height on the left (~60%), a right column stacked with the **configured companion
-  command running top-right** (`WORKFLOW_CELL_COMMAND` — **empty by default**, in which case
-  nothing is keyed and both right panes sit at a shell prompt) and a **shell at the prompt
-  bottom-right** — sized at creation time
-  (`split-window -l 40%`, then an even v-split; attribution-driven `balance` can't run
-  yet because the booting claude hasn't registered), all panes created and keyed by
-  this same run. A failed split or keystroke **degrades, loudly**: the claude launch
-  survives (it already happened and matters more than its companions), the degradation
-  is reported (`cell DEGRADED …`), the remaining agents still boot, and the run exits
-  non-zero. A failed v-split leaves the single right pane at the prompt with no companion
-  — a bare shell is the safe degraded state.
-
-**The window session resolves, and is never assumed.** Boot creates its windows in
-`WORKFLOW_FLEET_HOME_SESSION` when a session by that name exists; otherwise it falls back to
-the invoking client's current session, says so, and **rebinds** the home session for the whole
-run — so the duplicate-launch guard, the window creation, and the canonical ordering all follow
-one identity. Boot never creates a session, and refuses (exit 2) if the resolved session is the
-external-monitor session. The **persisted** identity is the primary mechanism:
-`WORKFLOW_FLEET_HOME_SESSION` lives in the gitignored `.claude/workflow.config.local`, and
-`lanes.sh provision` seeds that file into every lane — because each agent's SessionStart runs
-`name-windows` in **its own worktree**, and a lane with no `.local` would silently fall back to
-the default and never order its windows.
-
-Window names and canonical order **converge on their own**: each booting agent's
-SessionStart registration fires `name-windows` (register-agent.sh), so boot doesn't
-poll or wait. When it finishes, boot **hands the selection back to the invoking
-window** (the operator who typed it gets their own window back) — cosmetic, degrades
-silently when headless or the pane is unresolvable.
-
-**Resume prompts stay human.** Booted claudes may show "Resume from summary" pickers;
-boot reminds you and answers nothing — never blind-key Enter into a pane.
-
-**Failure model is loud:** a corrupt/missing/unreadable manifest (or python3
-unavailable) fails the run non-zero — it never degrades to "0 agents, exit 0", which a
-crash-recovering operator would misread as "fleet already up". **Outside tmux, boot refuses
-(exit 2)** rather than reporting "nothing to do, exit 0" — a spin-up verb an init flow depends
-on must not report success while launching zero agents (the cosmetic layout verbs keep exit 0). Agent names are validated
-(`A-Za-z0-9_-` only) and paths must be absolute before anything touches the filesystem.
-
-Re-running boot is idempotent: live agents report `live`, already-created windows report
-`window-exists`, nothing is double-launched and no cell is re-split. `--dry-run` prints
-the exact `new-window` + `split-window` + `send-keys` commands and mutates nothing (not
-even the dead-entry sweep).
-
-## `down` — stop the fleet cleanly (DX-jn-cc-010)
+With `teammateMode: "tmux"`, an `Agent`-tool spawn becomes a **real tmux pane**, and the
+harness puts it wherever the current layout puts a new pane — in practice appended into the
+cell's **right column, under the monocle companion**. Five reviewers and testers land on a
+40%-wide column and the window becomes unreadable.
 
 ```bash
-fleet-layout.sh down [--dry-run] [--force] [agent...]
+~/.claude/scripts/fleet-layout.sh subagents [--dry-run]
 ```
 
-The inverse of `boot`, and the script's ONLY killing verb. With **no agent names** it downs the
-whole fleet; with names it downs **only those agents** — `remove-worktree` uses that to stop one
-agent before removing its worktree. A requested name that is **not in the manifest** is a loud
-refusal (`rc≠0`, nothing killed for it): a filtered-to-empty set must never read as "that agent
-is down" while it still runs. A requested name that resolves to **self** is likewise refused —
-a run cannot kill its own pane, and a silent skip would tell the caller the agent is down.
-(The unrequested whole-fleet sweep still skips self quietly, which is what "stop all the
-others" means.)
+Run it **in the lead's own pane** — that pane is the stacking target, so it is known exactly
+rather than inferred, and a subagent can never end up as its own target. Each subagent pane is
+`join-pane -v`'d beneath it, in the left column, then the window is evened vertically. They are
+work the lead is waiting on, so reading them top-to-bottom beside the lead's transcript matches
+how they are used.
 
-Enumerates the same manifest (every `agent`-bearing entry — `active: false` does NOT exempt an
-entry: "stop all agents" means all; the flag gates boot only), excludes self, and per entry:
+Which panes move comes from the **team config** (`~/.claude/teams/*/config.json`), which records
+each member's `tmuxPaneId` and `agentType` — not from pane titles (an agent can set its own) and
+not from `ps` (a pane's claude is a grandchild of the pane's pid). Every config is scanned and
+self-located: one is ours if a non-lead member sits on a pane that currently exists. So no
+session id is needed, and a crashed lead's stale config contributes nothing because its recorded
+panes are gone.
 
-- **Targeting is keyed on the WORKTREE PATH, never the name**: a live registration
-  matches when its `~/.claude/agents/<name>.cwd` sidecar resolves to the entry path,
-  whatever the name — live agents can carry transient auto-names (observed 2026-07-10),
-  and a name-keyed down would miss all of them.
-- **Kills panes, never pids** (a registry pid can be recycled): the claude pane (the
-  registry token, corroborated to actually sit at the worktree before the kill) plus its
-  attributed companions (the `attribute_panes` cell model, exemptions intact —
-  `@fleet-layout-skip` panes and ambiguity-exempt shared-cwd panes survive; co-tenant
-  panes at other cwds are never touched). Companions die first, the claude pane last
-  (its death is the SessionEnd trigger). Emptied windows die on their own; windows with
-  survivors persist.
-- **Idle-gated**: a fresh busy marker skips the agent (`rc=1`); `--force` overrides the
-  BUSY gate — and ONLY the BUSY gate. A `@fleet-layout-skip` marker on the claude pane
-  is the user's explicit hands-off: the agent is skipped BEFORE any kill, `--force`
-  never bulldozes it (removing the marker is the override).
-- **`downed` is earned by observation**, never by `kill-pane`'s exit status (the verb's
-  founding incident was a sandbox masking kill failures): after a settle window
-  (`FLEET_DOWN_SETTLE`, default 5s) each targeted pane is re-checked; a survivor is
-  `FAILED` + `rc=1`. Registry entries at targeted paths are swept **pid-only** (a live
-  pid is never swept), and each downed worktree is re-probed — an unregistered surviving
-  pane is `UNACCOUNTED` + `rc=1`, never killed.
-- **Every guard input fails CLOSED into a loud non-zero refusal** — corrupt/empty
-  manifest enumeration, unreadable registry entries, an unresolvable sidecar on a live
-  registration, a blind or silent tmux, an unreadable skip marker or busy dir, an
-  unresolvable self. The failure direction is the inverse of the layout verbs': for a
-  destroy verb the danger is the operator reading "fleet is down, exit 0" while agents
-  still run, so nothing ever degrades to "nothing matched, proceed".
-- **Exit 0 means exactly**: every non-self entry is downed-and-verified or
-  probe-confirmed not running. Anything skipped, refused, failed, or unaccounted is
-  non-zero.
-- `--dry-run` prints the exact kills + sweep and mutates nothing (verification is
-  neutralized — nothing died, so it would flag every target).
+## Starting and stopping agents is NOT here
 
-Booted claudes recover with `claude --continue`, so `down` + `boot` is the sanctioned
-full-fleet restart path (resume prompts stay human-answered).
+`boot` and `down` used to be verbs of this script. They enumerated the fleet from a
+machine-local **worktrees manifest** that the lanes migration stopped maintaining, so both had
+been exiting 1 with `manifest missing or unreadable` on every invocation — including `down`, the
+verb you would reach for in a hurry.
+
+They now live in **`.claude/scripts/team-boot.sh`** (`boot` · `status` · `spawn-prompt` ·
+`down [--force] [--dry-run]`), which enumerates the **lane directory** instead. A lane is on
+disk by definition, so there is no manifest to go stale.
+
+`down`'s guards travelled with it, and it gained two it was missing: it never targets itself
+(the lead occupies lane 0, so an unguarded sweep killed the process running the sweep), and its
+"stopped" claim is earned by observing the process exit rather than by `kill`'s exit status.
+
+This script now **never starts or stops an agent** — it only moves and labels panes, which is
+why every verb here is safe to re-run.
 
 ## How to run it
 
@@ -197,20 +117,19 @@ from `main`. Pane ids survive the move, so delivery, liveness, and the registry 
 - **A companion that `cd`s out of the worktree** stops being attributed and is left where it is
   (subdirectories still match). It is never destroyed.
 - Missing agents degrade — `wide` with three feature agents renders a three-cell grid.
-- **The layout verbs never kill** anything except the `attach` placeholder window and, in
-  `single`, the agent-free external session — and that refuses while any agent pane is
-  still in it. **`down` is the single sanctioned kill path**: one helper
-  (`_down_kill_pane`, with a terminal never-kill-own-pane backstop), structurally pinned
-  by the test suite's comment-stripped kill-verb counts and caller allowlist.
+- **Nothing here kills a pane** except the `attach` placeholder window and, in `single`, the
+  agent-free external session — and that refuses while any agent pane is still in it. The test
+  suite pins this structurally, with comment-stripped counts asserting there is no
+  `kill-server`, exactly one `kill-window` (the placeholder drop), one `kill-session`
+  (`_teardown_ext`, via `_rw`), and no pid signal other than a `kill -0` liveness probe.
+  Stopping an agent is `team-boot.sh down`, in another file, on purpose.
 
 ## Config
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `WORKFLOW_WORKTREES_MANIFEST` | `~/.config/<main-clone-basename>-worktrees.json` | the fleet manifest `boot`/`down` enumerate (resolved by `fleet_manifest_path`) |
 | `WORKFLOW_CELL_COMMAND` | *(empty)* | command the cell's top-right companion pane runs. Empty ⇒ nothing is keyed and it stays a shell. Set it per project (e.g. `monocle`) |
 | `WORKFLOW_FLEET_HOME_SESSION` | `main` if such a session exists, else the invoking client's session | the session the agents' windows live in. **Persist it in `.claude/workflow.config.local`** (seeded into each lane by `lanes.sh provision`) — it is machine-local, never committed |
 | `WORKFLOW_FLEET_EXT_SESSION` | `wide` | the external-monitor session |
 
 Tests: `bash ~/.claude/scripts/fleet-layout.test.sh` (hermetic `$HOME` + scratch tmux socket).
-Background: [`.claude/docs/inter-agent-comms.md`](../../docs/inter-agent-comms.md#window-names--layouts).

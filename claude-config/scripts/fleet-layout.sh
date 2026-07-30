@@ -8,10 +8,14 @@
 #                                              #   move the feature windows into their own session
 #   fleet-layout.sh balance      [--dry-run]   # re-split each cell 60/40 after a resize
 #   fleet-layout.sh name-windows [--dry-run]   # label every window from its resident agents
-#   fleet-layout.sh boot         [--dry-run]   # bring the fleet up from cold: create windows
-#                                              #   for dead manifest agents + launch claude
-#   fleet-layout.sh down [--dry-run] [--force] # stop every fleet agent and remove its panes
-#                                              #   (path-keyed, idle-gated, fail-closed guards)
+#   fleet-layout.sh subagents    [--dry-run]   # restack a lead's subagent panes below its own
+#
+# THIS SCRIPT NEVER STARTS OR STOPS AN AGENT. It only moves and labels panes, which is what
+# makes every verb safe to re-run. `boot` and `down` used to live here and do exactly that;
+# they enumerated the fleet from a worktrees manifest the lanes migration stopped maintaining,
+# so both had been failing with "manifest missing or unreadable" on every call. They now live
+# in `.claude/scripts/team-boot.sh`, which enumerates the lane directory — a lane is on disk by
+# definition, so there is no manifest to go stale.
 #
 # `wide` and `dual` are the external-monitor modes: their windows live in a DEDICATED tmux
 # session so they are not tabs in the laptop's window. `single` brings them home.
@@ -26,7 +30,7 @@
 # registry, and send-keys types into unrelated panes. FLEET_TMUX_SOCKET exists ONLY for
 # fleet-layout.test.sh's scratch server.
 #
-# `name-windows` is called by register-agent.sh and agent-rename.sh so window labels stay
+# `name-windows` is called by register-agent.sh so window labels stay
 # automatic. It derives each name from ALL of a window's resident agents, so it converges
 # to the same answer no matter which agent invokes it — that is what makes co-tenant
 # agents unable to clobber each other's window label.
@@ -48,12 +52,24 @@ _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # home session) work from config with zero ceremony in ANY project — not only when exported.
 # Guarded: absence is not an error. _config.sh is env-wins (it snapshots exported WORKFLOW_*
 # values and re-applies them after sourcing), so a per-invocation env override still wins.
-# shellcheck source=_config.sh
-[ -r "$_here/_config.sh" ] && . "$_here/_config.sh"
+# _config.sh is PROJECT content and lives in the CONSUMING REPO (.claude/scripts/_config.sh) —
+# never beside this file. Once this script moved to ~/.claude/scripts (dotfiles-owned), the old
+# script-relative lookup resolved to ~/.claude/scripts/_config.sh, which does not exist, so the
+# load silently did nothing and every project knob fell back to its default.
+#
+# Measured consequence: WORKFLOW_CELL_COMMAND — set to "monocle" in this repo's workflow.config —
+# read as EMPTY, so the companion pane was never seeded, for the lead's window and for every
+# feature agent's cell alike. `[ -r ... ] &&` made the failure silent by construction.
+#
+# Same resolution register-agent.sh already uses: CLAUDE_PROJECT_DIR, else the repo root, and
+# only then the script-relative path as a last resort for a clone that keeps them together.
+_cfg_root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")}"
+for _cfg in "$_cfg_root/.claude/scripts/_config.sh" "$_here/_config.sh"; do
+  # shellcheck source=/dev/null
+  [ -r "$_cfg" ] && { . "$_cfg"; break; }
+done
 
 DRY_RUN=0
-FORCE=0                                        # set by the dispatcher's --force (down only)
-FLEET_DOWN_SETTLE="${FLEET_DOWN_SETTLE:-5}"    # seconds to wait for SessionEnd unregistration
 TAB="$(printf '\t')"
 
 # The fleet's home session (laptop), and the dedicated session that BOTH external-monitor
@@ -106,14 +122,36 @@ _plural() {
 # Scoped to the registry: .cwd sidecars outlive their agents, so globbing *.cwd would let
 # a dead agent claim live panes.
 live_agents() {
-  local f base name pid token cwd acwd
+  local f base name pid token cwd acwd _la_claude_pids
   for f in "$HOME"/.claude/running-agents/*; do
     [ -f "$f" ] || continue
     base="$(basename "$f")"; pid="${base##*.}"; name="${base%.*}"
     token="$(cat "$f" 2>/dev/null)"
     [ -n "$token" ] || continue
     fleet_alive "$pid" "$token" || continue
-    cwd="$(cat "$HOME/.claude/agents/$name.cwd" 2>/dev/null)"
+    # LIVE process cwd first; the recorded sidecar only as a fallback.
+    #
+    # The sidecar is written once, at SessionStart — and a teammate boots in the LEAD's
+    # worktree and only moves itself afterwards with EnterWorktree. So the sidecar says
+    # `team-lead` for every teammate, forever. Measured on a real 4-agent fleet: all four
+    # sidecars read `team-lead` while all four processes were correctly in their own lanes.
+    #
+    # Attribution then saw five agents sharing one cwd, hit its ambiguity rule ("matches two
+    # live agents with the same cwd — leaving it alone"), and refused to move anything. Every
+    # layout verb was a silent no-op for teammates: it reported success and rearranged nothing.
+    #
+    # The process's cwd is ground truth and it FOLLOWS the agent, which the sidecar cannot.
+    #
+    # ONLY for a pid that is actually a claude process. A registry entry can name a pid that
+    # has died and been RECYCLED by something unrelated, and that stranger's cwd would then be
+    # read as the agent's — attributing panes by where some other program happens to be
+    # working. Checking membership costs one process-table sweep for the whole loop.
+    cwd=""
+    if command -v fleet_pid_cwd >/dev/null 2>&1; then
+      [ -n "${_la_claude_pids+x}" ] || _la_claude_pids=" $(fleet_claude_pids | tr '\n' ' ')"
+      case "$_la_claude_pids" in *" $pid "*) cwd="$(fleet_pid_cwd "$pid")" ;; esac
+    fi
+    [ -n "$cwd" ] || cwd="$(cat "$HOME/.claude/agents/$name.cwd" 2>/dev/null)"
     [ -n "$cwd" ] || continue
     acwd="$(_abs "$cwd")"
     [ -n "$acwd" ] || continue
@@ -614,6 +652,63 @@ _gather_pair() {
   return 0
 }
 
+# _chunk_windows <per-window> <base> <bare-when-single> <gather-fn> <agent…>
+#
+# Split the agents into windows of <per-window> and hand each group to <gather-fn>.
+#
+# WHY THIS EXISTS: both layouts used to index their agents by hand — `wide` joined exactly
+# indices 0..3 into one window and `dual` wired up `$1 $2` and `$3 $4`. A FIFTH agent was
+# therefore not laid out at all: it was not an error and nothing was destroyed, it simply
+# stayed wherever it was while the report claimed the layout had been applied. Chunking makes
+# the count open-ended, so agents 5-8 get a second window, 9-12 a third.
+#
+# NAMING: with a single chunk `wide` keeps the bare `features` name it always had; from two
+# chunks on, every window is numbered. `_window_rank` orders windows by their LOWEST resident
+# agent number rather than by name, so the numbering is cosmetic and the order stays correct
+# however many windows there are.
+_chunk_windows() {
+  local per="$1" base="$2" bare="$3" fn="$4"; shift 4
+  local total="$#" idx=1 win group
+  while [ "$#" -gt 0 ]; do
+    group=(); while [ "${#group[@]}" -lt "$per" ] && [ "$#" -gt 0 ]; do group+=("$1"); shift; done
+    if [ "$bare" = 1 ] && [ "$total" -le "$per" ]; then win="$base"; else win="$base-$idx"; fi
+    "$fn" "$win" "${group[@]}" || return 1
+    idx=$((idx + 1))
+  done
+  return 0
+}
+
+# ── remembered layout ────────────────────────────────────────────────────────────────────
+# The chosen layout is MACHINE STATE, not project config: it depends on which monitor is
+# plugged in right now, so it belongs in ~/.claude beside the other runtime state and never in
+# a committed file. One line, one word.
+#
+# WHY: spawning an agent creates a pane, and a new pane lands wherever tmux puts it — so every
+# spawn silently degraded whatever arrangement was chosen earlier, and the operator had to
+# re-issue the layout by hand each time. `reapply` closes that loop: the lead runs it after a
+# spawn and the fleet returns to the shape the human last asked for.
+_layout_state() { printf '%s' "$HOME/.claude/fleet-layout-mode"; }
+
+_layout_remember() {  # <mode>
+  [ "$DRY_RUN" = 1 ] && return 0
+  mkdir -p "$HOME/.claude" 2>/dev/null || return 0
+  printf '%s\n' "$1" > "$(_layout_state)" 2>/dev/null || true
+}
+
+layout_reapply() {
+  local f mode; f="$(_layout_state)"
+  [ -r "$f" ] || { echo "fleet-layout: no remembered layout — run single|dual|wide once first"; return 0; }
+  mode="$(tr -d '[:space:]' < "$f")"
+  case "$mode" in
+    single) echo "fleet-layout: reapplying remembered layout 'single'";  layout_single ;;
+    dual)   echo "fleet-layout: reapplying remembered layout 'dual'";    layout_dual ;;
+    wide)   echo "fleet-layout: reapplying remembered layout 'wide'";    layout_wide ;;
+    # An unreadable or corrupt value must NOT silently pick a layout on its own: rearranging
+    # the operator's screen is exactly the thing they asked to be deterministic.
+    *) echo "fleet-layout: remembered layout '$mode' is not one of single|dual|wide — ignoring" >&2; return 1 ;;
+  esac
+}
+
 layout_wide() {
   local feats
   _snapshot_attr
@@ -621,7 +716,7 @@ layout_wide() {
   [ -n "$feats" ] || { echo "fleet-layout: no live feature agents" >&2; return 1; }
   # shellcheck disable=SC2086
   set -- $feats
-  _gather_grid features "$@" || return 1
+  _chunk_windows 4 features 1 _gather_grid "$@" || return 1
   _settle_external
 }
 
@@ -660,9 +755,9 @@ layout_dual() {
   [ -n "$feats" ] || { echo "fleet-layout: no live feature agents" >&2; return 1; }
   # shellcheck disable=SC2086
   set -- $feats
-  n="$#"
-  [ "$n" -ge 1 ] && { _gather_pair features-1 "$1" ${2:+"$2"} || return 1; }
-  [ "$n" -ge 3 ] && { _gather_pair features-2 "$3" ${4:+"$4"} || return 1; }
+  # Always numbered (bare=0): `dual` has never had a single-window form, and two agents in
+  # `features-1` with none in `features-2` is the shape it already produced.
+  _chunk_windows 2 features 0 _gather_pair "$@" || return 1
   _settle_external
 }
 
@@ -973,834 +1068,205 @@ attach_external() {
   _settle_external
 }
 
-# ---------------------------------------------------------------------------- boot
-# (DX-jn-cc-007) Bring the fleet up from cold: enumerate agent worktrees from the
-# machine-local manifest, skip live agents (and self), sweep dead same-name registry
-# entries, create missing windows in canonical order, and type the launch command ONLY
-# into panes THIS RUN created (captured from its own `new-window -P`) — never into a
-# pre-existing pane, whose state is unknown. Resume prompts are answered by the human.
-
-# The manifest path comes from the ONE resolver (fleet_manifest_path, _fleet.sh) — never a
-# hardcoded per-project filename. Unresolvable → empty, and the `-r` guard below refuses loudly.
-BOOT_MANIFEST="$(fleet_manifest_path 2>/dev/null || true)"
-
-# agent \t active \t path — one line per manifest entry carrying an `agent` field.
-# LOUD failure model: a corrupt/missing/unreadable manifest, or python3 unavailable,
-# exits non-zero. It must never degrade to "0 agents, exit 0" — an operator recovering
-# from a crash would read that as "fleet already up". (_config.sh's fail-soft manifest
-# idiom is the parser here, NOT the failure model.)
-_boot_manifest_agents() {
-  [ -r "$BOOT_MANIFEST" ] || { echo "fleet-layout boot: manifest $BOOT_MANIFEST missing or unreadable" >&2; return 1; }
-  python3 - "$BOOT_MANIFEST" <<'PY' || { echo "fleet-layout boot: cannot parse manifest $BOOT_MANIFEST (invalid JSON, or python3 unavailable)" >&2; return 1; }
-import json, sys
-d = json.load(open(sys.argv[1]))
-for w in d.get('worktrees', []):
-    a = w.get('agent')
-    if not a:
-        continue
-    print(f"{a}\t{'1' if w.get('active', True) else '0'}\t{w.get('path', '')}")
-PY
-}
-
-# Validate every entry BEFORE any filesystem use: the agent name feeds a same-name rm
-# glob in the sweep and the path feeds new-window -c, so garbage fails the whole RUN
-# loudly — only a path missing on disk is a per-agent warn+skip (handled in the loop).
-_boot_validate() {
-  local agent active path bad=0
-  while IFS="$TAB" read -r agent active path; do
-    case "$agent" in
-      ''|*[!A-Za-z0-9_-]*) echo "fleet-layout boot: invalid agent name '$agent' in manifest (allowed: A-Za-z0-9_-)" >&2; bad=1 ;;
-    esac
-    case "$path" in
-      /*) : ;;
-      *) echo "fleet-layout boot: non-absolute path '$path' for agent '$agent' in manifest" >&2; bad=1 ;;
-    esac
-  done
-  return "$bad"
-}
-
-# `claude --continue` when the worktree has prior sessions, else plain `claude`.
-# Project dir munge = nonalnum→'-' (same rule as agent-fanout.sh / register-agent.sh).
-_boot_claude_cmd() {
-  local pd f
-  pd="$HOME/.claude/projects/$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '-')"
-  for f in "$pd"/*.jsonl; do
-    [ -e "$f" ] && { printf 'claude --continue'; return; }
-    break
-  done
-  printf 'claude'
-}
-
-# Does <agent> have a LIVE registration? Full fleet_alive (pid + pane when the token is
-# a pane) — the skip check is deliberately STRICTER than the sweep below.
-_boot_agent_live() {
-  local name="$1" f base pid token
-  for f in "$HOME"/.claude/running-agents/"$name".*; do
-    [ -f "$f" ] || continue
-    base="$(basename "$f")"; pid="${base##*.}"
-    case "$pid" in ''|*[!0-9]*) continue ;; esac
-    token="$(cat "$f" 2>/dev/null)"
-    [ -n "$token" ] || continue
-    fleet_alive "$pid" "$token" && return 0
-  done
-  return 1
-}
-
-# Sweep <agent>'s dead registry entries — pid-only, deliberately NARROWER than the skip
-# check: a live-pid/dead-pane entry is left for the registration-time prune to settle,
-# because sweeping a live pid is the riskier error. Same-name entries only; the general
-# stale sweep belongs to register-agent.sh.
-_boot_sweep_dead() {
-  local name="$1" f base pid
-  for f in "$HOME"/.claude/running-agents/"$name".*; do
-    [ -f "$f" ] || continue
-    base="$(basename "$f")"; pid="${base##*.}"
-    case "$pid" in ''|*[!0-9]*) continue ;; esac
-    kill -0 "$pid" 2>/dev/null && continue
-    if [ "$DRY_RUN" = 1 ]; then echo "(dry-run) would sweep dead registry entry $base"
-    else rm -f "$f"; fi
-  done
-}
-
-# A blind reply must not read as "no window" — that is a LAUNCH decision, and reading blindness as
-# absence is how a second claude gets launched into a worktree. rc 0 = the window exists; rc 1 = it
-# does not; rc 2 = we could not see (callers must not launch). Same discipline as _panes_at_path.
-_boot_window_exists() {
-  local wins
-  wins="$(tmux list-windows -t "$FL_HOME_SESSION" -F '#{window_name}' 2>/dev/null)" || return 2
-  [ -n "$wins" ] || return 2
-  printf '%s\n' "$wins" | grep -qx "$1"
-}
-
-_boot_report() { printf '  %-14s %s\n' "$1" "$2"; }
-
-# The cell (DX-jn-cc-012): claude full-height left, right column stacked — the configured
-# companion command (WORKFLOW_CELL_COMMAND) top-right, shell at the prompt bottom-right.
-# Called ONLY from boot's launch branch, so every pane it splits or keys into was created by
-# THIS run. Sizes are set at creation time (-l 40%, then the v-split's even default —
-# _balance_cell's steady-state ratio): balance_cells needs attribution, which needs a
-# registration that doesn't exist until the booted claude's SessionStart fires. A failure
-# DEGRADES (report + return 1, the claude launch already happened and matters more than its
-# companions); a failed v-split leaves the single right pane at the prompt with no companion —
-# a bare shell is the safe degraded state.
+# ----------------------------------------------------------------------- subagents
+# Restack a lead's SUBAGENT panes (reviewer / tester / planner …) directly beneath the
+# lead's own claude pane.
 #
-# WORKFLOW_CELL_COMMAND EMPTY (the default) → the cell is still built, both right panes just sit
-# at a shell prompt and NOTHING is keyed. The success return is DELIBERATE (a helper's return
-# status is a contract): with no keystroke there is no last-command status to leak, so we return
-# 0 explicitly rather than inheriting whatever the last conditional evaluated to.
-_boot_cell() {
-  local agent="$1" pane="$2" path="$3" right bottom
-  if [ "$DRY_RUN" = 1 ]; then
-    _rw split-window -d -h -l '40%' -P -F '#{pane_id}' -t "$pane" -c "$path"
-    _rw split-window -d -v -P -F '#{pane_id}' -t '<right-pane>' -c "$path"
-    [ -n "$FL_CELL_COMMAND" ] && _rw send-keys -t '<right-pane>' "$FL_CELL_COMMAND" C-m
+# Why this verb exists: with `teammateMode: "tmux"`, an Agent-tool spawn is materialised as a
+# real pane, and the harness places it wherever tmux's current layout puts a new pane — in
+# practice appended into the cell's RIGHT column, under the monocle companion. Five reviewers
+# and testers land on top of a 40%-wide column and the whole window becomes unreadable. They
+# belong under the lead, in the left column: they are work the lead is waiting on, so reading
+# them top-to-bottom next to the lead's own transcript is the arrangement that matches how
+# they are used.
+#
+# WHICH PANES. The team config is authoritative — Claude Code records each member's
+# `tmuxPaneId` and `agentType` there, so we neither guess from pane titles (an agent can set
+# its own) nor parse `ps` (a pane's claude is a grandchild of the pane's own pid). Every
+# config under ~/.claude/teams/ is scanned and self-located: a config is OURS if one of its
+# non-lead members sits on a pane that currently exists. That means no session id is needed,
+# and a crashed lead's stale config contributes nothing, because its recorded panes are gone.
+#
+# TARGET is $TMUX_PANE — the invoking lead's own pane. The lead is what runs this verb, so its
+# pane is known exactly rather than inferred, and a subagent can never be its own target.
+# A team member that has ENTERED A LANE is not a subagent — it is a teammate, and its pane
+# belongs in that lane's own window, not stacked under the lead.
+#
+# The team config cannot tell them apart: both are members, `agentType` is whatever the lead
+# named at spawn (often nothing), and the config's recorded `cwd` is the LEAD's for every member
+# because it is written at spawn, before EnterWorktree. The discriminator that actually holds is
+# WHERE THE PANE IS NOW, compared against the lead:
+#
+#   same cwd as the lead  → it never moved → subagent → stack it under the lead
+#   different cwd         → it entered a lane → teammate → leave it in its own window
+#
+# NOT "is it inside the lanes directory" — which was the first attempt and silently matched
+# everything, because THE LEAD'S OWN WORKTREE IS A LANE (lane 0). Every subagent sits in it, so
+# the test was true for exactly the panes it was meant to select, and `subagents` reported "no
+# live subagent panes to place" while one sat in the window.
+#
+# A teammate that has not entered its lane yet also reads as a subagent and gets stacked. That
+# is the safe direction: it is squatting the lead's tree, where lane-guard is refusing its
+# writes, so surfacing it under the lead is exactly where you want to see it.
+_pane_shares_lead_cwd() {   # <pane_id> <lead-cwd> -> 0 when the pane never left the lead's tree
+  local p; p="$(tmux display-message -p -t "$1" '#{pane_current_path}' 2>/dev/null)"
+  p="$(_abs "$p")"; [ -n "$p" ] || return 1
+  [ "$p" = "$2" ]
+}
+
+_subagent_panes() {   # <lead-cwd> -> "<pane_id>\t<agent-name>\t<agent-type>" per live subagent pane
+  local leadcwd="$1" live c
+  live="$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null)" || return 1
+  [ -n "$live" ] || return 1
+  for c in "$HOME"/.claude/teams/*/config.json; do
+    [ -r "$c" ] || continue
+    python3 - "$c" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+for m in d.get('members', []):
+    pane = m.get('tmuxPaneId') or ''
+    # 'leader' is the lead's sentinel, not a pane id; skip the lead and anything unplaced.
+    if not pane.startswith('%'):
+        continue
+    if (m.get('agentType') or '') == 'team-lead':
+        continue
+    print('%s\t%s\t%s' % (pane, m.get('name', '?'), m.get('agentType') or '?'))
+PY
+  done | sort -u | while IFS="$TAB" read -r pane name atype; do
+    [ -n "$pane" ] || continue
+    _has_line "$live" "$pane" || continue          # recorded but gone — a dead teammate's leftover
+    _pane_shares_lead_cwd "$pane" "$leadcwd" || continue   # moved into a lane => teammate, leave it
+    printf '%s\t%s\t%s\n' "$pane" "$name" "$atype"
+  done
+}
+
+# The lead's own window, sized so the chat is actually readable.
+#
+# NOT `select-layout even-vertical`, which was the first attempt: it reflows EVERY pane in the
+# window to equal height, so the lead's chat ends up the same size as a shell it never looks at.
+# Targeted resizes instead — the chat keeps a fixed share and the companions divide the rest.
+#
+# This runs even when there are no subagents, because the sizing drifts on its own: breaking the
+# team's panes out into their own windows (`single`) left the lead's chat at 62 columns of a
+# 208-column window, since tmux keeps the surviving panes' geometry rather than reflowing.
+FL_LEAD_WIDTH_PCT="${WORKFLOW_LEAD_WIDTH_PCT:-60}"
+FL_LEAD_HEIGHT_PCT="${WORKFLOW_LEAD_HEIGHT_PCT:-65}"
+_normalize_lead_window() {  # <lead-pane>
+  local p="$1" win w h
+  win="$(_win_of "$p")"; [ -n "$win" ] || return 0
+  w="$(tmux display-message -p -t "$win" '#{window_width}'  2>/dev/null)"
+  h="$(tmux display-message -p -t "$win" '#{window_height}' 2>/dev/null)"
+  case "$w" in ''|*[!0-9]*) return 0 ;; esac
+  case "$h" in ''|*[!0-9]*) return 0 ;; esac
+  # Width first: it decides the left column. Only widen when there IS another column, otherwise
+  # tmux clamps and the call is noise.
+  if [ "$(tmux list-panes -t "$win" -F x 2>/dev/null | wc -l | tr -d ' ')" -gt 1 ]; then
+    _rw resize-pane -t "$p" -x "$(( w * FL_LEAD_WIDTH_PCT / 100 ))" 2>/dev/null || true
+    _rw resize-pane -t "$p" -y "$(( h * FL_LEAD_HEIGHT_PCT / 100 ))" 2>/dev/null || true
+  fi
+  _seed_companion "$win" "$p"
+}
+
+# Is <pane> sitting at a bare shell prompt — i.e. running nothing of its own?
+_pane_is_shell() {
+  case "$(tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null)" in
+    bash|zsh|fish|sh|-bash|-zsh|-fish|-sh) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Start WORKFLOW_CELL_COMMAND in the window's TOP-RIGHT pane, if that pane is idle.
+#
+# `build_cell` already does this for a feature agent's cell, but the LEAD's window is not a cell
+# — nothing ever built it — so its companion sat at a bare prompt while every feature agent got
+# its tool. Same treatment, same command, one place that decides what a companion runs.
+#
+# ONLY WHEN IDLE, and that is the whole safety story: keying into a pane is an ACTION, and
+# send-keys succeeds at the tmux layer even when the receiving program has no idea what to do
+# with the text. A pane already running something (an editor, a log tail, a shell mid-command)
+# is left strictly alone — a missing companion is a small annoyance, typing into a live process
+# is not.
+_seed_companion() {  # <window> <lead-pane>
+  [ -n "$FL_CELL_COMMAND" ] || return 0          # empty by default; nothing to seed
+  local win="$1" lead="$2" top_right
+  # Top-right = the pane in a different column from the lead (greatest left), highest up
+  # (smallest top). Ties break on the topmost, which is what "top right" means visually.
+  top_right="$(tmux list-panes -t "$win" -F '#{pane_id} #{pane_left} #{pane_top}' 2>/dev/null \
+    | awk -v lead="$lead" '$1!=lead { if ($2>bl || ($2==bl && $3<bt)) { bl=$2; bt=$3; id=$1 } } END{ if (id) print id }')"
+  [ -n "$top_right" ] || return 0
+  _pane_is_shell "$top_right" || return 0        # busy with something real — hands off
+  _rw send-keys -t "$top_right" -l "$FL_CELL_COMMAND"
+  _rw send-keys -t "$top_right" Enter
+  echo "  companion    started '$FL_CELL_COMMAND' in $top_right (was an idle shell)"
+}
+
+layout_subagents() {
+  fleet_tmux_ok || { echo "fleet-layout subagents: not inside tmux — nothing to place" >&2; return 0; }
+  local target="$TMUX_PANE" leadcwd rows n=0
+  leadcwd="$(_abs "$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null)")"
+  rows="$(_subagent_panes "$leadcwd")" || true
+  if [ -z "$rows" ]; then
+    echo "fleet-layout subagents: no live subagent panes to place"
+    _normalize_lead_window "$target"       # sizing drifts with or without subagents
     return 0
   fi
-  if ! right="$(tmux split-window -d -h -l '40%' -P -F '#{pane_id}' -t "$pane" -c "$path")" || [ -z "$right" ]; then
-    _boot_report "$agent" "cell DEGRADED (h-split errored — claude pane intact)"; return 1
-  fi
-  if ! bottom="$(tmux split-window -d -v -P -F '#{pane_id}' -t "$right" -c "$path")" || [ -z "$bottom" ]; then
-    _boot_report "$agent" "cell DEGRADED (v-split errored — right pane left at the prompt)"; return 1
-  fi
-  [ -n "$FL_CELL_COMMAND" ] || return 0        # no companion configured — bare shells, success
-  if [ -n "${FLEET_BOOT_LAUNCH_RECORDER:-}" ]; then
-    printf '%s\t%s\n' "$agent" "$FL_CELL_COMMAND" >> "$FLEET_BOOT_LAUNCH_RECORDER"
-  elif ! tmux send-keys -t "$right" "$FL_CELL_COMMAND" C-m; then
-    _boot_report "$agent" "cell DEGRADED ($FL_CELL_COMMAND keystroke errored — top-right pane at the prompt)"; return 1
-  fi
-}
-
-# Refocus the invoking window (DX-jn-cc-013): windows are created -d, but the end-of-run
-# name_windows reordering can leave another window selected — the operator who typed
-# `boot` gets their own window back. Cosmetic in the _balance_cell sense: headless, an
-# unresolvable pane, or a failed select-window all degrade silently, never tainting rc.
-_boot_refocus() {
-  [ -n "${TMUX_PANE:-}" ] || return 0
-  local win
-  win="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null)" || return 0
-  [ -n "$win" ] || return 0
-  _rw select-window -t "$win" || true
-}
-
-# Resolve the session boot creates its windows in, and REBIND FL_HOME_SESSION to it — one
-# session identity for the whole run, never a boot-local second variable (DX-jn-cc-014). Four
-# sites on boot's path read FL_HOME_SESSION: the two new-window calls, _boot_window_exists (the
-# duplicate-launch guard), and name_windows → _order_windows. A partial rebind would blind the
-# guard and silently no-op the ordering in exactly the projects this exists to serve.
-#
-# The CONFIGURED session wins when it exists on the server; otherwise fall back to the invoking
-# client's own session (a generic project's default session is `0`, not `main` — `main` is one
-# machine's zshrc convention). Boot NEVER creates a session. The persisted identity
-# (WORKFLOW_FLEET_HOME_SESSION in workflow.config.local, written by base-initialize/base-setup)
-# is the primary mechanism — this is the backstop for repos that never ran either.
-_boot_resolve_session() {
-  _session_exists "$FL_HOME_SESSION" && return 0
-  local cur
-  cur="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_name}' 2>/dev/null || true)"
-  [ -n "$cur" ] || { echo "fleet-layout boot: session '$FL_HOME_SESSION' not found and no current session to fall back to; refusing" >&2; return 2; }
-  echo "fleet-layout boot: session '$FL_HOME_SESSION' not found — using current session '$cur'. Persist WORKFLOW_FLEET_HOME_SESSION=\"$cur\" in .claude/workflow.config.local — in the MAIN CLONE and in each agent worktree (or re-seed them) — or name-windows ordering and the layout verbs will keep targeting '$FL_HOME_SESSION'." >&2
-  FL_HOME_SESSION="$cur"
-  # The preamble's home!=ext guard ran against the CONFIGURED value, before this resolution — so
-  # re-assert it. Without this a rebind could walk around a guard the preamble already cleared,
-  # and `single` would later tear down the session holding every agent.
-  [ "$FL_HOME_SESSION" != "$FL_EXT_SESSION" ] || {
-    echo "fleet-layout boot: resolved home session '$FL_HOME_SESSION' equals the external session; refusing" >&2; return 2; }
-  return 0
-}
-
-boot_fleet() {
-  local rows self toplevel launched=0 rc=0
-  _boot_resolve_session || return $?
-  rows="$(_boot_manifest_agents)" || return 1
-  [ -n "$rows" ] || { echo "fleet-layout boot: manifest has no agent entries — nothing to boot" >&2; return 1; }
-  printf '%s\n' "$rows" | _boot_validate || return 1
-  self="$(fleet_find_self "$HOME/.claude/running-agents" 2>/dev/null || true)"
-  toplevel="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-
-  local agent active path apath cmd pane live_row occ occ_rc occ_first wex
-  # Canonical order: agents by trailing number (the fleet_agent_id instance number);
-  # number-less names sort last. The manifest's own order is not a contract.
-  while IFS="$TAB" read -r agent active path; do
-    if [ "$active" = 0 ]; then _boot_report "$agent" "held (active: false)"; continue; fi
-    if [ "$agent" = "$self" ] || { [ -n "$toplevel" ] && [ "$path" = "$toplevel" ]; }; then
-      _boot_report "$agent" "skipped (self)"; continue
-    fi
-    _boot_sweep_dead "$agent"
-    if _boot_agent_live "$agent"; then _boot_report "$agent" "live"; continue; fi
-    # cwd corroboration (DX-jn-cc-010): a live registration at this WORKTREE counts as
-    # live regardless of name — transient auto-names (pre-DX-jn-cc-006 worktrees) blind
-    # the name-keyed check above, and a re-run then double-launched (observed 2026-07-10).
-    apath="$(_abs "$path")"
-    if [ -n "$apath" ] && live_row="$(_live_reg_at_path "$apath")"; then
-      _boot_report "$agent" "live (as ${live_row%%"$TAB"*} — transient name)"; continue
-    fi
-    if [ ! -d "$path" ]; then _boot_report "$agent" "missing-path ($path)"; continue; fi
-    # rc 0 = the window exists (leave it); rc 1 = it does not; rc 2 = WE COULD NOT SEE. A blind
-    # reply must never fall through to the launch below — that is how a second claude lands in a
-    # worktree. (The bare `if` here tested only zero-vs-nonzero, so a guarded rc 2 was still read as
-    # "no window" — the guard was inert until this call site learned to read it.)
-    _boot_window_exists "$agent"; wex=$?
-    if [ "$wex" = 0 ]; then
-      _boot_report "$agent" "window-exists (left untouched — launch manually or close it)"; continue
-    elif [ "$wex" = 2 ]; then
-      _boot_report "$agent" "REFUSED (cannot list windows — not launching blind)"; rc=1; continue
-    fi
-    # Occupancy by path, name-independent — the direct plug for the double-launch hazard.
-    # rc 2 (blind pane list inside tmux) is a contradiction: REFUSE to launch, never read
-    # blindness as "unoccupied".
-    if [ -n "$apath" ]; then
-      occ="$(_panes_at_path "$apath")"; occ_rc=$?
-      if [ "$occ_rc" = 0 ]; then
-        occ_first="$(printf '%s\n' "$occ" | head -1)"
-        _boot_report "$agent" "occupied (pane ${occ_first%%"$TAB"*}, window ${occ_first#*"$TAB"}, at this worktree — left untouched)"; continue
-      elif [ "$occ_rc" = 2 ]; then
-        _boot_report "$agent" "REFUSED (cannot enumerate panes — not launching blind)"; rc=1; continue
-      fi
-    fi
-    cmd="$(_boot_claude_cmd "$path")"
-    if [ "$DRY_RUN" = 1 ]; then
-      _rw new-window -d -P -F '#{pane_id}' -t "$FL_HOME_SESSION" -n "$agent" -c "$path"
-      _rw send-keys -t '<new-pane>' "$cmd" C-m
-      _boot_report "$agent" "booted ($cmd) [dry-run]"
-      _boot_cell "$agent" '<new-pane>' "$path"
-      launched=1
-    else
-      if ! pane="$(tmux new-window -d -P -F '#{pane_id}' -t "$FL_HOME_SESSION" -n "$agent" -c "$path")" || [ -z "$pane" ]; then
-        _boot_report "$agent" "FAILED (new-window)"; rc=1; continue
-      fi
-      if [ -n "${FLEET_BOOT_LAUNCH_RECORDER:-}" ]; then
-        printf '%s\t%s\n' "$agent" "$cmd" >> "$FLEET_BOOT_LAUNCH_RECORDER"
-      else
-        tmux send-keys -t "$pane" "$cmd" C-m
-      fi
-      _boot_report "$agent" "booted ($cmd)"
-      _boot_cell "$agent" "$pane" "$path" || rc=1
-      launched=1
-    fi
-  done < <(printf '%s\n' "$rows" | while IFS="$TAB" read -r a act p; do
-             num="$(printf '%s' "$a" | grep -oE '[0-9]+$' || true)"
-             printf '%09d\t%s\t%s\t%s\n' "${num:-999999999}" "$a" "$act" "$p"
-           done | sort -n | cut -f2-)
-
-  # Window names/order converge as each agent's SessionStart registration fires
-  # name-windows itself; this pass just settles whatever is already registered.
-  name_windows || true
-  _boot_refocus
-  if [ "$launched" = 1 ]; then
-    echo "Resume prompts (e.g. \"Resume from summary\") are answered by the HUMAN — check each new window; boot never types into a pane it did not just create."
-  fi
-  return "$rc"
-}
-
-# ---------------------------------------------------------------------------- down
-# (DX-jn-cc-010) The inverse of boot: stop every fleet agent and remove its panes —
-# never touching worktrees, self, or non-agent panes. Targeting is keyed on the
-# WORKTREE PATH, never the agent name: live registrations can carry transient
-# auto-names (observed 2026-07-10), and a name-keyed down would miss all of them.
-#
-# Failure DIRECTION (inverse of _teardown_ext): a vacuous scan here kills nothing —
-# the danger is the operator reading "fleet is down, exit 0" while agents still run.
-# So every guard input fails CLOSED into a loud non-zero refusal, `downed` is EARNED
-# by post-kill observation (the founding incident was a sandbox masking kill failures),
-# and exit 0 means exactly: every non-self entry is downed-and-verified or probe-
-# confirmed not running.
-
-# name \t pid \t token for every LIVE registration (full fleet_alive). Sidecars are NOT
-# consulted here — placement is _reg_cwd's job, with policy at the call sites.
-_down_live_regs() {
-  local f base name pid token
-  for f in "$HOME"/.claude/running-agents/*; do
-    [ -f "$f" ] || continue
-    base="${f##*/}"; pid="${base##*.}"; name="${base%.*}"
-    case "$pid" in ''|*[!0-9]*) continue ;; esac
-    token="$(cat "$f" 2>/dev/null)"
-    [ -n "$token" ] || continue
-    fleet_alive "$pid" "$token" || continue
-    printf '%s\t%s\t%s\n' "$name" "$pid" "$token"
-  done
-}
-
-# _reg_cwd <name> — echo the agent's resolved sidecar cwd. rc 0 = resolved; rc 2 =
-# can't-place (sidecar missing / empty / unreadable / unresolvable). Epistemics live
-# here; POLICY lives at the call sites: boot soft-skips into its occupancy backstop,
-# down refuses the whole run (the unplaceable agent could be self or a target).
-_reg_cwd() {
-  local cwd acwd f="$HOME/.claude/agents/$1.cwd"
-  [ -f "$f" ] && [ -r "$f" ] || return 2
-  cwd="$(cat "$f" 2>/dev/null)" || return 2
-  [ -n "$cwd" ] || return 2
-  acwd="$(_abs "$cwd")"
-  [ -n "$acwd" ] || return 2
-  printf '%s\n' "$acwd"
-}
-
-# Any LIVE registration whose sidecar resolves to <path>, regardless of name.
-# rc 0 = match (echoes "name\ttoken"), rc 1 = none. Shared by boot's live check and
-# down's matcher — one matching pipeline, per-caller failure policy (see _reg_cwd).
-_live_reg_at_path() {
-  local name pid token acwd
-  while IFS="$TAB" read -r name pid token; do
-    [ -n "$name" ] || continue
-    acwd="$(_reg_cwd "$name")" || continue
-    [ "$acwd" = "$1" ] && { printf '%s\t%s\n' "$name" "$token"; return 0; }
-  done <<EOF
-$(_down_live_regs)
-EOF
-  return 1
-}
-
-# Panes whose cwd is <path> or a subdirectory — boundary-aware ("$p"|"$p"/*): sibling
-# worktrees share string prefixes (see attribute_panes). rc 0 = hit(s), echoed as
-# "pane_id\twindow_name"; rc 1 = none; rc 2 = UNKNOWN — callers treat it as blindness,
-# never as "unoccupied"/"not running".
-#
-# TWO ways to be blind, and BOTH are rc 2:
-#   - the whole server pane list came back empty (self-contradictory inside tmux: our own
-#     pane exists), and
-#   - ANY pane's cwd field came back empty/unresolvable. A pane exists but we cannot say
-#     WHERE it is, so we cannot say the queried path is unoccupied. This branch used to
-#     `continue` — dropping that pane silently — which read field-level blindness as
-#     "absent" while the list-level case was correctly read as "unknown". The same
-#     empty-enumeration class, one level down: an unreadable FIELD is UNKNOWN, not absent.
-#     It is reachable in practice: a pane's cwd is not populated the instant it is created,
-#     so a freshly-split pane can appear with no path (this is what made the suite flaky).
-#     Consequences of the old behavior: boot's occupancy backstop — the direct plug for the
-#     double-launch hazard — would miss the pane and launch a SECOND claude into the
-#     worktree; down's UNACCOUNTED probe would report "not running" for a live pane.
-# Re-read ONE pane's cwd, briefly, for the transient not-yet-populated case (see _panes_at_path).
-#   rc 0 + path  — settled.
-#   rc 1         — the pane is GONE: it is absent from the server's pane list. That is ABSENCE, not
-#                  blindness — it vanished between the snapshot and now — so callers treat it as an
-#                  honest miss rather than a refusal. (Conflating the two would make every pane that
-#                  closes mid-run a spurious refusal, the class this helper exists to remove.)
-#   rc 2         — UNKNOWN: either the pane exists but still reports no location after retrying, or
-#                  we could not see the pane list at all. Callers must fail closed.
-#
-# NOTE what does NOT work as the gone-vs-blind oracle: display-message's EXIT STATUS. It exits 0
-# with EMPTY output for a pane that does not exist (verified, tmux 3.x) — it looks like an oracle
-# and is not. Pane-LIST membership answers the question; but the list itself can be blind, and an
-# empty -a reply is tmux contradicting itself by construction (our own pane is always in it), so it
-# is UNKNOWN — never "absent everywhere". Reading a blind list as "the pane is gone" would drop the
-# pane from _panes_at_path and let boot's occupancy backstop launch a SECOND claude into the
-# worktree: the same unknown-is-not-absent bug this helper was written to fix, one level down.
-_pane_path_settled() {
-  local pid="$1" i=0 p all
-  while [ "$i" -lt 10 ]; do
-    p="$(tmux display-message -p -t "$pid" '#{pane_current_path}' 2>/dev/null)"
-    [ -n "$p" ] && { printf '%s' "$p"; return 0; }
-    all="$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null)"
-    [ -n "$all" ] || return 2                              # blind list => UNKNOWN, never "gone"
-    printf '%s\n' "$all" | grep -qx "$pid" || return 1    # genuinely absent => honest miss
-    i=$((i+1)); sleep 0.05
-  done
-  return 2
-}
-
-_panes_at_path() {
-  local rows pid win ppath hit=1
-  rows="$(tmux list-panes -a -F "#{pane_id}${TAB}#{window_name}${TAB}#{pane_current_path}" 2>/dev/null)"
-  [ -n "$rows" ] || return 2
-  while IFS="$TAB" read -r pid win ppath; do
-    [ -n "$pid" ] || continue
-    # BLINDNESS is the EMPTY RAW FIELD: tmux knows the pane exists but reports no location — we
-    # cannot say the queried path is unoccupied, so it is UNKNOWN (rc 2), never "absent".
-    #
-    # But an empty field is usually TRANSIENT: tmux does not populate pane_current_path the instant
-    # a pane is created, and panes get created all the time (every split, every new window, by us
-    # and by the user). Failing closed on the first empty read would refuse boot/down for the WHOLE
-    # fleet whenever any unrelated pane happens to be a few milliseconds old. So re-query that one
-    # pane before declaring blindness: transient => it resolves; genuinely unreadable => it doesn't.
-    if [ -z "$ppath" ]; then
-      ppath="$(_pane_path_settled "$pid")"
-      case $? in
-        0) : ;;                 # settled
-        1) continue ;;          # the pane vanished between snapshot and re-read — honest miss
-        *) return 2 ;;          # exists but unplaceable — UNKNOWN, fail closed
-      esac
-    fi
-    ppath="$(_abs "$ppath")"
-    # A path we CAN read but cannot canonicalize (the pane's cwd was deleted) is not blindness: we
-    # know where the pane is, and it is not the worktree we asked about (which exists). Honest miss.
-    [ -n "$ppath" ] || continue
-    case "$ppath" in
-      "$1"|"$1"/*) printf '%s\t%s\n' "$pid" "$win"; hit=0 ;;
-    esac
+  local pane name atype
+  while IFS="$TAB" read -r pane name atype; do
+    [ -n "$pane" ] || continue
+    # Never move our own pane, and never move the pane we are stacking onto.
+    [ "$pane" = "$target" ] && { printf '  %-14s %s\n' "$name" "SKIPPED (that is the lead's own pane)"; continue; }
+    printf '  %-14s %s\n' "$name" "$atype → below the lead's pane ($target)"
+    # -v stacks BELOW the target, keeping it inside the left column rather than the cell's
+    # right-hand companion stack. Failure is reported and does not abort the rest: a pane that
+    # will not move is cosmetic, and half-placed beats aborted.
+    _rw join-pane -v -s "$pane" -t "$target" || printf '  %-14s %s\n' "$name" "join failed (left where it was)"
+    n=$((n + 1))
   done <<EOF
 $rows
 EOF
-  return "$hit"
+  _normalize_lead_window "$target"
+  echo "fleet-layout subagents: placed $n"
 }
 
-# Busy gate for the KILL path: UNKNOWN fails toward BUSY (skip), per the destroy-guard
-# discipline — fleet_busy (the canonical predicate in _fleet.sh) reads unknown as idle,
-# which is right for status display and fail-open for a kill.
-_down_busy() {
-  local dir="$HOME/.claude/agent-busy" m="$HOME/.claude/agent-busy/$1"
-  [ -e "$dir" ] || return 1                         # nobody has ever been marked → idle
-  { [ -r "$dir" ] && [ -x "$dir" ]; } || return 0   # dir unreadable → UNKNOWN → busy
-  if [ -e "$m" ] && ! find "$m" -mmin "-${WORKFLOW_BUSY_STALE_MIN:-30}" >/dev/null 2>&1; then return 0; fi  # query failed → busy
-  fleet_busy "$1"
-}
-
-# THE file's only kill-pane (structurally pinned by the test suite). Terminal self
-# backstop: whatever upstream logic concluded, our own pane is never a target.
-_down_kill_pane() {
-  if [ -n "${TMUX_PANE:-}" ] && [ "$1" = "$TMUX_PANE" ]; then
-    printf 'fleet-layout down: refusing to kill own pane %s\n' "$1" >&2
-    return 1
-  fi
-  _rw kill-pane -t "$1"
-}
-
-# The success claim is EARNED by observation: rc 0 = the pane is provably gone; rc 1 =
-# alive or unknowable — both are FAILED, never `downed`. An empty server pane list is
-# self-contradictory inside tmux and never corroborates death. NO exemptions here —
-# the skip marker is a PRE-kill decision; it is mutable mid-run, so honoring it at
-# verification time would reopen the masked-kill false success (rev-a R4/rev-b R3).
-_down_verify_dead() {
-  local all
-  all="$(tmux list-panes -a -F '#{pane_id}' 2>/dev/null)"
-  [ -n "$all" ] || return 1
-  _has_line "$all" "$1" && return 1
-  return 0
-}
-
-# Surviving panes at <path> that are NOT sanctioned. Sanctioned survivors (exempt from
-# the UNACCOUNTED probe ONLY — never from the kill verification above): our own pane,
-# @fleet-layout-skip-marked panes, and panes at a cwd shared by >=2 snapshot agents
-# (attribute_panes' attach-to-NEITHER ambiguity rule). A pane whose marker cannot be
-# read counts as a HIT — over-reporting is the safe direction for an informational
-# probe. Reads FL_DOWN_AMB (newline list of ambiguous cwds) from down_fleet's scope.
-_down_probe_unsanctioned() {
-  local hits prc pid win ppath amb exempt any=1
-  hits="$(_panes_at_path "$1")"; prc=$?
-  [ "$prc" = 0 ] || return "$prc"
-  while IFS="$TAB" read -r pid win; do
-    [ -n "$pid" ] || continue
-    [ -n "${TMUX_PANE:-}" ] && [ "$pid" = "$TMUX_PANE" ] && continue
-    [ "$(_skip_state "$pid")" = marked ] && continue
-    ppath="$(tmux display-message -p -t "$pid" '#{pane_current_path}' 2>/dev/null)"
-    ppath="$(_abs "$ppath")"
-    exempt=0
-    while IFS= read -r amb; do
-      [ -n "$amb" ] || continue
-      case "$ppath" in "$amb"|"$amb"/*) exempt=1 ;; esac
-    done <<EOF2
-${FL_DOWN_AMB:-}
-EOF2
-    [ "$exempt" = 1 ] && continue
-    printf '%s\t%s\n' "$pid" "$win"; any=0
-  done <<EOF
-$hits
-EOF
-  return "$any"
-}
-
-_down_report() { printf '  %-14s %s\n' "$1" "$2"; }
-
-down_fleet() {
-  local bad=0 rows f
-  # ---- global guards: every input fails CLOSED into a loud non-zero refusal ----
-  case $- in *f*)
-    echo "fleet-layout down: noglob shell state blinds the registry scan — refusing" >&2; return 1 ;;
-  esac
-  rows="$(_boot_manifest_agents)" || return 1
-  [ -n "$rows" ] || {
-    echo "fleet-layout down: manifest has no agent entries — refusing (an empty enumeration must never read as 'fleet is down')" >&2
-    return 1; }
-  printf '%s\n' "$rows" | _boot_validate || return 1
-  # ---- per-agent filter (DX-jn-cc-014) ----
-  # Applied AFTER the whole-manifest parse + validation, so a corrupt manifest still refuses even
-  # when a filter is given. An UNKNOWN requested name is a loud refusal, never a silent no-match:
-  # a filtered-to-empty set must not satisfy the exit contract vacuously ("subset is down, exit 0"
-  # while the agent still runs — the caller, e.g. remove-worktree, would then delete its worktree).
-  if [ -n "${DOWN_FILTER:-}" ]; then
-    local want kept="" have
-    for want in $DOWN_FILTER; do
-      have="$(printf '%s\n' "$rows" | cut -f1 | grep -qxF -- "$want" && echo 1 || echo 0)"
-      if [ "$have" = 0 ]; then
-        echo "fleet-layout down: '$want' is not in the manifest — refusing (nothing was killed for it)" >&2
-        bad=1; continue
-      fi
-      kept="${kept}$(printf '%s\n' "$rows" | awk -F"$TAB" -v a="$want" '$1==a')
-"
-    done
-    rows="$(printf '%s' "$kept" | sed '/^$/d')"
-    # An unknown name TAINTS the run (bad=1, set above) but must NOT spare the agents that DID
-    # match: `down a bogus` downs `a` and still exits non-zero. Refusing everything here would
-    # make the run's own error message a lie ("nothing killed for it" — while also killing nothing
-    # for the valid names) and would send the operator hunting the wrong agent. Only a filter that
-    # matched NOTHING refuses outright — the empty-enumeration guard, which must never read as
-    # "that agent is down".
-    [ -n "$rows" ] || {
-      echo "fleet-layout down: no requested agent is in the manifest — refusing (nothing was killed)." >&2
-      return 1; }
-  fi
-  [ -d "$HOME/.claude/running-agents" ] || {
-    echo "fleet-layout down: registry directory missing — cannot enumerate the fleet; refusing" >&2; return 1; }
-  for f in "$HOME"/.claude/running-agents/*; do
-    [ -e "$f" ] || [ -L "$f" ] || continue
-    [ -f "$f" ] && [ -r "$f" ] || {
-      echo "fleet-layout down: registry entry $f is not a readable file — refusing" >&2; return 1; }
-  done
-  tmux display-message -p '#{pid}' >/dev/null 2>&1 || {
-    echo "fleet-layout down: tmux is not answering — refusing" >&2; return 1; }
-  local all_panes
-  all_panes="$(tmux list-panes -a -F "#{pane_id}${TAB}#{pane_current_path}" 2>/dev/null)"
-  [ -n "$all_panes" ] || {
-    echo "fleet-layout down: cannot enumerate the server pane list — refusing" >&2; return 1; }
-
-  # Sidecar preflight: a LIVE registration we cannot place could be self or a target.
-  local live_regs name pid token
-  live_regs="$(_down_live_regs)"
-  while IFS="$TAB" read -r name pid token; do
-    [ -n "$name" ] || continue
-    _reg_cwd "$name" >/dev/null || {
-      echo "fleet-layout down: live registration '$name' has an unresolvable .cwd sidecar — cannot place it (could be self or a target); refusing" >&2
-      return 1; }
-  done <<EOF
-$live_regs
-EOF
-
-  # Self: token equality is PRIMARY (name- and cwd-independent — transient names blind
-  # the name check, and the invoker's toplevel diverges outside the worktree); the name
-  # and toplevel checks are secondaries. Both unresolvable → refuse: an unidentifiable
-  # self could be among the targets.
-  local self_token toplevel self_name token_matches=0
-  self_token="$(fleet_self_token)"
-  toplevel="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-  [ -n "$toplevel" ] && toplevel="$(_abs "$toplevel")"
-  self_name="$(fleet_find_self "$HOME/.claude/running-agents" 2>/dev/null || true)"
-  printf '%s\n' "$live_regs" | cut -f3 | grep -qxF -- "$self_token" && token_matches=1
-  if [ "$token_matches" = 0 ] && [ -z "$toplevel" ]; then
-    echo "fleet-layout down: cannot resolve self (no registration carries our token, no git toplevel) — refusing" >&2
-    return 1
-  fi
-
-  # Snapshot attribution ONCE before the first kill: kills mutate live_agents, and a
-  # rescan would make the same-cwd ambiguity rule order-dependent (panes owed to
-  # NEITHER re-attribute to the survivor). Ambiguous cwds feed the probe's exemptions.
-  _snapshot_attr
-  FL_DOWN_AMB="$(live_agents | cut -f3 | sort | uniq -d)"
-
-  # Canonical (agent-number) order, same rule as boot.
-  local entries
-  entries="$(printf '%s\n' "$rows" | while IFS="$TAB" read -r a act p; do
-               num="$(printf '%s' "$a" | grep -oE '[0-9]+$' || true)"
-               printf '%09d\t%s\t%s\t%s\n' "${num:-999999999}" "$a" "$act" "$p"
-             done | sort -n | cut -f2-)"
-
-  # ---- per-entry pass: match by path, gate, kill (companions first, claude last) ----
-  # `active:false` does NOT exempt an entry: "stop all agents" means all; the flag
-  # gates boot only.
-  local agent active path apath m n tk acwd tpath comps c
-  local entry_kills entry_names entry_tokens
-  local summaries="" swept_paths=""
-  while IFS="$TAB" read -r agent active path; do
-    [ -n "$agent" ] || continue
-    apath="$(_abs "$path")"
-    if [ -n "$self_name" ] && [ "$agent" = "$self_name" ]; then
-      # Explicitly REQUESTED self → refuse loudly. The silent skip is correct only for an
-      # unrequested whole-fleet sweep; for a named request, exit 0 would tell the caller the
-      # agent is down while it is the very process running this command.
-      if [ -n "${DOWN_FILTER:-}" ]; then
-        _down_report "$agent" "REFUSED (self — a run cannot down its own pane)"; bad=1; continue
-      fi
-      _down_report "$agent" "skipped (self)"; continue
-    fi
-    m=""
-    if [ -n "$apath" ]; then
-      m="$(printf '%s\n' "$live_regs" | while IFS="$TAB" read -r n _p2 tk; do
-             [ -n "$n" ] || continue
-             acwd="$(_reg_cwd "$n")" || continue
-             [ "$acwd" = "$apath" ] && printf '%s\t%s\n' "$n" "$tk"
-           done)"
-    fi
-    if [ -n "$m" ] && printf '%s\n' "$m" | cut -f2 | grep -qxF -- "$self_token"; then
-      if [ -n "${DOWN_FILTER:-}" ]; then
-        _down_report "$agent" "REFUSED (self — a run cannot down its own pane)"; bad=1; continue
-      fi
-      _down_report "$agent" "skipped (self)"; continue
-    fi
-    if [ -n "$toplevel" ] && [ -n "$apath" ] && [ "$apath" = "$toplevel" ]; then
-      # The invoking pane stands in this worktree without a matching registration — the
-      # safe direction is skip, but the summary must not read as fully down.
-      _down_report "$agent" "skipped (invoking pane is in this worktree)"; bad=1; continue
-    fi
-    swept_paths="${swept_paths}${apath}
-"
-    if [ -z "$m" ]; then
-      # No live registration: PROBE before trusting "not running" — a broken
-      # registration chain must never convert a live agent into a silent exit 0.
-      if [ -z "$apath" ]; then
-        _down_report "$agent" "not running (worktree missing)"; continue
-      fi
-      local hits prc first
-      hits="$(_down_probe_unsanctioned "$apath")"; prc=$?
-      if [ "$prc" = 0 ]; then
-        first="$(printf '%s\n' "$hits" | head -1)"
-        _down_report "$agent" "UNACCOUNTED (pane ${first%%"$TAB"*} at this worktree, no live registration)"; bad=1
-      elif [ "$prc" = 2 ]; then
-        _down_report "$agent" "REFUSED (cannot enumerate panes to confirm 'not running')"; bad=1
-      else
-        _down_report "$agent" "not running"
-      fi
-      continue
-    fi
-    entry_kills=0; entry_names=""; entry_tokens=""
-    while IFS="$TAB" read -r n tk; do
-      [ -n "$n" ] || continue
-      case "$tk" in
-        %[0-9]*) : ;;
-        *) _down_report "$agent" "headless (as $n; cwd token — no pane to kill)"; bad=1; continue ;;
-      esac
-      if [ "$FORCE" != 1 ] && _down_busy "$n"; then
-        _down_report "$agent" "BUSY (mid-turn, as $n) — skipped; re-run with --force"; bad=1; continue
-      fi
-      # Corroborate the token before killing: it must resolve to a pane at this
-      # worktree (boundary-aware). Registry and tmux contradicting each other is a
-      # refusal, not a kill.
-      # Two DIFFERENT failures hide behind one lookup, and only one of them is "no pane":
-      #   (a) the token is absent from the snapshot   -> the pane is gone. Refuse.
-      #   (b) the token IS in the snapshot but its path field is EMPTY -> tmux knows the pane
-      #       exists and cannot yet say where it is. That is BLINDNESS, not absence — and it is
-      #       routine: pane_current_path is not populated the instant a pane is created, and
-      #       `list-panes` and `display-message` settle at different moments. Reading (b) as "no
-      #       pane" made `down` REFUSE to kill live agents (the 12%-flaky suite rows were this,
-      #       root-caused 2026-07-11: "token %62 resolves to 'no pane'" while %62 sat at the
-      #       worktree in the very same pane dump).
-      # So re-read the pane directly before concluding anything; only then refuse — still
-      # fail-closed, but on evidence rather than on a race.
-      tline="$(printf '%s\n' "$all_panes" | awk -F"$TAB" -v p="$tk" '$1==p{print; exit}')"
-      if [ -z "$tline" ]; then
-        _down_report "$agent" "REFUSED (token $tk resolves to no pane, as $n)"; bad=1; continue
-      fi
-      tpath="${tline#*"$TAB"}"
-      [ -n "$tpath" ] || tpath="$(_pane_path_settled "$tk")"   # rc 1/2 both leave tpath empty ->
-      tpath="$(_abs "$tpath")"                                  # the refusal below, which is right:
-                                                                # a vanished or unplaceable pane is
-                                                                # never a pane we may kill.
-      case "$tpath" in
-        "$apath"|"$apath"/*) : ;;
-        *) _down_report "$agent" "REFUSED (token $tk resolves to '${tpath:-an unreadable location}', not this worktree, as $n)"; bad=1; continue ;;
-      esac
-      # Skip marker on the claude pane: a PRE-kill decision (the user's explicit
-      # hands-off; --force never overrides it — removing the marker is the override).
-      # An unreadable marker is UNKNOWN and fails CLOSED.
-      case "$(_skip_state "$tk")" in
-        marked)  _down_report "$agent" "skipped (claude pane is skip-marked, as $n)"; bad=1; continue ;;
-        unknown) _down_report "$agent" "REFUSED (cannot read skip marker on $tk, as $n)"; bad=1; continue ;;
-      esac
-      # Companions first, claude last: the claude kill is the SessionEnd trigger. A
-      # refused companion kill (e.g. the terminal self backstop) is reported and taints
-      # the rc — the cell was not fully removed, and exit 0 must never claim it was.
-      comps="$(_attr | awk -F"$TAB" -v a="$n" '$1==a{print $3; exit}')"
-      for c in $comps; do
-        if _down_kill_pane "$c"; then entry_kills=$((entry_kills+1))
-        else _down_report "$agent" "REFUSED (companion $c not killed)"; bad=1; fi
-      done
-      if _down_kill_pane "$tk"; then
-        entry_kills=$((entry_kills+1))
-        entry_tokens="${entry_tokens:+$entry_tokens }$tk"
-        entry_names="${entry_names:+$entry_names, }$n"
-      else
-        _down_report "$agent" "FAILED (kill errored on $tk, as $n)"; bad=1
-      fi
-    done <<EOF2
-$m
-EOF2
-    [ -n "$entry_tokens" ] && summaries="${summaries}${agent}${TAB}${entry_names}${TAB}${entry_kills}${TAB}${entry_tokens}${TAB}${apath}
-"
-  done <<EOF
-$entries
-EOF
-
-  # ---- settle: give SessionEnd a moment to unregister, then verify + sweep + probe ----
-  local vagent vnames vcount vtoks vpath tk2 waited still
-  if [ "$DRY_RUN" != 1 ] && [ -n "$summaries" ]; then
-    waited=0
-    while [ "$waited" -lt "$FLEET_DOWN_SETTLE" ]; do
-      still=0
-      while IFS="$TAB" read -r _va _vn _vc vtoks _vp; do
-        [ -n "$vtoks" ] || continue
-        for tk2 in $vtoks; do _down_verify_dead "$tk2" || still=1; done
-      done <<EOF
-$summaries
-EOF
-      [ "$still" = 0 ] && break
-      sleep 1; waited=$((waited+1))
-    done
-  fi
-
-  # Pid-only sweep of registry entries at targeted paths — the SIGHUP-path backstop for
-  # SessionEnd. A live pid is never swept (and has already produced FAILED below).
-  local sp
-  while IFS= read -r sp; do
-    [ -n "$sp" ] || continue
-    _down_sweep_path "$sp"
-  done <<EOF
-$(printf '%s\n' "$swept_paths" | sort -u)
-EOF
-
-  # Verification + closing probe. Under --dry-run both are neutralized: nothing was
-  # killed, so the observation would flag every target as FAILED.
-  while IFS="$TAB" read -r vagent vnames vcount vtoks vpath; do
-    [ -n "$vagent" ] || continue
-    if [ "$DRY_RUN" = 1 ]; then
-      if [ "$vnames" = "$vagent" ]; then _down_report "$vagent" "downed ($(_down_plural "$vcount")) [dry-run]"
-      else _down_report "$vagent" "downed ($(_down_plural "$vcount"), as $vnames) [dry-run]"; fi
-      continue
-    fi
-    local entry_fail=0 hits prc first
-    for tk2 in $vtoks; do
-      if ! _down_verify_dead "$tk2"; then
-        _down_report "$vagent" "FAILED (pane $tk2 survived the kill)"; bad=1; entry_fail=1
-      fi
-    done
-    if [ "$entry_fail" = 0 ]; then
-      # This is the probe that earns the success claim: it looks for panes still ALIVE at the
-      # worktree after the kills. rc 2 = we could not see. A blind probe must NEVER fall through to
-      # "downed" + exit 0 — `remove-worktree` gates deleting the worktree on exactly that exit code,
-      # so reading blindness as "nothing survived" would delete a worktree out from under a live
-      # pane, which is the failure the down-first discipline exists to prevent. The pre-kill probe
-      # above already fails closed on rc 2; this one has to as well.
-      hits="$(_down_probe_unsanctioned "$vpath")"; prc=$?
-      if [ "$prc" = 0 ]; then
-        first="$(printf '%s\n' "$hits" | head -1)"
-        _down_report "$vagent" "UNACCOUNTED (pane ${first%%"$TAB"*} survived at this worktree)"; bad=1; entry_fail=1
-      elif [ "$prc" = 2 ]; then
-        _down_report "$vagent" "REFUSED (cannot enumerate panes to confirm nothing survived — NOT claiming this agent is down)"; bad=1; entry_fail=1
-      fi
-    fi
-    if [ "$entry_fail" = 0 ]; then
-      if [ "$vnames" = "$vagent" ]; then _down_report "$vagent" "downed ($(_down_plural "$vcount"))"
-      else _down_report "$vagent" "downed ($(_down_plural "$vcount"), as $vnames)"; fi
-    fi
-  done <<EOF
-$summaries
-EOF
-
-  if [ "$bad" = 0 ]; then
-    if [ -n "${DOWN_FILTER:-}" ]; then
-      echo "fleet down: every REQUESTED agent (${DOWN_FILTER# }) is downed-and-verified or not running."
-    else
-      echo "fleet down: every non-self entry is downed-and-verified or not running."
-    fi
-  else
-    echo "fleet down: NOT fully down — see the report above." >&2
-  fi
-  return "$bad"
-}
-
-_down_plural() { if [ "$1" = 1 ]; then printf '1 pane'; else printf '%s panes' "$1"; fi; }
-
-# rm DEAD-pid registry entries whose sidecar resolves to <path>. Pid-only, same
-# discipline as boot's sweep: sweeping a live pid is the riskier error.
-_down_sweep_path() {
-  local f base pid name acwd
-  for f in "$HOME"/.claude/running-agents/*; do
-    [ -f "$f" ] || continue
-    base="${f##*/}"; pid="${base##*.}"; name="${base%.*}"
-    case "$pid" in ''|*[!0-9]*) continue ;; esac
-    kill -0 "$pid" 2>/dev/null && continue
-    acwd="$(_reg_cwd "$name")" || continue
-    [ "$acwd" = "$1" ] || continue
-    if [ "$DRY_RUN" = 1 ]; then echo "(dry-run) would sweep dead registry entry $base"
-    else rm -f "$f"; fi
-  done
-}
 
 # ---------------------------------------------------------------------------- main
 
 [ -n "${FLEET_LAYOUT_LIB:-}" ] && return 0
 
-USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|boot|down> [--dry-run] [--force] [--label-only (name-windows)] [agent...  (down only)]"
+USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply> [--dry-run] [--label-only (name-windows)]"
 verb=""
-DOWN_FILTER=""          # space-separated agent names; empty = whole fleet (today's behavior)
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    --force)   FORCE=1 ;;
     --label-only) FL_LABEL_ONLY=1 ;;   # name-windows: relabel only, skip _order_windows (settle-recheck)
-    single|dual|wide|attach|balance|name-windows|boot|down)
-      # A bare verb word AFTER the verb is an agent name for `down` (an agent may legitimately
-      # be named e.g. `test`), so only the FIRST verb-shaped arg is the verb.
-      if [ -z "$verb" ]; then verb="$arg"; else DOWN_FILTER="$DOWN_FILTER $arg"; fi ;;
-    -*) echo "$USAGE" >&2; exit 2 ;;
-    *) DOWN_FILTER="$DOWN_FILTER $arg" ;;
+    single|dual|wide|attach|balance|name-windows|subagents|reapply)
+      [ -z "$verb" ] || { echo "$USAGE" >&2; exit 2; }
+      verb="$arg" ;;
+    *) echo "$USAGE" >&2; exit 2 ;;
   esac
 done
 [ -n "$verb" ] || { echo "$USAGE" >&2; exit 2; }
-[ "$FORCE" = 1 ] && [ "$verb" != down ] && { echo "fleet-layout: --force applies to down only" >&2; exit 2; }
-# Agent names are accepted by `down` alone — a stray word anywhere else is a usage error, never
-# a silently-ignored argument.
-if [ -n "$DOWN_FILTER" ] && [ "$verb" != down ]; then
-  echo "fleet-layout: agent names apply to \`down\` only (got:$DOWN_FILTER)" >&2; exit 2
-fi
-# Validate BEFORE anything touches the filesystem or tmux — same rule boot applies to manifest
-# names (the name feeds greps and reports).
-for _n in $DOWN_FILTER; do
-  case "$_n" in
-    *[!A-Za-z0-9_-]*) echo "fleet-layout down: invalid agent name '$_n' (allowed: A-Za-z0-9_-)" >&2; exit 2 ;;
-  esac
-done
 
-# The soft exit 0 is right for the layout verbs (nothing to restructure) and a FAIL-OPEN
-# for down: "nothing to do, exit 0" outside tmux would read to a crash-recovering
-# operator as "fleet is down" while every agent still runs (DX-jn-cc-010).
+# BOOT AND DOWN USED TO LIVE HERE, and their removal is why this dispatcher is so much
+# simpler. Both enumerated the fleet from the machine-local worktrees manifest, which the
+# lanes migration stopped maintaining — so both had been exiting 1 with "manifest missing or
+# unreadable" for every invocation. Their replacements are lanes-native, in
+# `.claude/scripts/team-boot.sh` (`boot`, `status`, `spawn-prompt`, `down`), which enumerates
+# the lane directory itself; a lane is on disk by definition, so there is no manifest to go
+# stale. `down`'s guards travelled with it: fail-closed busy, never-target-self, and a death
+# claim earned by observation rather than by kill's exit status.
+#
+# What is left here is what this file is actually for: pane and window topology. It never
+# starts or stops an agent, which is also why every verb below is safe to re-run.
+
+# Layout verbs restructure nothing when there is no tmux, so exit 0 is the honest answer.
+# (This used to fork three ways: down and boot both had to REFUSE here, because for a
+# start/stop verb "nothing to do, exit 0" reads as "the fleet is up" / "the fleet is down"
+# while the opposite is true. Neither verb lives here now, so the fork is gone with them.)
 if ! fleet_tmux_ok; then
-  if [ "$verb" = down ]; then
-    echo "fleet-layout down: not inside tmux — cannot enumerate or kill fleet panes; refusing (this does NOT mean the fleet is down)" >&2
-    exit 2
-  fi
-  # boot is a SPIN-UP verb an init flow depends on: "nothing to do, exit 0" outside tmux would
-  # read to base-initialize (or a crash-recovering operator) as "the fleet is up" while zero
-  # agents launched — the boot-side cousin of down's vacuous-success failure. The cosmetic
-  # layout verbs keep exit 0 (restructuring nothing IS a valid no-op for them).
-  if [ "$verb" = boot ]; then
-    echo "fleet-layout boot: not inside tmux — cannot create windows or launch agents; refusing (this does NOT mean the fleet is up)" >&2
-    exit 2
-  fi
   echo "fleet-layout: not inside tmux — nothing to do" >&2; exit 0
 fi
 
@@ -1822,10 +1288,10 @@ fi
 case "$verb" in
   name-windows) name_windows ;;
   balance)      balance_cells ;;
-  single)       layout_single ;;
-  dual)         layout_dual ;;
-  wide)         layout_wide ;;
+  single)       layout_single && _layout_remember single ;;
+  dual)         layout_dual && _layout_remember dual ;;
+  wide)         layout_wide && _layout_remember wide ;;
   attach)       attach_external ;;
-  boot)         boot_fleet ;;
-  down)         down_fleet ;;
+  subagents)    layout_subagents ;;
+  reapply)      layout_reapply ;;
 esac
