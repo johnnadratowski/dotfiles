@@ -249,6 +249,68 @@ has "boot: an optional count never swallows the next flag" "$err" "unknown flag:
 eq "boot: no tmux call escaped ANY rejected invocation" "" "$(cat "$TMUXLOG")"
 
 echo
+echo "cmd_boot — the lead is launched into a PANE ID, never a window name"
+
+# THE REGRESSION, from a live boot. /shutdown leaves the outgoing lead's window alive at a
+# shell still named team-lead, so the next boot makes a SECOND window by that name. boot then
+# resolved its pane as "$SESSION:$LEAD_LANE" — a name target, which tmux answers with the
+# lowest-index match, the stale window. claude was typed there (cwd $HOME) while the window
+# just created sat empty, and the lead came up outside its own worktree.
+#
+# The stub is that fleet: new-window hands back %99, any name lookup still answers %1. Code
+# that goes back to resolving by name gets %1 and fails here.
+BOOTL="$TMP/bootlanes"; mkdir -p "$BOOTL/team-lead" "$BOOTL/feature-1"
+LEADP="$(cd "$BOOTL/team-lead" && pwd -P)"
+
+# $* rather than $1: the session probe is `display-message -p -t <pane> #{session_name}`, and
+# only the FORMAT distinguishes it from a pane-id lookup.
+TSTUB='tmux() {
+  echo "tmux $*" >> "$TMUXLOG"
+  case "$*" in
+    new-window*)          echo "%99" ;;
+    *"#{session_name}"*)  echo "main" ;;
+    display-message*)     echo "%1"  ;;
+  esac
+  return 0
+}'
+# TMUX/TMUX_PANE LEAK IN from the terminal running this suite — bootlib uses `env`, which adds
+# to the environment rather than clearing it. Left alone, every case below silently takes the
+# reuse path and the new-window assertions test nothing.
+NOTMUX='unset TMUX TMUX_PANE;'
+INFLEET='TMUX=/fake/sock TMUX_PANE=%7;'
+
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has   "boot: the pane id is asked of new-window itself"        "$log" "-P -F #{pane_id}"
+has   "boot: …and the lead is typed into exactly that pane"    "$log" "send-keys -t %99 -l claude"
+hasnt "boot: …never into one resolved by window name"          "$log" "-t %1"
+has   "boot: the window opens in the lane, not where boot ran" "$log" "-c $LEADP"
+
+# Reuse: no second team-lead window, and the adopted pane is moved to the lane first — a pane
+# we did not create keeps its shell's cwd, and cwd is how every fleet lookup identifies an agent.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $INFLEET cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+hasnt "boot from the fleet session: no second team-lead window" "$log" "new-window"
+has   "boot from the fleet session: the caller's pane is used"  "$log" "send-keys -t %7 -l cd $LEADP"
+has   "boot from the fleet session: …and it is renamed"         "$log" "rename-window -t %7 team-lead"
+
+# Reuse is scoped to the FLEET session — a pane in some unrelated session must not be hijacked.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "${TSTUB/main/elsewhere}; $INFLEET cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has "boot from a pane outside the fleet session: a window is created" "$log" "new-window"
+
+# --with-team must NOT reuse: _boot_request_team polls in the foreground for the lead, and a
+# lead launched into this pane cannot start until boot exits. Reuse there is a deadlock.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; _boot_request_team() { :; }; $INFLEET cmd_boot --with-team" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has "boot --with-team: takes its own window even inside the fleet session" "$log" "new-window"
+has "boot --with-team: …so the lead is typed there, not into the caller's" "$log" "send-keys -t %99 -l claude"
+
+echo
 echo "resolve_lanes_sh — project content is never a sibling of this script"
 
 # team-boot.sh lives in dotfiles and travels; lanes.sh is one product's. Resolving it as

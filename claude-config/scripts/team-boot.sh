@@ -184,9 +184,34 @@ cmd_boot() {
   command -v tmux >/dev/null 2>&1 || die "tmux required"
   tmux has-session -t "$SESSION" 2>/dev/null || die "tmux session '$SESSION' not found"
 
-  # A window of its own, named for the lane. fleet-layout owns arrangement after this.
-  tmux new-window -t "$SESSION" -n "$LEAD_LANE" -c "$p"
-  local pane; pane="$(tmux display-message -p -t "$SESSION:$LEAD_LANE" '#{pane_id}')"
+  # WHERE THE LEAD LANDS — a pane id, never a window NAME.
+  #
+  # This used to create the window and then look its pane up again as "$SESSION:$LEAD_LANE".
+  # That is a name target, and `/shutdown` leaves the outgoing lead's window alive at a shell
+  # STILL NAMED team-lead — so by the next boot two windows carry the name and tmux resolves
+  # the lowest index, the stale one. The claude command was typed into the OLD window, where
+  # cwd is wherever that shell was ($HOME, not the lane), while the window just created sat
+  # empty. A lead outside its own worktree is not cosmetic: lane-guard and every git op are
+  # then pointed at the wrong tree.
+  #
+  # So: reuse the pane boot was invoked from when it is already in the fleet session — that is
+  # the window the user is looking at, it is usually the stale team-lead window itself, and
+  # reusing it is what stops a new one accreting on every boot. Otherwise create a window and
+  # take the pane id STRAIGHT FROM new-window, which is exact and immune to duplicate names.
+  local pane reuse=""
+  if [ -z "$WITH_TEAM" ] && [ -n "${TMUX:-}" ] && [ -n "${TMUX_PANE:-}" ] &&
+     [ "$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}' 2>/dev/null)" = "$SESSION" ]; then
+    # --with-team is excluded deliberately: _boot_request_team polls IN THE FOREGROUND for the
+    # lead to come up, and a lead launched into this very pane cannot start until this script
+    # exits. Reusing the pane there would deadlock, so that flag keeps its own window.
+    pane="$TMUX_PANE"; reuse=1
+    tmux rename-window -t "$pane" "$LEAD_LANE"
+  else
+    # A window of its own, named for the lane. fleet-layout owns arrangement after this.
+    pane="$(tmux new-window -t "$SESSION" -n "$LEAD_LANE" -c "$p" -P -F '#{pane_id}')" ||
+      die "could not create the lead window in session '$SESSION'"
+    [ -n "$pane" ] || die "tmux new-window returned no pane id"
+  fi
   # PERMISSIONS: start in `auto`, with bypass AVAILABLE but not engaged.
   #
   #   --permission-mode auto                  how the session starts
@@ -197,9 +222,15 @@ cmd_boot() {
   # settings: if the lead runs with --dangerously-skip-permissions, all teammates do too", so one
   # flag on lane 0 silently put the ENTIRE fleet in bypass. `permissions.defaultMode: "auto"` in
   # settings.json could never take effect, because a CLI flag outranks it.
-  tmux send-keys -t "$pane" -l "claude --teammate-mode tmux --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_LANE"
+  #
+  # The reuse path prefixes a `cd`: new-window gets the lane via -c, but a pane we adopt is
+  # sitting wherever its shell was left, and the lead's cwd IS its lane identity — alive_in
+  # and every other fleet lookup match agents by process cwd.
+  local launch="claude --teammate-mode tmux --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_LANE"
+  [ -n "$reuse" ] && launch="cd $(printf '%q' "$p") && $launch"
+  tmux send-keys -t "$pane" -l "$launch"
   tmux send-keys -t "$pane" Enter
-  echo "lead booting in $pane ($SESSION:$LEAD_LANE), cwd $p"
+  echo "lead booting in $pane ($SESSION:$LEAD_LANE${reuse:+, reused}), cwd $p"
 
   if [ -n "$WITH_TEAM" ]; then
     _boot_request_team "$pane"
