@@ -3,13 +3,15 @@
 #
 # Subcommands:
 #   status                          Read-only fleet snapshot (incl. CTX% per agent).
-#   merge-down [targeting]          Canned: tell peers to run `/base-merge down`.
-#   send [targeting] --stdin <<BODY Message a targeted set (reuses agent-send.sh).
 #   restart --yes [--clean] [targ.]  Kill idle agents' claude, relaunch `claude --continue`
 #                                    (or a FRESH session with --clean, discarding history).
 #   compact --yes [--threshold N]   Inject `/compact` into idle agents at/above N% context.
 #
-# Targeting (all but status): --role feature|review|test|coordinator|all (default all) ·
+# MESSAGING IS NOT HERE. There was a `send`/`merge-down` pair that wrapped the mailbox
+# transport; both are gone with it. A lead addresses a teammate with native `SendMessage`,
+# by team name. This script is registry+pane mechanics only.
+#
+# Targeting (all but status): --role feature|review|test|team-lead|all (default all) ·
 #   --only name1,name2 (explicit set) · --exclude a,b · --threshold N (compact) · --dry-run.
 # CTX% finds each agent's transcript via recorded transcript_path/cwd sidecars (tmux only as
 # an optional fallback); window = $WORKFLOW_CTX_WINDOW or a model default (opus/sonnet-4.x→1M).
@@ -18,17 +20,20 @@
 # SAFETY: `restart` is destructive (kills the live claude in each pane). It requires
 # --yes AND only acts on IDLE agents (skips BUSY / copy-mode). The /agent-fanout SKILL
 # passes --yes ONLY after explicit user confirmation in that turn — never blanket-run it.
+#
+#   ⚠ `restart` IS WRONG FOR A TEAM MEMBER. `claude --continue` forks a NEW session id, so
+#     the teammate comes back in a new, empty team and is permanently unaddressable by its
+#     lead. Correct for a standalone lane agent; for a teammate, respawn it from the lead.
 
 set -u
 reg="$HOME/.claude/running-agents"
 here="$(cd "$(dirname "$0")" && pwd)"
-SEND="$here/agent-send.sh"
-# Load WORKFLOW_BASE_BRANCH (default main) for the merge-down body + behind-count.
+# Load WORKFLOW_PR_TARGET_BRANCH (default master) for status's behind-count.
 # shellcheck disable=SC1090
 [ -r "$here/_config.sh" ] && . "$here/_config.sh"
 # shellcheck disable=SC1090
 [ -r "$here/_fleet.sh" ] && . "$here/_fleet.sh"   # fleet_self_token/_tmux_ok/_alive/_find_self
-BASE="${WORKFLOW_BASE_BRANCH:-main}"
+BASE="${WORKFLOW_PR_TARGET_BRANCH:-master}"
 
 # Delegates to fleet_resolve_role() in _fleet.sh (the single source of the name→role
 # patterns) so status/targeting can never classify an agent differently from the role
@@ -41,9 +46,6 @@ is_busy()  {
   if command -v fleet_busy >/dev/null 2>&1; then fleet_busy "$1"
   else local m="$HOME/.claude/agent-busy/$1"; [ -f "$m" ] && [ -n "$(find "$m" -mmin "-${WORKFLOW_BUSY_STALE_MIN:-30}" 2>/dev/null)" ]; fi
 }
-# Errored = a StopFailure marker (mark-error.sh; cleared on recovery). Not time-windowed —
-# a stuck/errored agent keeps showing ERR until it recovers or dies.
-is_errored() { [ -f "$HOME/.claude/agent-error/$1" ]; }
 pane_in_mode() { [ "$(tmux display-message -p -t "$1" '#{pane_in_mode}' 2>/dev/null || echo 0)" = "1" ]; }
 # A pane is "at a shell" (ready for a relaunch) when its foreground process is a shell,
 # not claude/node. Used to avoid sending the relaunch into a dying claude / its SessionEnd
@@ -120,7 +122,7 @@ enumerate() {  # args: role only_csv exclude_csv -> "name pid pane" per live pee
     local bn name pid pane; bn="$(basename "$f")"; name="${bn%.*}"; pid="${bn##*.}"; pane="$(cat "$f" 2>/dev/null)"
     # Dedupe check first, but mark "seen" only AFTER the liveness check passes —
     # otherwise a stale twin entry (dead pid globbing first) consumes the name and
-    # hides the live agent from every fan-out (same pattern as agent-broadcast.sh).
+    # hides the live agent from every fan-out.
     case "$seen" in *" $name "*) continue;; esac
     [ "$name" = "$self" ] && continue
     alive "$pid" "$pane" || continue
@@ -132,7 +134,7 @@ enumerate() {  # args: role only_csv exclude_csv -> "name pid pane" per live pee
   done
 }
 
-ROLE=all; ONLY=""; EXCL=""; DRY=0; YES=0; STDIN=0; THRESH=80; CLEAN=0
+ROLE=all; ONLY=""; EXCL=""; DRY=0; YES=0; THRESH=80; CLEAN=0
 parse() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -143,7 +145,6 @@ parse() {
       --dry-run) DRY=1;;
       --yes) YES=1;;
       --clean) CLEAN=1;;
-      --stdin) STDIN=1;;
       *) echo "unknown argument: $1" >&2; exit 2;;
     esac; shift
   done
@@ -175,64 +176,13 @@ case "$cmd" in
         st=STALE
       fi
       seen="$seen$name "
-      # errored takes precedence over busy/idle (busy is cleared by mark-error.sh on StopFailure).
-      errnote=""
-      if is_errored "$name"; then st="$st/ERR"; errnote="  ⚠ $(head -c 24 "$HOME/.claude/agent-error/$name" 2>/dev/null | tr -d '\n')"
-      elif is_busy "$name"; then st="$st/BUSY"
-      else st="$st/idle"; fi
+      if is_busy "$name"; then st="$st/BUSY"; else st="$st/idle"; fi
       br="$(cat "$HOME/.claude/agents/$name" 2>/dev/null || echo '?')"
       behind="$(git rev-list --count "${br}..${BASE}" 2>/dev/null || echo '?')"
       ci="$(ctx_info "$name" "$pane")"; if [ -n "$ci" ]; then ctxd="$(ctx_flag "${ci%% *}")${ci%% *}%"; else ctxd='—'; fi
-      printf '%-14s %-11s %-9s %-24s %-7s %s%s%s\n' "$name" "$(role_of "$name")" "$st" "$br (behind $behind)" "$ctxd" "$pane" "$([ "$name" = "$self" ] && echo '  <- you')" "$errnote"
+      printf '%-14s %-11s %-9s %-24s %-7s %s%s\n' "$name" "$(role_of "$name")" "$st" "$br (behind $behind)" "$ctxd" "$pane" "$([ "$name" = "$self" ] && echo '  <- you')"
     done
     echo "local $BASE @ $basesha   (CTX = main-loop context vs window; ⚠≥80% 🔴≥90%; window via WORKFLOW_CTX_WINDOW or model default)"
-    ;;
-
-  merge-down|send)
-    if [ "$cmd" = merge-down ]; then
-      body="Fleet sync: local \`$BASE\` advanced. Please run \`/base-merge down\` to pick it up; if the down-merge conflicts, resolve it normally. Reply when done (or if blocked)."
-    else
-      [ "$STDIN" = 1 ] || { echo "send: pass --stdin and pipe the body via heredoc" >&2; exit 2; }
-      body="$(cat)"
-    fi
-    targets="$(enumerate "$ROLE" "$ONLY" "$EXCL")"
-    [ -n "$targets" ] || { echo "no live peers match (role=$ROLE only=$ONLY exclude=$EXCL)"; exit 1; }
-    echo "recipients:"; echo "$targets" | awk '{print "  - "$1}'
-    if [ "$DRY" = 1 ]; then echo "(dry-run — nothing sent)"; exit 0; fi
-    echo "$targets" | while read -r name pid pane; do
-      err="$(printf '%s' "$body" | "$SEND" "$name" --stdin 2>&1 >/dev/null)" \
-        && echo "  sent -> $name" \
-        || echo "  FAILED -> $name${err:+ — $(printf '%s' "$err" | head -1)}"
-    done
-    ;;
-
-  resume-errored|nudge-errored)
-    # Nudge agents that StopFailured (error marker present, e.g. an Anthropic rate-limit)
-    # to continue — the common rate-limit case. They're stopped at their prompt but ALIVE,
-    # so a direct tmux nudge resumes them (no inbox/drain — a stopped agent won't drain).
-    # Targets ONLY errored agents (narrow, safe set); honours --role/--only/--exclude.
-    # Custom continue-text via --stdin, else a sensible default. (DX — rate-limit ergonomics.)
-    if ! fleet_tmux_ok 2>/dev/null; then
-      echo "resume-errored needs tmux (drives panes via send-keys) — unavailable, skipping." >&2; exit 0
-    fi
-    if [ "$STDIN" = 1 ]; then body="$(cat)"; else
-      body="Continue — the API rate limit should have cleared. Resume where you left off."
-    fi
-    errored=""
-    while read -r name pid pane; do
-      [ -n "$name" ] || continue
-      is_errored "$name" && errored="${errored}${name} ${pid} ${pane}"$'\n'
-    done <<< "$(enumerate "$ROLE" "$ONLY" "$EXCL")"
-    errored="$(printf '%s' "$errored" | sed '/^[[:space:]]*$/d')"
-    [ -n "$errored" ] || { echo "no errored agents (no fresh ~/.claude/agent-error/* among live peers matching role=$ROLE only=$ONLY exclude=$EXCL)"; exit 0; }
-    echo "errored agents to nudge:"; printf '%s\n' "$errored" | awk '{print "  - "$1" (pane "$3") ⚠ "}'
-    if [ "$DRY" = 1 ]; then echo "(dry-run — nothing nudged)"; exit 0; fi
-    printf '%s\n' "$errored" | while read -r name pid pane; do
-      [ -n "$pane" ] || continue
-      if pane_in_mode "$pane"; then echo "  SKIP $name — pane in copy-mode"; continue; fi
-      tmux send-keys -t "$pane" -l "$body"; tmux send-keys -t "$pane" Enter
-      echo "  nudged $name (pane $pane) — continue"
-    done
     ;;
 
   restart)
@@ -295,7 +245,7 @@ case "$cmd" in
 
   compact)
     if ! fleet_tmux_ok 2>/dev/null; then
-      echo "compact needs tmux (it injects /compact via send-keys) — tmux unavailable, skipping. (A tmux-free compact would need the command-mailbox model; see DX-jn-8-019.)" >&2; exit 0
+      echo "compact needs tmux (it injects /compact via send-keys) — tmux unavailable, skipping." >&2; exit 0
     fi
     targets="$(enumerate "$ROLE" "$ONLY" "$EXCL")"
     [ -n "$targets" ] || { echo "no live peers match (role=$ROLE only=$ONLY exclude=$EXCL)"; exit 1; }
@@ -326,5 +276,5 @@ EOF
     done
     ;;
 
-  *) echo "usage: agent-fanout.sh {status|merge-down|send|restart|compact|resume-errored} [--role R] [--only a,b] [--exclude a,b] [--threshold N] [--dry-run] [--yes]" >&2; exit 2;;
+  *) echo "usage: agent-fanout.sh {status|restart|compact} [--role R] [--only a,b] [--exclude a,b] [--threshold N] [--dry-run] [--yes]" >&2; exit 2;;
 esac

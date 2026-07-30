@@ -10,7 +10,7 @@ subagent definitions, settings, keybindings. It is versioned, reviewed, and belo
 repo.
 
 **State** is what a running fleet writes about itself on *this* machine: which agents are
-live, what branch each considers home, what is queued in whose inbox, which transcript
+live, what branch each considers home, which agents are mid-turn, which transcript
 backs which pane. It is specific to one machine and one fleet, it changes many times a
 minute, and it must **never** be committed here.
 
@@ -23,7 +23,7 @@ puts them **side by side**:
 | `~/.claude/scripts/`, `commands/*.md`, `skills/<name>/` | machinery | you (symlinked here) |
 | `~/.claude/agents/<name>.md` | machinery | you (symlinked here, per file) |
 | `~/.claude/agents/<name>`, `<name>.cwd`, `<name>.transcript`, `<name>.role` | **state** | `register-agent.sh`, every SessionStart |
-| `~/.claude/running-agents/`, `agent-busy/`, `agent-inbox/`, `agent-hold/`, `agent-error/`, `agent-nudge-claim/`, `agent-nudged/` | **state** | fleet tooling, continuously |
+| `~/.claude/running-agents/`, `agent-busy/` | **state** | fleet tooling, continuously |
 | `~/.claude/sessions/`, `projects/`, `debug/`, `*.log`, `*.pid`, `security/`, `telemetry/` | **state** | Claude Code itself |
 
 ## Two linking mechanisms, and when to use which
@@ -72,7 +72,7 @@ Basenames must therefore stay unique across subdirectories.
 | `keybindings.json` | key bindings |
 | `scripts/_fleet.sh` | canonical fleet helpers (`fleet_find_self`, `fleet_busy`, `fleet_resolve_role`, …) |
 | `scripts/fleet-clear.sh` | run in an agent's **own** pane: clear its context and restore its session name (`/clear` alone silently drops it), or `--name-only` after clearing by hand. Self-targeting by design — nothing types into a pane you are using |
-| `scripts/last-msg-ago.sh`, `notify-end.sh`, `statusline-usage.sh` | statusline + notification helpers |
+| `scripts/notify-end.sh`, `statusline-usage.sh` | statusline + notification helpers |
 | `skills/fleet-clear/` | the skill wrapping `fleet-clear.sh` |
 | `skills/monocle-pr-review/` | Monocle PR review skill |
 | `commands/challenge.md` | the `/challenge` command |
@@ -82,7 +82,7 @@ Basenames must therefore stay unique across subdirectories.
 ## Still vendored per-repo (not yet migrated)
 
 Fleet machinery also exists inside consuming repos at `<repo>/.claude/` — scripts, hooks,
-skills, agent roles — invoked by **repo-relative** paths (`.claude/scripts/agent-send.sh`)
+skills, agent roles — invoked by **repo-relative** paths (`.claude/scripts/lanes.sh`)
 from skills, hook wiring, and permission allow-lists. Those copies are the ones that
 actually run today.
 

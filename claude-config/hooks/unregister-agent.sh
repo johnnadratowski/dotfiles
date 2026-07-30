@@ -31,23 +31,28 @@ for f in "$HOME/.claude/running-agents/"*; do
   [ "${bn##*.}" = "$PPID" ] && match=1
   [ "$match" = 1 ] || continue
   rm -f "$HOME/.claude/agent-busy/${bn%.*}"    # clear the busy marker too
-  rm -f "$HOME/.claude/agent-error/${bn%.*}"   # and the error marker
-  rm -f "$HOME/.claude/agent-hold/${bn%.*}"    # and the Monocle-wait hold (DX-jn-8-031)
   rm -f "$f"
 done
 
 # --- Non-blocking work-loss warning on session end (best-effort) ---
 # The most relevant exit-time loss surface: ending a session with uncommitted
-# changes, or with commits that never landed in the LOCAL base branch, gets no
-# warning anywhere else. Surface it (stderr) so nothing is silently stranded.
-# Always exits 0; any git/array edge case is swallowed. (Local-base, not origin:
-# origin/<base> is frozen + advanced only by /base-push — "not in local base" is
-# the real "unlanded" signal, mirroring remove-worktree's gate.)
+# changes, or with commits that never reached the branch this lane ships to, gets
+# no warning anywhere else. Surface it (stderr) so nothing is silently stranded.
+# Always exits 0; any git/array edge case is swallowed.
+#
+# This read WORKFLOW_BASE_BRANCH, which was DELETED with the base-* abstraction —
+# so `base` was always empty and this entire warning silently never fired. The
+# signal is now "not yet in the branch we open PRs against", i.e. the remote
+# target: a lane ships through a PR, so local master proves nothing.
 repo="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
 if [ -n "$repo" ] && git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
   base=""
   cfg="$repo/.claude/scripts/_config.sh"
-  [ -r "$cfg" ] && base="$( . "$cfg" >/dev/null 2>&1; printf '%s' "${WORKFLOW_BASE_BRANCH:-}" )"
+  [ -r "$cfg" ] && base="$( . "$cfg" >/dev/null 2>&1; printf '%s' "${WORKFLOW_PR_TARGET_BRANCH:-}" )"
+  # Prefer the remote ref; fall back to the local branch if origin isn't fetched.
+  if [ -n "$base" ] && git -C "$repo" rev-parse --verify "origin/$base" >/dev/null 2>&1; then
+    base="origin/$base"
+  fi
   warns=()
   dirty="$(git -C "$repo" status --porcelain 2>/dev/null || true)"
   [ -n "$dirty" ] && warns+=("uncommitted changes ($(printf '%s\n' "$dirty" | grep -c . || true) file(s))")
@@ -56,13 +61,13 @@ if [ -n "$repo" ] && git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
      && git -C "$repo" rev-parse --verify "$base" >/dev/null 2>&1; then
     ahead="$(git -C "$repo" rev-list --count "$base..HEAD" 2>/dev/null || echo 0)"
     [ "${ahead:-0}" -gt 0 ] 2>/dev/null \
-      && warns+=("$ahead commit(s) on '$branch' not yet in local '$base' (unlanded)")
+      && warns+=("$ahead commit(s) on '$branch' not yet in '$base' (unshipped)")
   fi
   if [ "${#warns[@]}" -gt 0 ]; then
     {
       printf '\n[session-end] ⚠ possible unsaved work in %s:\n' "$repo"
       for w in "${warns[@]}"; do printf '  - %s\n' "$w"; done
-      printf '  Commit, /base-merge, or /base-push as appropriate so nothing is lost.\n'
+      printf '  Commit, then ship with /open-pr, so nothing is lost.\n'
     } >&2
   fi
 fi

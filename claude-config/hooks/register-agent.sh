@@ -2,7 +2,7 @@
 # Register / re-sync this Claude session in ~/.claude/running-agents.
 #
 # Idempotent: safe to call from SessionStart and as a self-heal prelude
-# from agent-send.sh / agent-rename.sh. All paths converge on the same
+# from agent-rename.sh. All paths converge on the same
 # end state.
 #
 # Registry: ~/.claude/running-agents/<name>.<claude_pid>  (content: $TMUX_PANE)
@@ -13,7 +13,6 @@
 #
 # Usage:
 #   register-agent.sh sessionstart      — full setup; role context; schedules settle-recheck
-#   register-agent.sh send-selfheal     — quiet re-sync; no role context, no /rename
 #   register-agent.sh rename-selfheal   — quiet re-sync; no role context, no /rename
 #   register-agent.sh settle-recheck    — delayed self-invocation (DX-jn-cc-006): after the
 #                                         session's real name has settled, re-register if a
@@ -49,7 +48,7 @@ log "fired. TMUX_PANE=${TMUX_PANE:-(unset)} cwd=$PWD payload_bytes=${#stdin_payl
 _common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
 # SCOPE to a NON-bare clone (git-dir is "<worktree>/.git"): there `core.bare=true` is always the
 # bug. A genuinely BARE repo (git-dir does NOT end in /.git) legitimately carries core.bare=true —
-# never touch it. This hook is synced to other projects via update-workflow, so it must self-scope.
+# never touch it. This hook is shared across projects via ~/.claude, so it must self-scope.
 case "$_common_dir" in
   */.git)
     if [ -f "$_common_dir/config" ] && [ "$(git config -f "$_common_dir/config" --get core.bare 2>/dev/null)" = "true" ]; then
@@ -145,7 +144,7 @@ _repo_root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null ||
 #
 # This gate lives HERE, in the script, because the SessionStart wiring in
 # settings.json is only ONE of the ways this file runs. `send-selfheal` (from
-# agent-send.sh / agent-rename.sh) and `settle-recheck` re-enter directly and
+# agent-rename.sh) and `settle-recheck` re-enter directly and
 # skip that wiring entirely. Gating the caller therefore gated nothing: on
 # 2026-07-28 a send-selfheal in ~/git/dotfiles registered that session as
 # "master" (its session name looked auto-generated, so the name fell back to the
@@ -171,7 +170,7 @@ fleet_helper="$HOME/.claude/scripts/_fleet.sh"
 self_token="$(fleet_self_token 2>/dev/null || printf '%s' "${TMUX_PANE:-cwd:$PWD}")"
 
 # The one sanitizer every name in this script must pass through (no dots — dots
-# are field delimiters in the mailbox filenames).
+# are field delimiters in the registry filenames).
 _sanitize() { tr -c 'A-Za-z0-9_-' '-' | sed -E 's/-+/-/g; s/^-//; s/-$//'; }
 
 # DX-jn-cc-006: Claude Code's TRANSIENT session auto-name is <cwd-basename>-<2hex>.
@@ -202,7 +201,7 @@ _is_transient_name() { # $1 = sanitized candidate
 # THE name pipeline: transform -> sanitize -> prefix (with the double-application
 # guard). Boot-time resolution AND the settle-recheck swap must both route
 # through this — two resolvers for one identity that normalize differently
-# oscillate the registry/mailbox/sidecar identity on every restart.
+# oscillate the registry/sidecar identity on every restart.
 _normalize_name() { # stdin: raw candidate -> stdout: normalized name
   local n prefix
   n="$(cat)"
@@ -213,7 +212,7 @@ _normalize_name() { # stdin: raw candidate -> stdout: normalized name
     log "applied transform: $n"
   fi
   # Sanitize: alnum/dash/underscore only. (No dots — dots are field delimiters
-  # in the message-mailbox filenames; a dot would break drain parsing.)
+  # the registry filename, where the last dot delimits the pid.)
   n=$(printf '%s' "$n" | _sanitize)
   # Prefix (sanitized WITHOUT edge-trim — a trailing dash like "wf-" is the
   # point). Guard against double-application: a name already carrying the
@@ -462,12 +461,17 @@ $(cat "$role_overlay")"
   else
     log "no role file for role=$role ($role_file)"
   fi
-  # Base-branch alias: tell the model the configured base branch's NAME, so a
-  # user saying "merge <branch>" / "push <branch>" routes to the base-* skills
-  # even though the skills are branch-name-agnostic. Config-derived — renaming
-  # the base branch never requires a prose edit.
-  if [ -n "${WORKFLOW_BASE_BRANCH:-}" ]; then
-    base_alias_note="This project's configured base branch is \`$WORKFLOW_BASE_BRANCH\` (WORKFLOW_BASE_BRANCH in .claude/workflow.config). When the user names it — \"merge $WORKFLOW_BASE_BRANCH\", \"push $WORKFLOW_BASE_BRANCH\", \"review $WORKFLOW_BASE_BRANCH\", \"test $WORKFLOW_BASE_BRANCH\" — they mean /base-merge, /base-push, /base-pr, /base-test against that branch."
+  # Target-branch alias: tell the model the PR target's NAME, so a user naming the
+  # branch routes to the right verb. Config-derived — renaming the target never
+  # requires a prose edit.
+  #
+  # This keyed off WORKFLOW_BASE_BRANCH and routed to /base-merge, /base-push,
+  # /base-pr and /base-test. All four skills and the knob were deleted with the
+  # base-* abstraction, so the block was both dead (the knob never set) and wrong
+  # (it named nonexistent commands). There is no coordination base branch now: a
+  # lane syncs DOWN with plain git and ships UP through a PR.
+  if [ -n "${WORKFLOW_PR_TARGET_BRANCH:-}" ]; then
+    base_alias_note="This project's PR target branch is \`$WORKFLOW_PR_TARGET_BRANCH\` (WORKFLOW_PR_TARGET_BRANCH in .claude/workflow.config). When the user names it: \"merge $WORKFLOW_PR_TARGET_BRANCH\" / \"sync $WORKFLOW_PR_TARGET_BRANCH\" means sync this lane DOWN with \`git fetch origin $WORKFLOW_PR_TARGET_BRANCH && git merge --no-commit origin/$WORKFLOW_PR_TARGET_BRANCH\` (then regen artifacts, then commit — the seed is \`merge=ours\`); shipping UP is \`/open-pr\`, never a direct push. \"review\" is \`/review\` and \"test\" is \`/test\`, both of which act on this lane's own branch."
     if [ -n "$role_context" ]; then
       role_context="$role_context
 
@@ -535,9 +539,9 @@ printf '%s\n' "$PWD" > "$HOME/.claude/agents/$name.cwd"
 # without SessionEnd (crash, or the `kill` fallback agent-fanout uses when C-c doesn't
 # exit). unregister-agent.sh clears it on a clean exit; this covers the unclean ones.
 #
-# This became load-bearing when the nudge gate switched to fleet_turn_open (marker
+# This became load-bearing when the turn gate switched to fleet_turn_open (marker
 # present at ANY age ⇒ never type into the pane). Under that rule an orphaned marker
-# whose name is later REUSED would suppress every nudge to the new agent, permanently
+# whose name is later REUSED would read as permanently mid-turn for the new agent,
 # and silently. Clearing at registration makes the marker's lifetime match the session's.
 rm -f "$HOME/.claude/agent-busy/$name" 2>/dev/null || true
 

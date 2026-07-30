@@ -20,14 +20,7 @@
       "Bash(npm uninstall:*)",
       "Bash(grep:*)",
       "Bash(git checkout:*)",
-      "Bash(*john-send.sh:*)",
-      "Bash(*john-broadcast.sh:*)",
-      "Bash(*john-fanout.sh:*)",
-      "Bash(*john-msg.sh:*)",
-      "Bash(*agent-send.sh:*)",
-      "Bash(*agent-broadcast.sh:*)",
       "Bash(*agent-fanout.sh:*)",
-      "Bash(*agent-msg.sh:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr diff:*)",
       "Bash(gh pr checkout:*)",
@@ -51,15 +44,6 @@
             "command": "bash -c 'r=$(git -C \"${CLAUDE_PROJECT_DIR:-$PWD}\" rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; h=\"$HOME/.claude/hooks/register-agent.sh\"; [ -x \"$h\" ] || h=\"$r/.claude/hooks/register-agent.sh\"; [ -x \"$h\" ] || exit 0; exec bash \"$h\" sessionstart'"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "command": "bash \"$HOME/.claude/hooks/cc-watcher-keepalive.sh\"",
-            "type": "command"
-          }
-        ],
-        "matcher": ""
       }
     ],
     "PermissionRequest": [
@@ -122,14 +106,6 @@
       {
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/drain-inbox.sh\"",
-            "type": "command"
-          },
-          {
-            "command": "bash \"$HOME/.claude/hooks/cc-watcher-keepalive.sh\"",
-            "type": "command"
-          },
-          {
             "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks on-stop --agent claude",
             "type": "command",
             "timeout": 3600
@@ -143,22 +119,6 @@
         "hooks": [
           {
             "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\"",
-            "type": "command"
-          },
-          {
-            "command": "bash \"$HOME/.claude/hooks/suppress-spent-agent-msg.sh\"",
-            "type": "command",
-            "timeout": 5
-          }
-        ],
-        "matcher": ""
-      }
-    ],
-    "StopFailure": [
-      {
-        "hooks": [
-          {
-            "command": "bash \"$HOME/.claude/hooks/mark-error.sh\"",
             "type": "command"
           }
         ],

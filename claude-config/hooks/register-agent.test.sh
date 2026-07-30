@@ -189,7 +189,7 @@ ok "settled .transcript written from env" '[ "$(cat "$H/.claude/agents/researche
 ok "pre-existing settled base file untouched" '[ "$(cat "$H/.claude/agents/researcher")" = "main" ]'
 ok "boot sidecars removed" '[ ! -e "$H/.claude/agents/feature-1" ] && [ ! -e "$H/.claude/agents/feature-1.cwd" ] && [ ! -e "$H/.claude/agents/feature-1.transcript" ]'
 rm -rf "$H" "$R"
-# Dotted settled name registers SANITIZED (no-dots mailbox invariant).
+# Dotted settled name registers SANITIZED (the last dot delimits the pid).
 H="$(newhome)"; R="$(newrepo)"
 seed_boot "$H" "$R"
 session_json "$H" "feat.x"

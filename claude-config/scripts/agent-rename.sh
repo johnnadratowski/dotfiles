@@ -8,7 +8,7 @@ set -u
 [ "$#" -lt 1 ] && { echo "usage: $(basename "$0") <new-name>" >&2; exit 2; }
 new_name="$1"
 
-# Identity is tmux-optional (DX-jn-8-019): the registry/branch/mailbox rename works
+# Identity is tmux-optional (DX-jn-8-019): the registry/branch rename works
 # headless; only the tmux title/window + /rename keystroke below need tmux.
 fleet_helper="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/_fleet.sh"
 # shellcheck disable=SC1090
@@ -108,40 +108,18 @@ for _sc in "$agents_dir/$old_name".*; do
   mv -f "$_sc" "$agents_dir/$new_name.${_sc##*.}"
 done
 
-# --- Migrate the durable mailbox + clear the stale busy marker ---
-# Both are keyed by agent name. After this rename our Stop-drain reads
-# ~/.claude/agent-inbox/<new_name>/, so any message a peer already staged under
-# <old_name> would be stranded and eventually GC'd UNREAD — the exact silent loss
-# the durable mailbox exists to prevent. Move them so nothing INBOUND is lost.
-# (uuid-prefixed filenames make collisions with existing <new_name> mail
-# impossible.) Only reached because old_name != new_name (guarded above).
+# --- Clear the stale busy marker ---
+# Keyed by agent name, and read by fleet-layout's idle gate. Ephemeral: mark-busy
+# re-stamps <new_name> on our next tool call, so just clear the stale leftover.
 #
-# We deliberately do NOT touch messages we SENT to other agents: those live under
-# the RECIPIENT's inbox as <recipient>/<uuid>.<old_name>.<kind>.txt, may be
-# unprocessed, and are the recipient's to drain — deleting them would lose
-# information. They aren't under our own old mailbox dir, so this block can't.
-inbox="$HOME/.claude/agent-inbox"
-migrated=0
-if [ -d "$inbox/$old_name" ]; then
-  mkdir -p "$inbox/$new_name"
-  # Migrate, then re-scan: a message racing into <old_name>/ between a single glob
-  # expansion and the rmdir would be missed (stranded → GC'd unread). Re-pass a few
-  # times so a straggler is caught; rmdir only succeeds once <old_name>/ is truly
-  # empty, which is the loop's exit. Bounded (won't spin on a pathological flood).
-  for _ in 1 2 3 4 5; do
-    for m in "$inbox/$old_name"/*; do   # nullglob (set above) → skipped if empty
-      [ -e "$m" ] || continue
-      mv -f "$m" "$inbox/$new_name/" && migrated=$((migrated + 1))
-    done
-    rmdir "$inbox/$old_name" 2>/dev/null && break   # empty → removed → done
-  done
-fi
-# Busy marker is ephemeral + name-keyed; mark-busy re-stamps <new_name> on our
-# next tool call, so just clear the stale leftover.
+# There used to be a durable-mailbox migration here too, moving inbound messages
+# from <old_name>/ to <new_name>/ so a rename couldn't strand unread mail. The
+# mailbox transport is gone (native SendMessage addresses a live team member, and
+# a rename cannot orphan anything durable), so there is nothing left to migrate.
 rm -f "$HOME/.claude/agent-busy/$old_name"
 
 # tmux cosmetics + the built-in /rename keystroke — only when tmux is drivable.
-tmux_note="tmux unavailable — registry/branch/mailbox renamed; pane title + /rename skipped"
+tmux_note="tmux unavailable — registry/branch renamed; pane title + /rename skipped"
 if fleet_tmux_ok 2>/dev/null; then
   # Set the tmux pane title (right granularity — survives split-pane setups).
   tmux select-pane -t "$TMUX_PANE" -T "$new_name" 2>/dev/null || true
@@ -168,4 +146,4 @@ fi
 echo "renamed: $old_name -> $new_name (registry + branch; $tmux_note)"
 echo "git: $git_rename_result"
 echo "base branch tracked at: $agents_dir/$new_name"
-echo "mailbox: migrated $migrated inbound message(s) $old_name -> $new_name; stale busy marker cleared (outbound messages to peers left untouched)"
+echo "stale busy marker cleared"

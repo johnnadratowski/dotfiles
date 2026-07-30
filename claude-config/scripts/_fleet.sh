@@ -7,10 +7,9 @@
 # The registry file ~/.claude/running-agents/<name>.<pid> stores this token; self-id
 # matches it; liveness is pid-based, with a tmux pane-check only when the token is a pane.
 #
-# This makes tmux OPTIONAL: registration, self-identification, mailbox delivery/drain,
-# busy-marking and status all work headless. Only live remote-drive (send-keys nudge,
-# restart, compact, rename) needs tmux — callers gate those on fleet_tmux_ok and skip
-# gracefully when it's absent.
+# This makes tmux OPTIONAL: registration, self-identification, busy-marking and status
+# all work headless. Only live remote-drive (restart, compact, rename) needs tmux —
+# callers gate those on fleet_tmux_ok and skip gracefully when it's absent.
 
 # Identity token for THIS process.
 fleet_self_token() {
@@ -48,21 +47,19 @@ fleet_find_self() {
 # WHY THE WINDOW IS 30 MINUTES, NOT 5. The marker is touched at UserPromptSubmit and again
 # at every PreToolUse — but a SINGLE long-running tool call touches it once and then runs
 # for as long as it runs. A 5-minute window therefore reported a working agent as IDLE
-# during any routine long call (a test sweep, a build, a poll loop), which is exactly when
-# inbox-watcher.sh would re-nudge it; the nudge lands in the pane's input buffer, loses to
-# the Stop-drain, and replays as a "message file gone" no-op that costs the recipient a
-# turn each. That storm is what the busy check exists to prevent, so the window has to
+# during any routine long call (a test sweep, a build, a poll loop). So the window has to
 # exceed the longest ordinary tool call, not the longest ordinary *turn*.
 #
+# What "IDLE" buys the caller is permission to act destructively: fleet-layout's `down`
+# stops an agent and removes its pane, and agent-fanout's restart/compact kill or type into
+# one. Reading a working agent as idle is how those verbs interrupt real work — so the
+# predicate errs toward "busy", and the window is sized for that, not for display.
+#
 # The window only matters when an agent dies mid-turn WITHOUT clearing its marker — Stop
-# (drain-inbox.sh), StopFailure (mark-error.sh) and SessionEnd (unregister-agent.sh) all
-# clear it, so that means a hard crash. Cost of that case: peers stage messages without a
-# live nudge for up to the window, and the agent's own Stop-drain delivers them when it
-# returns. Cheaper than the duplicate storm, and it errs toward "busy" — the safe
-# direction for every idle-GATED destructive action (restart, compact, fleet-layout down).
-# The one place that costs something is crash RECOVERY: agent-fanout's restart/compact skip
-# BUSY with no override, so a stale marker now blocks them for 30 min instead of 5. The
-# escape is `rm ~/.claude/agent-busy/<name>` (documented in the agent-fanout skill).
+# and SessionEnd (unregister-agent.sh) clear it, so that means a hard crash. Cost of that
+# case is crash RECOVERY: restart/compact skip BUSY with no override, so a stale marker
+# blocks them for 30 min instead of 5. The escape is `rm ~/.claude/agent-busy/<name>`
+# (documented in the agent-fanout skill).
 #
 # WORKFLOW_BUSY_STALE_MIN is an ENVIRONMENT override. **Invariant: no config file carries
 # this value** — not `workflow.config`, not `workflow.config.local` (the house style points
@@ -74,17 +71,16 @@ fleet_find_self() {
 # such lists go stale — "no config file carries this" does not. An environment export reaches
 # every reader; a single literal default at every site cannot split.
 #
-# To change the default, edit EVERY occurrence of the literal — there are 7 across 6 files
-# (this one, five inline fallbacks, and inbox-watcher.sh's startup banner, which reports the
-# window and would otherwise lie). `_config.test.sh` asserts they all agree, so a missed one
+# To change the default, edit EVERY occurrence of the literal — there are 4 files (this one
+# plus three inline fallbacks). `_config.test.sh` asserts they all agree, so a missed one
 # turns the suite red rather than shipping a silent disagreement.
 #
-# agent-fanout.sh, agent-send.sh, inbox-watcher.sh and statusline-fleet.sh all DELEGATE here
-# (DX-jn-cc-011). Each keeps an inline copy only as a FALLBACK for a clone with no _fleet.sh, and
-# each guards with `if command -v fleet_busy` — never `&& fleet_busy || inline`, in which the
-# inline copy would run on every not-busy answer and the compound would be `fleet_busy OR inline`
-# (two live predicates, biased toward "busy" — the direction that strands nudges). An undefined
-# function would instead fail OPEN (busy reads as idle → duplicate nudges), which is why the
+# agent-fanout.sh, fleet-layout.sh and statusline-fleet.sh all DELEGATE here (DX-jn-cc-011).
+# Each keeps an inline copy only as a FALLBACK for a clone with no _fleet.sh, and each guards
+# with `if command -v fleet_busy` — never `&& fleet_busy || inline`, in which the inline copy
+# would run on every not-busy answer and the compound would be `fleet_busy OR inline` (two
+# live predicates, biased toward "busy"). An undefined function would instead fail OPEN
+# (busy reads as idle → a destructive verb acts on a working agent), which is why the
 # fallback exists at all.
 #
 # NOTE the failure direction: an unreadable marker dir or a failed find reads as IDLE — right for
@@ -97,25 +93,26 @@ fleet_busy() {
 
 # fleet_turn_open <name> — is the target's turn OPEN (started, not yet ended)?
 # Marker present, ANY AGE. This is the predicate for "may I type into this pane",
-# and it is deliberately STRICTER than fleet_busy.
+# and it is deliberately STRICTER than fleet_busy. Sole consumer: register-agent.sh,
+# gating its `/rename` keystroke fallback.
 #
 # fleet_busy applies a staleness window so a stuck marker cannot suppress a restart
 # forever — correct for restart/compact, whose whole purpose is recovering a wedged
-# agent. It is WRONG for the keystroke nudge, and the failure is not theoretical:
-# an agent parked on an AskUserQuestion / permission prompt / plan approval is
-# MID-TURN, so nothing re-touches its marker while it waits for a human. Past
-# WORKFLOW_BUSY_STALE_MIN it reads as idle, the nudge fires, and
+# agent. It is WRONG for a keystroke, and the failure is not theoretical: an agent
+# parked on an AskUserQuestion / permission prompt / plan approval is MID-TURN, so
+# nothing re-touches its marker while it waits for a human. Past
+# WORKFLOW_BUSY_STALE_MIN it reads as idle, the keystroke fires, and
 # `send-keys … Enter` lands on the OPEN SELECTOR — submitting an answer nobody
 # chose. Observed in this fleet.
 #
 # A healthy live agent has NO marker between turns (Stop clears it), so a marker
 # that exists means the turn genuinely never ended — and "blocked on a human" is by
-# far its commonest cause. Same reasoning the Monocle hold marker already documents:
-# a human can take hours, so it applies no staleness test either.
+# far its commonest cause, which is why no staleness test applies: a human can take
+# hours.
 #
-# Fails CLOSED. Worst case a message waits for the target's Stop-drain, which is
-# durable and always delivers — trading a cheap failure (latency) to avoid an
-# expensive one (an unintended answer, an auto-approved permission or plan).
+# Fails CLOSED. Worst case the session keeps a stale name until someone runs
+# fleet-clear — trading a cheap failure (a wrong label) to avoid an expensive one
+# (an unintended answer, an auto-approved permission or plan).
 fleet_turn_open() {
   [ -f "$HOME/.claude/agent-busy/$1" ]
 }

@@ -22,7 +22,7 @@
 # script can exist.
 #
 # NEVER let this script spawn a second tmux server: pane ids restart at %0 and collide,
-# `list-panes -a` goes blind across servers, agent-send.sh prunes live agents from the
+# `list-panes -a` goes blind across servers, the fleet tooling prunes live agents from the
 # registry, and send-keys types into unrelated panes. FLEET_TMUX_SOCKET exists ONLY for
 # fleet-layout.test.sh's scratch server.
 #

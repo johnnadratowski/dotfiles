@@ -8,7 +8,7 @@
 # (2) is the sanctioned exception to fleet-layout's "never spawn a second tmux server"
 # invariant. It is safe ONLY because every tmux call below carries -L "$SOCKET", including
 # the EXIT trap. A bare `tmux kill-server` in a teardown would reset every pane id on the
-# DEFAULT socket and staleness-bomb the live fleet's registry (agent-send.sh:107-109 would
+# DEFAULT socket and staleness-bomb the live fleet's registry (the pruning path would
 # prune live agents). assert_scratch_socket() enforces that before anything destructive.
 #
 # Locks in the findings from the DX-jn-cc-001 plan + diff reviews:

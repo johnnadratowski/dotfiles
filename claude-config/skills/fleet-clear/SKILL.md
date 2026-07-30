@@ -33,7 +33,7 @@ though the session file is stale. That staleness is the bug; the registry is the
 
 ## Self-targeting, deliberately
 
-The obvious design — have the coordinator drive `/clear` + `/rename` into the agent's pane —
+The obvious design — have the lead drive `/clear` + `/rename` into the agent's pane —
 reintroduces the problem it is meant to solve. Right after clearing an agent you are
 normally typing to it, and an external `tmux send-keys` interleaves with your keystrokes.
 That fragility is why the delayed auto-rename keystroke was unreliable even in the cases

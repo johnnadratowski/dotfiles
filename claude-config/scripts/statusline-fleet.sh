@@ -3,8 +3,13 @@
 #
 # ccstatusline `custom-command` widget: prints "🤖 N 💤 M" = N live fleet agents, M of
 # them idle (live and NOT busy). Idle agents are the fanout/compact candidates the
-# coordinator acts on. Silent (exit 0, no output) when no agents are registered — so
+# team lead acts on. Silent (exit 0, no output) when no agents are registered — so
 # it's harmless in a non-fleet repo.
+#
+# There was an "⚠ N errored" count here, off the StopFailure marker written by
+# mark-error.sh. Both are gone: Claude Code's own retry (300 attempts under
+# CLAUDE_CODE_RETRY_WATCHDOG) is what survives a rate limit now, so the marker had
+# no writer and the count could only ever render 0.
 #
 # Live   = registry entry ~/.claude/running-agents/<name>.<pid> whose pid is alive
 #          (and, for a tmux-pane token, whose pane still exists — via _fleet.sh when
@@ -33,12 +38,9 @@ is_busy() {  # canonical predicate when sourced, inline fallback otherwise (same
   if command -v fleet_busy >/dev/null 2>&1; then fleet_busy "$1"
   else local m="$HOME/.claude/agent-busy/$1"; [ -f "$m" ] && [ -n "$(find "$m" -mmin "-${WORKFLOW_BUSY_STALE_MIN:-30}" 2>/dev/null)" ]; fi
 }
-# Errored = a StopFailure marker exists (written by mark-error.sh, cleared on recovery).
-# Not time-windowed: a stuck/errored agent should keep showing until it recovers or dies.
-is_errored() { [ -f "$HOME/.claude/agent-error/$1" ]; }
 
 shopt -s nullglob
-live=0 idle=0 err=0
+live=0 idle=0
 for f in "$registry"/*; do
   [ -f "$f" ] || continue
   bn="$(basename "$f")"
@@ -47,13 +49,11 @@ for f in "$registry"/*; do
   token="$(cat "$f" 2>/dev/null)"
   if is_alive "$pid" "$token"; then
     live=$((live + 1))
-    if is_errored "$name"; then err=$((err + 1))      # errored takes precedence over idle
-    elif ! is_busy "$name"; then idle=$((idle + 1)); fi
+    is_busy "$name" || idle=$((idle + 1))
   fi
 done
 
 if [ "$live" -gt 0 ]; then
   printf '🤖 %s 💤 %s' "$live" "$idle"
-  [ "$err" -gt 0 ] && printf ' ⚠ %s' "$err"
 fi
 exit 0

@@ -11,7 +11,7 @@ description: Rearrange the agent fleet's tmux panes for the monitors you have, (
 
 An agent's identity is its **tmux pane id**, and `join-pane` / `move-window` *move* panes rather
 than recreating them. So panes can be rearranged freely — across windows and even across
-sessions — around **live** agents: no restarts, no re-registration, and nudges keep landing.
+sessions — around **live** agents: no restarts and no re-registration.
 That is the whole reason this is safe.
 
 ## The three modes
@@ -24,10 +24,10 @@ That is the whole reason this is safe.
 
 Each feature agent occupies a **cell**: its claude pane on the left, its companions stacked to the
 right, split 60/40. The top-right companion runs `WORKFLOW_CELL_COMMAND` when the project sets one
-(**empty by default** — then it is simply a shell). The coordinator, the review/test window,
+(**empty by default** — then it is simply a shell). The team lead, the review/test window,
 and any unrelated window are never touched.
 
-**Canonical window order, in every mode:** the coordinator first, then the feature agents in
+**Canonical window order, in every mode:** the team lead first, then the feature agents in
 agent-number order (`feature-1` … `feature-4`, or the merged `features` / `features-1` / `features-2`),
 then `review-test`, then any unrelated window, keeping its relative position. Applied by
 `name_windows`, so every path gets it; idempotent, so it emits nothing when already in order.
@@ -87,10 +87,10 @@ the invoking client's current session, says so, and **rebinds** the home session
 run — so the duplicate-launch guard, the window creation, and the canonical ordering all follow
 one identity. Boot never creates a session, and refuses (exit 2) if the resolved session is the
 external-monitor session. The **persisted** identity is the primary mechanism:
-`base-initialize` / `base-setup` write `WORKFLOW_FLEET_HOME_SESSION` into the gitignored
-`.claude/workflow.config.local`, and `add-worktree` seeds that file into every agent worktree —
-because each agent's SessionStart runs `name-windows` in **its own worktree**, and a worktree
-with no `.local` would silently fall back to the default and never order its windows.
+`WORKFLOW_FLEET_HOME_SESSION` lives in the gitignored `.claude/workflow.config.local`, and
+`lanes.sh provision` seeds that file into every lane — because each agent's SessionStart runs
+`name-windows` in **its own worktree**, and a lane with no `.local` would silently fall back to
+the default and never order its windows.
 
 Window names and canonical order **converge on their own**: each booting agent's
 SessionStart registration fires `name-windows` (register-agent.sh), so boot doesn't
@@ -184,7 +184,7 @@ from `main`. Pane ids survive the move, so delivery, liveness, and the registry 
 ## Rules
 
 - **Never spawn a second tmux server.** Attach more clients instead. A second server restarts
-  pane ids at `%0`, so ids collide, `list-panes -a` goes blind across servers, `agent-send.sh`
+  pane ids at `%0`, so ids collide, `list-panes -a` goes blind across servers, the fleet tooling
   prunes live agents from the registry, and `send-keys` types into an unrelated pane.
   `FLEET_TMUX_SOCKET` exists solely for `fleet-layout.test.sh`.
 - **Never `write text` / `send-keys` into a new terminal window.** `~/.zshrc` ends with
@@ -209,7 +209,7 @@ from `main`. Pane ids survive the move, so delivery, liveness, and the registry 
 |---|---|---|
 | `WORKFLOW_WORKTREES_MANIFEST` | `~/.config/<main-clone-basename>-worktrees.json` | the fleet manifest `boot`/`down` enumerate (resolved by `fleet_manifest_path`) |
 | `WORKFLOW_CELL_COMMAND` | *(empty)* | command the cell's top-right companion pane runs. Empty ⇒ nothing is keyed and it stays a shell. Set it per project (e.g. `monocle`) |
-| `WORKFLOW_FLEET_HOME_SESSION` | `main` if such a session exists, else the invoking client's session | the session the agents' windows live in. **Persist it in `.claude/workflow.config.local`** (written by `base-initialize`/`base-setup`, seeded into each worktree by `add-worktree`) — it is machine-local, never committed |
+| `WORKFLOW_FLEET_HOME_SESSION` | `main` if such a session exists, else the invoking client's session | the session the agents' windows live in. **Persist it in `.claude/workflow.config.local`** (seeded into each lane by `lanes.sh provision`) — it is machine-local, never committed |
 | `WORKFLOW_FLEET_EXT_SESSION` | `wide` | the external-monitor session |
 
 Tests: `bash ~/.claude/scripts/fleet-layout.test.sh` (hermetic `$HOME` + scratch tmux socket).
