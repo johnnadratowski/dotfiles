@@ -1227,15 +1227,20 @@ _seed_companion() {  # <window> <lead-pane>
 # IDEMPOTENT BY COUNT, which is what makes every caller safe to re-run: a window that already
 # has more than one pane is left structurally alone. It never splits a window twice, and it
 # never touches a companion that is running something — _seed_companion owns that judgement.
-_ensure_companion() {  # <claude-pane>
-  local p="$1" win n cwd
+_ensure_companion() {  # <claude-pane> [cwd]
+  local p="$1" cwd="${2:-}" win n
   win="$(_win_of "$p")"; [ -n "$win" ] || return 1
   n="$(tmux list-panes -t "$win" -F x 2>/dev/null | wc -l | tr -d ' ')"
   case "$n" in ''|*[!0-9]*) n=1 ;; esac
   [ "$n" -eq 1 ] || return 0
   # -d keeps focus where it is: at boot this runs while claude is starting in that pane, and
   # stealing the active pane would send the launch keystrokes to a shell.
-  cwd="$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)"
+  #
+  # An EXPLICIT cwd beats the pane's own, because the pane's is a transient fact. boot reuses a
+  # pane whose shell is wherever it was left and prefixes the `cd` to the LAUNCH command, which
+  # runs after this — so reading pane_current_path here put the companion in $HOME instead of
+  # the lane. The caller that knows the lane passes it.
+  [ -n "$cwd" ] || cwd="$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)"
   local new=""
   if [ "$DRY_RUN" = "1" ]; then
     _rw split-window -h -d -P -F '#{pane_id}' ${cwd:+-c "$cwd"} -t "$p"
@@ -1256,11 +1261,11 @@ _ensure_companion() {  # <claude-pane>
 }
 
 # The lead's window, built and sized. Boot's entry point, when the lead is the only agent alive.
-ensure_lead_window() {  # <lead-pane>
+ensure_lead_window() {  # <lead-pane> [cwd]
   local p="$1"
   [ -n "$p" ] || { echo "fleet-layout lead-window: no pane given and \$TMUX_PANE is unset" >&2; return 2; }
   [ -n "$(_win_of "$p")" ] || { echo "fleet-layout lead-window: '$p' is not a live pane" >&2; return 2; }
-  _ensure_companion "$p" || return 1
+  _ensure_companion "$p" "${2:-}" || return 1
   _normalize_agent_window "$p"
 }
 
@@ -1319,9 +1324,10 @@ EOF
 
 [ -n "${FLEET_LAYOUT_LIB:-}" ] && return 0
 
-USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window|agent-windows> [--dry-run] [--label-only (name-windows)] [--pane=%N (lead-window)]"
+USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window|agent-windows> [--dry-run] [--label-only (name-windows)] [--pane=%N --cwd=DIR (lead-window)]"
 verb=""
 FL_PANE=""
+FL_CWD=""
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
@@ -1331,6 +1337,8 @@ for arg in "$@"; do
     # $TMUX_PANE, which is right when a lead calls it for itself and wrong when boot calls it
     # from another pane, so boot passes it explicitly.
     --pane=*) FL_PANE="${arg#--pane=}" ;;
+    --cwd=*)  FL_CWD="${arg#--cwd=}" ;;    # lead-window: where the companion opens
+
     single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window|agent-windows)
       [ -z "$verb" ] || { echo "$USAGE" >&2; exit 2; }
       verb="$arg" ;;
@@ -1383,6 +1391,6 @@ case "$verb" in
   attach)       attach_external ;;
   subagents)    layout_subagents ;;
   reapply)      layout_reapply ;;
-  lead-window)  ensure_lead_window "${FL_PANE:-${TMUX_PANE:-}}" ;;
+  lead-window)  ensure_lead_window "${FL_PANE:-${TMUX_PANE:-}}" "$FL_CWD" ;;
   agent-windows) ensure_agent_windows ;;
 esac

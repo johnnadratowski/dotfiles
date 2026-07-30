@@ -278,7 +278,7 @@ cmd_boot() {
     # learn what the companion runs (WORKFLOW_CELL_COMMAND), and it resolves that from the repo
     # root of its own cwd. boot is typically run from somewhere else entirely, where the lookup
     # finds nothing and the companion silently comes up as a bare shell. The lane IS the project.
-    CLAUDE_PROJECT_DIR="$p" "$layout_sh" lead-window --pane="$pane" ||
+    CLAUDE_PROJECT_DIR="$p" "$layout_sh" lead-window --pane="$pane" --cwd="$p" ||
       echo "  (lead-window failed — continuing with a bare pane)"
   fi
 

@@ -364,6 +364,10 @@ export WORKFLOW_FLEET_LAYOUT_SH="$FLSTUB"
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 has "boot: fleet-layout is asked to build the lead's window" "$log" "fleet-layout lead-window --pane=%99"
+# The LANE, explicitly. boot reuses a pane whose shell is wherever it was left and prefixes the
+# `cd` to the LAUNCH command, which runs afterwards — so a companion that reads the pane's own
+# cwd opens in $HOME. Observed live: the lead's companion sat in /Users/john, not the lane.
+has "boot: …with the lane pinned, not the pane's transient cwd" "$log" "--cwd=$LEADP"
 
 # ORDER IS THE POINT: the split resizes the pane, and a TUI started at its final size never
 # reflows. Both calls succeed in either order, so only position can catch a regression.
