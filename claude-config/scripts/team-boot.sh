@@ -167,6 +167,19 @@ _boot_request_team() {  # <lead-pane>
   echo "  asked the lead to staff $want lane(s): $list"
 }
 
+# Does this lane have a conversation to come back to?
+#
+# Claude Code files transcripts under ~/.claude/projects/<cwd>/<session>.jsonl, with every
+# non-alphanumeric character of the cwd mapped to '-' (so /Users/john/.claude/jobs becomes
+# -Users-john--claude-jobs — the doubled dash is the dot). Presence of any .jsonl there is
+# what makes `--continue` safe: with none, it exits immediately.
+lane_has_transcript() {  # <lane-path>
+  local d f
+  d="$HOME/.claude/projects/$(printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g')"
+  for f in "$d"/*.jsonl; do [ -f "$f" ] && return 0; done
+  return 1
+}
+
 cmd_boot() {
   WITH_TEAM=""; WITH_TEAM_N=""
   while [ $# -gt 0 ]; do
@@ -227,6 +240,17 @@ cmd_boot() {
   # sitting wherever its shell was left, and the lead's cwd IS its lane identity — alive_in
   # and every other fleet lookup match agents by process cwd.
   local launch="claude --teammate-mode tmux --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_LANE"
+  # CONTINUITY: a relaunched lead resumes ITS OWN conversation. Without this a shutdown/boot
+  # cycle read as amnesia — the lead came back knowing nothing of the work it had just been
+  # doing, which is the whole reason the cycle exists.
+  #
+  # `--continue` forking a new session id (header) is not an objection HERE. That fork costs
+  # the team, and the team is rebuilt in-process at startup anyway: teammates are respawned,
+  # never re-adopted. What it buys is the lead's context, which otherwise dies with the process.
+  #
+  # Guarded, because a first boot into a freshly-created lane has no transcript, and there
+  # `claude --continue` exits on the spot — leaving an empty pane where the lead should be.
+  lane_has_transcript "$p" && launch="$launch --continue"
   [ -n "$reuse" ] && launch="cd $(printf '%q' "$p") && $launch"
   tmux send-keys -t "$pane" -l "$launch"
   tmux send-keys -t "$pane" Enter

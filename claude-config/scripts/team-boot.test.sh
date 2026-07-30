@@ -311,6 +311,26 @@ has "boot --with-team: takes its own window even inside the fleet session" "$log
 has "boot --with-team: …so the lead is typed there, not into the caller's" "$log" "send-keys -t %99 -l claude"
 
 echo
+echo "cmd_boot — the lead comes back to its own conversation"
+
+# THE REGRESSION, from a live cycle. `boot` never passed --continue, so every /shutdown was
+# followed by a lead that came up knowing nothing of the work it had just been doing. The
+# symptom reads as a worktree problem ("new lane, nothing to resume") and is not one: the
+# transcript was sitting in ~/.claude/projects the whole time, unasked for.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+hasnt "boot: a lane with no transcript starts clean" "$(cat "$TMUXLOG")" "--continue"
+
+# ...and that guard is load-bearing, not decoration: `claude --continue` with nothing to
+# continue EXITS on the spot, which would leave a first boot into a fresh lane staring at an
+# empty pane. The negative case above is the only thing standing between here and that.
+PROJD="$FHOME/.claude/projects/$(printf '%s' "$LEADP" | sed 's/[^A-Za-z0-9]/-/g')"
+mkdir -p "$PROJD"; : > "$PROJD/session.jsonl"
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+has "boot: a lane with a transcript resumes it" "$(cat "$TMUXLOG")" "--name team-lead --continue"
+
+echo
 echo "resolve_lanes_sh — project content is never a sibling of this script"
 
 # team-boot.sh lives in dotfiles and travels; lanes.sh is one product's. Resolving it as
