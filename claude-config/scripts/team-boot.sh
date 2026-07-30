@@ -336,8 +336,10 @@ If current-work names an issue, pick it up through the /todo skill — it is alr
 Progress, and its plan is the issue's \`## Plan\` comment, so resume that plan rather than
 drafting a new one. If it is empty, you were idle; say so.
 
-Report: your lane, your branch, and either the issue you are resuming or "no work in
-flight" — then stand by.
+Report with SendMessage to \`team-lead\`: your lane, your branch, and either the issue you
+are resuming or "no work in flight" — then stand by. **Your plain output is not visible to
+the lead** — a report you merely print is a report nobody receives, which is exactly how
+two teammates came up looking like they had ignored this instruction.
 --- end ---
 EOF
 }
