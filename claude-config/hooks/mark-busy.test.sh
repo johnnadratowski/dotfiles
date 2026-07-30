@@ -7,7 +7,7 @@
 # the writer of a load-bearing signal with no test at all.
 #
 # The signal is load-bearing because IDLE is what authorises a destructive verb:
-# fleet-layout.sh's `down` stops an agent and removes its pane, and agent-fanout's
+# team-boot.sh's `down` stops an agent, and agent-fanout's
 # restart/compact kill or type into one. All of them read this marker through fleet_busy.
 # A silently-not-writing mark-busy means every one of them sees a working agent as idle.
 #
@@ -40,6 +40,8 @@ newhome() {  # newhome [token] -> prints the temp HOME
   printf '%s' "$h"
 }
 
+mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
+
 run() {  # run <home> [payload] -> exit code, stdin fed like a real hook
   local h="$1" payload="${2:-}"
   printf '%s' "$payload" | env -u TMUX -u TMUX_PANE HOME="$h" bash "$HOOK" >/dev/null 2>&1
@@ -53,6 +55,23 @@ echo "mark-busy.sh — the busy marker's only writer"
 H1="$(newhome)"
 eqx "exits 0 with an empty payload"            "0" "$(run "$H1")"
 eqx "exits 0 with a real PreToolUse payload"   "0" "$(run "$H1" '{"tool_name":"Bash","tool_input":{"command":"ls"}}')"
+
+# 1b. THE TURN-START WRITE. The hook is wired on UserPromptSubmit as well as PreToolUse, and a
+#     UserPromptSubmit payload carries NO tool_name. That is the mark of the turn's START, and
+#     it is the only mark a turn gets if the model thinks before its first tool call or answers
+#     in pure text with no tool call at all.
+#
+#     Found by mutation: a hook that returned early on any payload without a `tool_name` passed
+#     all ten of this suite's original assertions, because the ONLY no-tool_name case was the
+#     empty payload above — which asserts the exit code and never checks for a marker. The
+#     unmarked agent then reads as idle and `down` kills it mid-turn.
+H1B="$(newhome)"
+run "$H1B" '{"session_id":"abc","prompt":"do the thing"}' >/dev/null
+ok  "a UserPromptSubmit payload (NO tool_name) still writes the marker" \
+    '[ -f "$H1B/.claude/agent-busy/testself" ]'
+H1C="$(newhome)"
+run "$H1C" '' >/dev/null
+ok  "…and so does a payload-less invocation" '[ -f "$H1C/.claude/agent-busy/testself" ]'
 
 # 2. NON-VACUITY — it actually writes the marker for a registered agent.
 H2="$(newhome)"
@@ -81,7 +100,6 @@ M="$H5/.claude/agent-busy/testself"
 # Guarded: if the write side is broken there is no marker to stat, and an unguarded
 # `stat` would spray a usage error and an "integer expected" from the comparison —
 # turning a clean FAIL into an error cascade that hides which assertion actually broke.
-mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
 if [ ! -f "$M" ]; then
   fail=$((fail+1)); printf '  FAIL %s (no marker was written — see the write assertion above)\n' \
     "a second tool call RE-TOUCHES the marker"
@@ -99,6 +117,40 @@ fi
 H6="$(newhome)"
 run "$H6" '{"tool_name":"mcp__monocle__get_feedback","tool_input":{"wait":true}}' >/dev/null
 ok "the blocking-Monocle payload no longer writes an agent-hold marker" '[ ! -e "$H6/.claude/agent-hold" ]'
+
+# 7. MULTI-TENANCY. This hook runs in every agent on a shared ~/.claude, so it touches a
+#    directory other agents depend on. It must write EXACTLY its own marker.
+#
+#    Found by mutation: inserting `rm -f "$HOME/.claude/agent-busy/"*` after the mkdir passed
+#    every assertion, because the fixture only ever seeded ONE agent — a single-tenant fixture
+#    cannot observe cross-tenant destruction. In a four-agent fleet that mutant makes every
+#    agent's tool call clear every other agent's marker, so `down` sees working teammates as
+#    idle and kills them. Continuous, and worse than the turn-start hole above.
+H7="$(newhome)"
+mkdir -p "$H7/.claude/agent-busy"
+: > "$H7/.claude/agent-busy/other-agent"
+printf 'cwd:/somewhere/else' > "$H7/.claude/running-agents/other-agent.9999"
+OTHER_BEFORE="$(mtime "$H7/.claude/agent-busy/other-agent" 2>/dev/null || echo x)"
+run "$H7" '{"tool_name":"Read"}' >/dev/null
+ok "writes its OWN marker in a multi-agent home"      '[ -f "$H7/.claude/agent-busy/testself" ]'
+ok "…and does NOT delete a peer's marker"             '[ -f "$H7/.claude/agent-busy/other-agent" ]'
+ok "…and does not even re-touch a peer's marker"      \
+   '[ "$(mtime "$H7/.claude/agent-busy/other-agent")" = "$OTHER_BEFORE" ]'
+eqx "…leaving exactly two markers"               "2" \
+    "$(ls -1 "$H7/.claude/agent-busy" 2>/dev/null | wc -l | tr -d ' ')"
+
+# 8. SELF-ID FAIL-CLOSED. If neither _fleet.sh candidate is readable, `fleet_find_self` is
+#    undefined — and this hook used to exit 0 having written nothing, so a registered mid-turn
+#    agent was indistinguishable from an idle one at exactly the moment a destroy-guard asks.
+#    The inline fallback exists for this, and this case is what keeps it honest.
+H8="$(newhome)"
+printf '' | env -u TMUX -u TMUX_PANE HOME="$H8" bash -c '
+  # Simulate _fleet.sh being unreadable from BOTH candidate paths by pointing HOME at a home
+  # with no scripts dir and running the hook from a copy with no sibling scripts/ either.
+  d="$(mktemp -d)"; cp "$1" "$d/mark-busy.sh"; bash "$d/mark-busy.sh"
+' _ "$HOOK" >/dev/null 2>&1
+ok "no readable _fleet.sh → the marker is STILL written (fails closed)" \
+   '[ -f "$H8/.claude/agent-busy/testself" ]'
 
 echo
 echo "  $pass passed, $fail failed"

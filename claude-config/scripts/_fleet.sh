@@ -40,6 +40,57 @@ fleet_find_self() {
   return 1
 }
 
+# ── PROCESS-FIRST LIVENESS ───────────────────────────────────────────────────────────────
+# "Is anything working in this directory?" — answered from the PROCESS TABLE, never from the
+# registry.
+#
+# WHY BOTH EXIST, because collapsing them would make one of the two wrong:
+#
+#   REGISTRY-FIRST (fleet_find_self / fleet_alive over ~/.claude/running-agents) is how you get
+#   an agent's NAME, role and sidecars. It can only see agents that registered, which requires
+#   the SessionStart hook to have fired and the fleet gate to have passed.
+#
+#   PROCESS-FIRST (below) cannot name anything, and cannot miss anything.
+#
+# So: naming uses the registry; anything DESTRUCTIVE uses this. A registry miss in front of a
+# kill or an `rm -rf` is a working agent destroyed, and registry misses are real — this whole
+# primitive exists because team-boot.sh's `pgrep`-based check reported every shim-launched
+# agent, the lead included, as "not running", and `down` called that "the fleet is already
+# down".
+#
+# NOT pgrep. `pgrep -x claude` compares the process NAME, which for a shim launch is the version
+# string ("2.1.220"); `pgrep -f share/claude/versions` needs a path a shim launch does not have;
+# and `pgrep -f claude` was observed NOT returning a live session whose argv begins with
+# "claude". `ps ax` plus our own matching is portable and inspectable.
+fleet_claude_pids() {
+  ps ax -o pid=,comm=,command= 2>/dev/null | while read -r _p _c _rest; do
+    case "${_c##*/}" in
+      claude|[0-9]*.[0-9]*.[0-9]*) printf '%s\n' "$_p"; continue ;;
+    esac
+    case "$_rest" in
+      claude|claude\ *|*/claude|*/claude\ *|*share/claude/versions/*) printf '%s\n' "$_p" ;;
+    esac
+  done
+}
+
+# fleet_pid_cwd <pid> — the process's working directory, or empty.
+fleet_pid_cwd() { lsof -a -p "$1" -d cwd -Fn 2>/dev/null | grep '^n' | cut -c2-; }
+
+# fleet_agent_in_dir <abs-dir> [pids…] — echo the pid of a claude working in <abs-dir>, else 1.
+# Pass a pre-computed pid list to reuse ONE `ps` sweep across many directories: enumerating per
+# lane costs a full process-table scan each time, which `lanes.sh list` would do once per lane.
+fleet_agent_in_dir() {
+  local want="$1"; shift
+  local pids="$*" pid cwd
+  [ -n "$pids" ] || pids="$(fleet_claude_pids)"
+  for pid in $pids; do
+    [ "$pid" = "$$" ] && continue
+    cwd="$(fleet_pid_cwd "$pid")"
+    [ "$cwd" = "$want" ] && { printf '%s' "$pid"; return 0; }
+  done
+  return 1
+}
+
 # fleet_busy <name> — a fresh busy marker (~/.claude/agent-busy/<name>, touched within
 # WORKFLOW_BUSY_STALE_MIN minutes) means the agent is mid-turn. THE canonical predicate
 # (DX-jn-cc-010/014).
@@ -50,8 +101,8 @@ fleet_find_self() {
 # during any routine long call (a test sweep, a build, a poll loop). So the window has to
 # exceed the longest ordinary tool call, not the longest ordinary *turn*.
 #
-# What "IDLE" buys the caller is permission to act destructively: fleet-layout's `down`
-# stops an agent and removes its pane, and agent-fanout's restart/compact kill or type into
+# What "IDLE" buys the caller is permission to act destructively: team-boot.sh's `down`
+# stops an agent, and agent-fanout's restart/compact kill or type into
 # one. Reading a working agent as idle is how those verbs interrupt real work — so the
 # predicate errs toward "busy", and the window is sized for that, not for display.
 #
@@ -122,7 +173,7 @@ fleet_turn_open() {
 # register-agent.sh's resolve_role() and agent-fanout.sh's role_of() delegate here so
 # status/targeting/role-context can never classify an agent differently. Pure pattern
 # match — callers that ALSO honor a per-agent ~/.claude/agents/<name>.role override
-# (register-agent.sh, agent-rename.sh, statusline-role.sh) apply that override first and
+# (register-agent.sh, statusline-role.sh) apply that override first and
 # only fall back to this.
 # `team-lead` is the ONLY name Claude Code will let the lead answer to — it is a
 # hardcoded constant there, so this is the canonical spelling, not a preference. The
@@ -191,7 +242,7 @@ fleet_lanes_dir() {
 }
 
 # fleet_manifest_path — echo the machine-local worktrees-manifest path (DX-jn-cc-014).
-# THE single resolver: fleet-layout's boot/down, statusline-role's lane fallback, and any
+# THE single resolver: team-boot.sh's boot/down, statusline-role's lane fallback, and any
 # consuming project's config all route through here rather than hardcoding a path (one
 # identity, one pipeline).
 #
