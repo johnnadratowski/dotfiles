@@ -13,6 +13,9 @@
 #                                              # build the lead's own window: companion column
 #                                              #   beside its chat, sized and seeded (boot calls
 #                                              #   this; idempotent, so re-running is free)
+#   fleet-layout.sh agent-windows [--dry-run]  # the same shape for EVERY live agent. Every
+#                                              #   layout verb ends here, so staffing an agent
+#                                              #   can no longer leave the lead's chat squeezed
 #
 # THIS SCRIPT NEVER STARTS OR STOPS AN AGENT. It only moves and labels panes, which is what
 # makes every verb safe to re-run. `boot` and `down` used to live here and do exactly that;
@@ -749,6 +752,7 @@ _settle_external() {
   fi
   name_windows
   _renumber "$FL_HOME_SESSION"
+  ensure_agent_windows   # every agent gets its column back; cells that lost one are rebuilt
   balance_cells
 }
 
@@ -799,6 +803,7 @@ EOF
   _move_features_home || true
   name_windows
   _renumber "$FL_HOME_SESSION"
+  ensure_agent_windows   # every agent gets its column back; cells that lost one are rebuilt
   balance_cells          # the windows just resized from the external monitor to the laptop
   _teardown_ext          # close the iTerm window + drop the now-empty external session
 }
@@ -1147,7 +1152,11 @@ PY
   done
 }
 
-# The lead's own window, sized so the chat is actually readable.
+# An agent's own window, sized so the chat is actually readable.
+#
+# The proportions are named for the lead because it was the only caller for a long time, but
+# the shape is the FLEET's: every agent — lead or teammate — reads its chat on the left and
+# runs its tool in the column beside it. The knob names stay put; they are config people set.
 #
 # NOT `select-layout even-vertical`, which was the first attempt: it reflows EVERY pane in the
 # window to equal height, so the lead's chat ends up the same size as a shell it never looks at.
@@ -1158,7 +1167,7 @@ PY
 # 208-column window, since tmux keeps the surviving panes' geometry rather than reflowing.
 FL_LEAD_WIDTH_PCT="${WORKFLOW_LEAD_WIDTH_PCT:-60}"
 FL_LEAD_HEIGHT_PCT="${WORKFLOW_LEAD_HEIGHT_PCT:-65}"
-_normalize_lead_window() {  # <lead-pane>
+_normalize_agent_window() {  # <lead-pane>
   local p="$1" win w h
   win="$(_win_of "$p")"; [ -n "$win" ] || return 0
   w="$(tmux display-message -p -t "$win" '#{window_width}'  2>/dev/null)"
@@ -1207,47 +1216,74 @@ _seed_companion() {  # <window> <lead-pane>
   echo "  companion    started '$FL_CELL_COMMAND' in $top_right (was an idle shell)"
 }
 
-# Build the lead's window: claude on the left, a companion column on the right.
+# Split the companion column beside an agent's claude pane.
 #
-# WHY THIS EXISTS. `build_cell` gives every FEATURE agent a companion column; the lead's window
-# is not a cell and nothing ever built it, so the lead came up as one bare pane. Everything
-# downstream then quietly no-opped on it: `_normalize_lead_window` only resizes when a second
-# column already exists, and `_seed_companion` only seeds a pane that is already there. So the
-# lead alone had no monocle, and its chat kept whatever width the window happened to have.
+# WHY THIS EXISTS. `build_cell` only ever JOINS companions that already exist; nothing created
+# one. So an agent alone in its window — the lead always, and every freshly-staffed teammate —
+# stayed a single full-width pane, and both downstream steps then quietly no-opped on it:
+# `_normalize_agent_window` only resizes when a second column is already there, and
+# `_seed_companion` only seeds a pane that is already there. Hence a lead with no monocle.
 #
-# IDEMPOTENT BY COUNT, which is what makes it safe to call on every boot: a window that already
+# IDEMPOTENT BY COUNT, which is what makes every caller safe to re-run: a window that already
 # has more than one pane is left structurally alone. It never splits a window twice, and it
 # never touches a companion that is running something — _seed_companion owns that judgement.
-ensure_lead_window() {  # <lead-pane>
+_ensure_companion() {  # <claude-pane>
   local p="$1" win n cwd
-  [ -n "$p" ] || { echo "fleet-layout lead-window: no pane given and \$TMUX_PANE is unset" >&2; return 2; }
-  win="$(_win_of "$p")"
-  [ -n "$win" ] || { echo "fleet-layout lead-window: '$p' is not a live pane" >&2; return 2; }
+  win="$(_win_of "$p")"; [ -n "$win" ] || return 1
   n="$(tmux list-panes -t "$win" -F x 2>/dev/null | wc -l | tr -d ' ')"
   case "$n" in ''|*[!0-9]*) n=1 ;; esac
-  if [ "$n" -eq 1 ]; then
-    # -d keeps focus on the lead: this runs while claude is starting there, and stealing the
-    # active pane would send the boot keystrokes to a shell.
-    cwd="$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)"
-    local new=""
-    if [ "$DRY_RUN" = "1" ]; then
-      _rw split-window -h -d -P -F '#{pane_id}' ${cwd:+-c "$cwd"} -t "$p"
-    elif [ -n "$cwd" ]; then new="$(tmux split-window -h -d -P -F '#{pane_id}' -c "$cwd" -t "$p" 2>/dev/null)"
-    else                     new="$(tmux split-window -h -d -P -F '#{pane_id}' -t "$p" 2>/dev/null)"
-    fi
-    [ "$DRY_RUN" = "1" ] || [ -n "$new" ] || {
-      echo "fleet-layout lead-window: split failed — leaving $win as it was" >&2; return 1; }
-    echo "  lead-window  added the companion column beside $p"
-    # WAIT FOR THE SHELL. A pane is not a shell the instant it exists — for a few hundred ms
-    # tmux still reports whatever is exec'ing, and _seed_companion reads that as "busy, hands
-    # off" and skips. On the single call boot makes, that is the difference between a seeded
-    # companion and a bare prompt: the seed only ever worked because someone re-ran a layout
-    # verb later. Bounded, and a timeout just means no seed — never a keystroke into a live
-    # process, which is the risk _pane_is_shell exists to avoid.
-    local i=0
-    while [ -n "$new" ] && [ "$i" -lt 40 ] && ! _pane_is_shell "$new"; do sleep 0.05; i=$((i + 1)); done
+  [ "$n" -eq 1 ] || return 0
+  # -d keeps focus where it is: at boot this runs while claude is starting in that pane, and
+  # stealing the active pane would send the launch keystrokes to a shell.
+  cwd="$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)"
+  local new=""
+  if [ "$DRY_RUN" = "1" ]; then
+    _rw split-window -h -d -P -F '#{pane_id}' ${cwd:+-c "$cwd"} -t "$p"
+  elif [ -n "$cwd" ]; then new="$(tmux split-window -h -d -P -F '#{pane_id}' -c "$cwd" -t "$p" 2>/dev/null)"
+  else                     new="$(tmux split-window -h -d -P -F '#{pane_id}' -t "$p" 2>/dev/null)"
   fi
-  _normalize_lead_window "$p"
+  [ "$DRY_RUN" = "1" ] || [ -n "$new" ] || {
+    echo "fleet-layout: companion split failed — leaving $win as it was" >&2; return 1; }
+  echo "  companion    added the column beside $p"
+  # WAIT FOR THE SHELL. A pane is not a shell the instant it exists — for a few hundred ms
+  # tmux still reports whatever is exec'ing, and _seed_companion reads that as "busy, hands
+  # off" and skips. On the single call boot makes, that is the difference between a seeded
+  # companion and a bare prompt: the seed only ever worked because someone re-ran a layout
+  # verb later. Bounded, and a timeout just means no seed — never a keystroke into a live
+  # process, which is the risk _pane_is_shell exists to avoid.
+  local i=0
+  while [ -n "$new" ] && [ "$i" -lt 40 ] && ! _pane_is_shell "$new"; do sleep 0.05; i=$((i + 1)); done
+}
+
+# The lead's window, built and sized. Boot's entry point, when the lead is the only agent alive.
+ensure_lead_window() {  # <lead-pane>
+  local p="$1"
+  [ -n "$p" ] || { echo "fleet-layout lead-window: no pane given and \$TMUX_PANE is unset" >&2; return 2; }
+  [ -n "$(_win_of "$p")" ] || { echo "fleet-layout lead-window: '$p' is not a live pane" >&2; return 2; }
+  _ensure_companion "$p" || return 1
+  _normalize_agent_window "$p"
+}
+
+# Give EVERY live agent the same window shape — chat left, companion column right.
+#
+# WHY BOOT IS NOT ENOUGH. Teammates spawn as split panes in the LEAD's window and are broken out
+# afterwards, and tmux keeps the survivors' geometry rather than reflowing: staffing four agents
+# left the lead's chat at 62 columns of 208. Each teammate meanwhile arrives as a lone full-width
+# pane, because nothing builds a cell for a window holding exactly one agent. Same missing step,
+# so the same fix — and every layout verb ends here, which makes rearrangement converge on the
+# shape instead of drifting away from it.
+#
+# One agent's failure never stops the rest: a half-laid-out fleet is worse than a reported one.
+ensure_agent_windows() {
+  local name token comps
+  while IFS="$TAB" read -r name token comps; do
+    [ -n "$token" ] || continue
+    [ -n "$(_win_of "$token")" ] || continue     # a registry token whose pane is gone
+    _ensure_companion "$token" || continue
+    _normalize_agent_window "$token"
+  done <<EOF
+$(_attr)
+EOF
 }
 
 layout_subagents() {
@@ -1257,7 +1293,7 @@ layout_subagents() {
   rows="$(_subagent_panes "$leadcwd")" || true
   if [ -z "$rows" ]; then
     echo "fleet-layout subagents: no live subagent panes to place"
-    _normalize_lead_window "$target"       # sizing drifts with or without subagents
+    _normalize_agent_window "$target"       # sizing drifts with or without subagents
     return 0
   fi
   local pane name atype
@@ -1274,7 +1310,7 @@ layout_subagents() {
   done <<EOF
 $rows
 EOF
-  _normalize_lead_window "$target"
+  _normalize_agent_window "$target"
   echo "fleet-layout subagents: placed $n"
 }
 
@@ -1283,7 +1319,7 @@ EOF
 
 [ -n "${FLEET_LAYOUT_LIB:-}" ] && return 0
 
-USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window> [--dry-run] [--label-only (name-windows)] [--pane=%N (lead-window)]"
+USAGE="usage: fleet-layout.sh <single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window|agent-windows> [--dry-run] [--label-only (name-windows)] [--pane=%N (lead-window)]"
 verb=""
 FL_PANE=""
 for arg in "$@"; do
@@ -1295,7 +1331,7 @@ for arg in "$@"; do
     # $TMUX_PANE, which is right when a lead calls it for itself and wrong when boot calls it
     # from another pane, so boot passes it explicitly.
     --pane=*) FL_PANE="${arg#--pane=}" ;;
-    single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window)
+    single|dual|wide|attach|balance|name-windows|subagents|reapply|lead-window|agent-windows)
       [ -z "$verb" ] || { echo "$USAGE" >&2; exit 2; }
       verb="$arg" ;;
     *) echo "$USAGE" >&2; exit 2 ;;
@@ -1348,4 +1384,5 @@ case "$verb" in
   subagents)    layout_subagents ;;
   reapply)      layout_reapply ;;
   lead-window)  ensure_lead_window "${FL_PANE:-${TMUX_PANE:-}}" ;;
+  agent-windows) ensure_agent_windows ;;
 esac

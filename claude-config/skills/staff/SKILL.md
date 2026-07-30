@@ -82,6 +82,10 @@ in windows of their own.
 
 `reapply` restores the last mode you chose (`~/.claude/fleet-layout-mode`) rather than
 imposing one, which is what stops each new agent from silently degrading the arrangement.
+It also ends in `agent-windows`, which is what repairs the two things staffing breaks: a
+teammate arrives as a lone full-width pane with no companion column, and the lead's own chat
+is left squeezed — tmux keeps the surviving panes' geometry when the spawned panes are broken
+out, which once cut the lead to 62 columns of 208.
 Pass an explicit `single` / `dual` / `wide` only if the user names one. Pane ids survive
 `break-pane`, so routing follows the pane id, not the window.
 

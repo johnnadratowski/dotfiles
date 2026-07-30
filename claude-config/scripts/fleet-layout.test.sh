@@ -784,6 +784,32 @@ unset WORKFLOW_CELL_COMMAND
 eq "the companion is seeded on the FIRST call, not on a later re-run" "1" \
    "$(printf '%s' "$seedout" | grep -c 'companion .* started')"
 
+# EVERY agent, not just the lead. Teammates spawn as split panes in the LEAD's window and are
+# broken out afterwards; tmux keeps the survivors' geometry rather than reflowing, so staffing
+# four agents left the lead's chat at 62 columns of 208 while each teammate sat alone at full
+# width. Observed live on 2026-07-30, immediately after a clean staff of four.
+#
+# STRIP A COMPANION FIRST. After `single` every fixture agent already has one, so asserting
+# against that state would pass no matter what the code did. x-4 is reduced to the shape a
+# freshly-staffed teammate actually arrives in — alone in its window — and must be rebuilt.
+W_K="$(t list-panes -a -F '#{pane_id} #{window_id}' | awk -v p="$P_K" '$1==p{print $2}')"
+t list-panes -t "$W_K" -F '#{pane_id}' | grep -vx "$P_K" | while read -r dead; do t kill-pane -t "$dead"; done
+eq "fixture: x-4 is alone in its window, as a new teammate is" "1" \
+   "$(t list-panes -t "$W_K" -F x | wc -l | tr -d ' ')"
+lib "ensure_agent_windows" >/dev/null 2>&1
+eq "a lone agent's window gains its companion column back" "2" \
+   "$(t list-panes -t "$W_K" -F x | wc -l | tr -d ' ')"
+eq "…and the agent's own pane survived it" "1" \
+   "$(t list-panes -t "$W_K" -F '#{pane_id}' | grep -cx "$P_K")"
+eq "…as a column beside it, not a row beneath" "yes" \
+   "$(t list-panes -t "$W_K" -F '#{pane_id} #{pane_left}' | awk -v l="$P_K" '$1==l{x=$2} $1!=l{y=$2} END{print (y>x)?"yes":"no"}')"
+
+# Convergence, not accumulation: the layout verbs call this on EVERY run.
+after="$(t list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
+lib "ensure_agent_windows" >/dev/null 2>&1
+eq "re-running adds nothing — the shape converges" "$after" \
+   "$(t list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
+
 # A pane id that is not live is a caller error, not something to guess at: splitting "the
 # current window" would build the column in whatever window happened to be active.
 lib "ensure_lead_window '%99999'" >/dev/null 2>&1
