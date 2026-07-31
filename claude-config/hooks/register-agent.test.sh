@@ -31,6 +31,7 @@ ok(){ if eval "$2"; then echo "  PASS: $1"; pass=$((pass+1)); else echo "  FAIL:
 sanitize(){ printf '%s' "$1" | tr -c 'A-Za-z0-9_-' '-' | sed -E 's/-+/-/g; s/^-//; s/-$//'; }
 
 # --- PATH stubs -------------------------------------------------------------
+SUITE_T0="$(date +%s)"   # cleanup reaps only settle jobs younger than this run
 STUB="$(mktemp -d)"
 cat > "$STUB/ps" <<'EOF'
 #!/bin/bash
@@ -452,9 +453,18 @@ run_hook "$CBH3" "$CBBARE" "$(payload startup)" sessionstart >/dev/null 2>&1
 ok "self-heal leaves a genuinely BARE repo core.bare=true untouched" '[ "$(git -C "$CBBARE" config --get core.bare)" = true ]'
 rm -rf "$CBH" "$CBR" "$CBH2" "$CBR2" "$CBH3" "$CBBARE"
 
-# Orphaned settle sleepers from the scheduling tests (3600s) reference THIS
-# hook path; reap them so the suite leaves no stragglers.
-pkill -f "$HOOK settle-recheck" 2>/dev/null
+# Orphaned settle sleepers from the scheduling tests (3600s) reference THIS hook path — and so
+# does every LIVE agent's pending settle job, because settings.json invokes the hook through
+# ~/.claude/hooks (a symlink into this directory) and both sides build the path with `cd … &&
+# pwd`. The pattern alone is therefore byte-identical to the fleet's, and a bare `pkill -f`
+# reaped every agent's pending re-check machine-wide. Age is what distinguishes ours: only a
+# process younger than this suite's own runtime can belong to it. A live job scheduled mid-run
+# is the residual window, and losing one costs a re-check that gets rescheduled.
+for _pid in $(pgrep -f "$HOOK settle-recheck" 2>/dev/null); do
+  _age="$(ps -o etimes= -p "$_pid" 2>/dev/null | tr -d ' ')"
+  case "$_age" in ''|*[!0-9]*) continue ;; esac
+  [ "$_age" -le "$(( $(date +%s) - SUITE_T0 + 5 ))" ] && kill "$_pid" 2>/dev/null
+done
 rm -rf "$STUB"
 
 echo

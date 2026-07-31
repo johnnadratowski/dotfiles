@@ -61,11 +61,16 @@ fi
 # pointer restores that convenience without putting any product's name in a file that ships to
 # every machine: it is written the first time we DO resolve from inside a repo, and it lives in
 # ~/.claude (machine-local runtime state, beside fleet-layout-mode), never in dotfiles.
+#
+# WRITTEN ONLY WHEN IT EXISTS, and never from library mode. The derivation answers for whatever
+# repo you happen to be standing in — run any verb from an unrelated clone and it yields
+# `<that repo>-worktrees`, which does not exist — so an unguarded write would record that as the
+# fleet's lanes directory and every later invocation from outside a repo would read it back.
 _LANES_PTR="$HOME/.claude/fleet-lanes-dir"
-if [ -n "$LANES_DIR" ]; then
+if [ -n "$LANES_DIR" ] && [ -d "$LANES_DIR" ] && [ -z "${TEAM_BOOT_LIB:-}" ]; then
   [ "$(cat "$_LANES_PTR" 2>/dev/null || true)" = "$LANES_DIR" ] ||
     printf '%s\n' "$LANES_DIR" > "$_LANES_PTR" 2>/dev/null || true
-elif [ -r "$_LANES_PTR" ]; then
+elif [ -z "$LANES_DIR" ] && [ -r "$_LANES_PTR" ]; then
   LANES_DIR="$(cat "$_LANES_PTR" 2>/dev/null || true)"
   [ -d "$LANES_DIR" ] || LANES_DIR=""
 fi
@@ -80,6 +85,12 @@ die() { echo "team-boot: $*" >&2; exit 1; }
 # `die` at source time would take the harness with it.
 [ -n "${TEAM_BOOT_LIB:-}" ] || [ -n "$LANES_DIR" ] ||
   die "cannot resolve the lanes directory — run this inside the repo, or set WORKFLOW_LANES_DIR"
+# RESOLVED IS NOT ENOUGH — the directory has to be there. A resolved-but-absent path makes
+# "$LANES_DIR"/*/ expand to the literal glob, so every verb enumerates nothing: `status` prints
+# an empty fleet and `down` reports success having stopped nothing, while the fleet is up. An
+# empty enumeration vacuously satisfies a destructive verb's success contract.
+[ -n "${TEAM_BOOT_LIB:-}" ] || [ -d "$LANES_DIR" ] ||
+  die "lanes directory does not exist: $LANES_DIR — wrong repo, or the lanes were never created"
 lane_path() { printf '%s/%s' "$LANES_DIR" "$1"; }
 
 # Who is alive in a lane — by PROCESS CWD, never by team config. The team config survives a

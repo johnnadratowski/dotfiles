@@ -85,10 +85,13 @@ tmux list-windows -t main
   evidence the agent is alive.** Trust `status`, which resolves by process cwd, then close the
   orphaned companions by **pane id**. This bullet used to say the opposite, and would now
   produce a confident, false "the fleet is not down".
-- **No reply within ~60s** ⇒ that agent is genuinely mid-turn or wedged. Escalate only that
-  one: `~/.claude/scripts/team-boot.sh down --force`, which SIGTERMs and then **verifies death
-  by observation** rather than trusting `kill`'s exit status. Report anything it can't prove
-  dead.
+- **No reply within ~60s** ⇒ that agent is genuinely mid-turn or wedged. Escalate with
+  `~/.claude/scripts/team-boot.sh down --force`, which SIGTERMs and then **verifies death by
+  observation** rather than trusting `kill`'s exit status. Report anything it can't prove dead.
+  **`down` takes no targets** — it sweeps every lane and `--force` disables the busy gate for
+  all of them, so run it only once the responders are already gone (they report "not running"
+  and are skipped) and never while an agent you want to keep is mid-turn. Self is never a
+  target. This bullet used to say "escalate only that one", which the script cannot do.
 - **A rejected request (`approve: false`) is an answer, not an obstacle.** Relay the reason
   and stop — the user decides whether to force it.
 

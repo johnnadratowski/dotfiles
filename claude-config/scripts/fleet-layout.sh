@@ -351,6 +351,11 @@ _window_rank() {   # <current-index> <agent-name…>
   local n role has_feature=0
   for n in "$@"; do
     role="$(_role_of "$n")"
+    # BOTH SPELLINGS, in every reader. fleet_resolve_role was changed to return `team-lead`, and
+    # _window_rank below was updated with it while the guard at the bottom of this function was
+    # not — so that guard tested for a role string nothing emits any more and was simply dead.
+    # Same stranded-readers failure the base-* deletion produced; the fix is to update every
+    # reader in the same change, not the one the test happened to cover.
     # `team-lead` is canonical. `coordinator` is still accepted because _role_of returns a
     # per-agent ~/.claude/agents/<name>.role override VERBATIM, and overrides written before
     # the rename still say it — matching only the new spelling silently demoted lane 0 from
@@ -397,7 +402,7 @@ EOF
   # coordinator is EXPECTED and must not block the feature windows from ordering. (Fixes the
   # settle-recheck reorder introduced with DX-jn-cc-018 — see register-agent.sh.)
   if [ "$sess" = "$FL_HOME_SESSION" ] \
-     && printf '%s\n' "$agents" | awk -F"$TAB" '$4=="coordinator"{f=1} END{exit !f}' \
+     && printf '%s\n' "$agents" | awk -F"$TAB" '$4=="coordinator"||$4=="team-lead"{f=1} END{exit !f}' \
      && ! printf '%s\n' "$rows" | awk -F"$TAB" '$1=="000000"{f=1} END{exit !f}'; then
     return 0
   fi

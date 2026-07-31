@@ -177,6 +177,17 @@ fleet_turn_open() {
 # only fall back to this.
 # `team-lead` is the ONLY name Claude Code will let the lead answer to — it is a
 # hardcoded constant there, so this is the canonical spelling, not a preference. The
+# The task-scoped SUBAGENT names this fleet spawns — `reviewer`/`rev-a`/`rev-b`, `tester`,
+# `planner` — must match too, and none of them did: every one fell through to `feature`. That is
+# not cosmetic. `layout_single` restructures feature agents, so `single --dry-run` was observed
+# emitting `break-pane -d -s %61 -n rev-a`; `agent-fanout restart --role feature --yes` SIGTERMs
+# a feature agent and relaunches it with `claude --continue`, which for a reviewer means killing
+# a live team member and bringing it back permanently outside the lead's team; and
+# `fleet_agent_id` gave rev-a, rev-b, reviewer, tester, planner AND feature-1 all the same `f1`,
+# collapsing the very uniqueness the `agent:<id>` label depends on. `planner` resolves to
+# `review` rather than a new role name: what matters downstream is "task-scoped, never
+# restructured, never restarted as a lane agent", which `review` already means.
+#
 # legacy `cc` / `*-cc` / `coordinator` spellings still MATCH (old sessions, old
 # per-agent .role overrides, historical ids) but they all RESOLVE to `team-lead`, so
 # there is exactly one role name downstream and one role doc: agent-roles/team-lead.md.
@@ -184,8 +195,9 @@ fleet_resolve_role() {
   case "$1" in
     team-lead|*-team-lead|team-lead-*) echo team-lead ;;
     cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo team-lead ;;
-    test|*-test|*-test-*|test-*)                                       echo test ;;
-    review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)           echo review ;;
+    test|tester|*-test|*-test-*|test-*|tester-*)                       echo test ;;
+    review|reviewer|rev|rev-*|*-rev|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*|planner|plan-*)
+                                                                       echo review ;;
     *)                                                                 echo feature ;;
   esac
 }
