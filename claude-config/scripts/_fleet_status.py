@@ -13,7 +13,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _agent_facts import (  # noqa: E402
+from _agent_facts import (  # type: ignore[import-not-found]  # noqa: E402  (sibling, via sys.path above)
     MARK, context_for, fmt_secs, needs_input, summary_for, todo_for,
 )
 
