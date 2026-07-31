@@ -48,8 +48,12 @@ _derive_lanes_dir() {
   case "$base" in ''|'/'|'.') return 1 ;; esac
   printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
 }
+# _derive_lanes_dir is the NO-_fleet.sh path only. With _fleet.sh present, fleet_lanes_dir
+# already honours WORKFLOW_LANES_DIR and runs the byte-identical `git rev-parse`, so a
+# `|| _derive_lanes_dir` fallback there could never fire — an unfalsifiable branch reading as a
+# safety net that is not one.
 if command -v fleet_lanes_dir >/dev/null 2>&1; then
-  LANES_DIR="$(fleet_lanes_dir 2>/dev/null || _derive_lanes_dir 2>/dev/null || true)"
+  LANES_DIR="$(fleet_lanes_dir 2>/dev/null || true)"
 else
   LANES_DIR="${WORKFLOW_LANES_DIR:-$(_derive_lanes_dir 2>/dev/null || true)}"
 fi

@@ -179,5 +179,7 @@ Worth considering (ask the user before adding — out of scope unless requested)
 
 ## Companion skills
 
-- **`fleet-layout`** — owns the pane/window topology and every tmux window name; `boot` and `down`.
+- **`fleet-layout`** — owns the pane/window topology and every tmux window name. **Not** `boot`
+  or `down`: those live in `team-boot.sh`, and fleet-layout exits 2 on any verb outside its own
+  list. (This line named them for years after they moved.)
 - **`fleet-clear`** — restore an agent's own session name after a `/clear` (self-targeting).
