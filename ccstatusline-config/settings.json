@@ -111,7 +111,7 @@
       {
         "id": "fleet-summary",
         "type": "custom-command",
-        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null); for q in \"$HOME/.claude/scripts/statusline-summary.sh\" \"$r/.claude/scripts/statusline-summary.sh\"; do [ -n \"$q\" ] && [ -x \"$q\" ] && { exec \"$q\"; }; done; exit 0'",
+        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null); for q in \"$HOME/.claude/scripts/statusline-summary.sh\" \"$r/.claude/scripts/statusline-summary.sh\"; do [ -n \"$q\" ] && [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
         "timeout": 2000,
         "preserveColors": true
       },
