@@ -144,6 +144,33 @@ def todo_for(cwd):
     return ""
 
 
+def needs_input(cwd):
+    """Does this agent want the human? THE HARNESS CANNOT TELL US.
+
+    Measured across 294 live payloads, `status` only ever takes two values - `running` and
+    `completed`. There is no waiting-for-input state to read, and an agent that has asked a
+    question and gone idle is indistinguishable from one simply between turns. So the signal
+    has to be one the agent writes: a one-line reason in <lane>/.claude/needs-input, created
+    when it needs an answer and removed once it has one.
+    """
+    p = cwd if isinstance(cwd, str) and cwd else None
+    for _ in range(24):
+        if not p:
+            break
+        f = os.path.join(p, ".claude", "needs-input")
+        try:
+            if os.path.getsize(f) > 0:
+                with open(f) as fh:
+                    return fh.readline().strip()
+        except OSError:
+            pass
+        parent = os.path.dirname(p)
+        if parent == p:
+            break
+        p = parent
+    return ""
+
+
 def summary_for(cwd):
     """The agent's most recent 📌 summary, from its own transcript.
 
@@ -210,6 +237,12 @@ for t in tasks:
 
     parts = []
 
+    # FIRST, and loud. The point of the row is to say where you are needed; a question
+    # buried behind six facts is a question you scroll past.
+    ask = needs_input(t.get("cwd"))
+    if ask:
+        parts.append("\u2753")
+
     # IDENTITY. A teammate carries a real `name` (the lane). A subagent carries NONE — the
     # harness sends only `description`/`label`, which is the task PROMPT, so falling back to it
     # filled the row with "Full gate sweep on FEAT-6" where a name belongs. Prefer the name;
@@ -254,7 +287,12 @@ for t in tasks:
 
     # The summary takes whatever width is left and is the first thing dropped — every field
     # before it is a fact you act on; this one is context.
+    # A question outranks the summary for the leftover width: one is addressed to you, the
+    # other is background.
     room = COLUMNS - len(head) - 4
+    if ask and room >= 12:
+        head = head + "  \u2753 " + (ask if len(ask) <= room else ask[:room - 1] + "\u2026")
+        room = COLUMNS - len(head) - 4
     if room >= 24:
         s = summary_for(t.get("cwd"))
         if s:

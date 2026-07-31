@@ -395,6 +395,11 @@ If current-work names an issue, pick it up through the /todo skill — it is alr
 Progress, and its plan is the issue's \`## Plan\` comment, so resume that plan rather than
 drafting a new one. If it is empty, you were idle; say so.
 
+If you ever stop and wait on a person, say so where it is visible: write one line naming the
+decision to \`.claude/needs-input\` (gitignored) at the same moment you ask, and \`rm\` it once
+you have the answer. The agent panel puts a ❓ on your row when that file exists — the harness
+itself has no waiting-for-input state, so this is the only signal there is.
+
 Report with SendMessage to \`team-lead\`: your lane, your branch, and either the issue you
 are resuming or "no work in flight" — then stand by. **Your plain output is not visible to
 the lead** — a report you merely print is a report nobody receives, which is exactly how
