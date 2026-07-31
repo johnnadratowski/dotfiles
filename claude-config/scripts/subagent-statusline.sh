@@ -210,9 +210,17 @@ for t in tasks:
 
     parts = []
 
-    name = t.get("name") or t.get("label") or t.get("description") or ""
+    # IDENTITY. A teammate carries a real `name` (the lane). A subagent carries NONE — the
+    # harness sends only `description`/`label`, which is the task PROMPT, so falling back to it
+    # filled the row with "Full gate sweep on FEAT-6" where a name belongs. Prefer the name;
+    # otherwise say what KIND of task this is and let the summary carry the what.
+    name = t.get("name")
     if name:
         parts.append(str(name)[:18])
+    else:
+        kind = str(t.get("type") or "").replace("local_", "").replace("_", " ")
+        if kind:
+            parts.append(kind[:12])
 
     status = str(t.get("status") or "").strip()
     if status.lower() not in QUIET:
@@ -234,6 +242,13 @@ for t in tasks:
     todo = todo_for(t.get("cwd"))
     if todo:
         parts.append("▸ " + todo)
+
+    # For an unnamed task the description is the only thing that says what it IS, so it earns a
+    # short slot — but truncated hard, because it is a prompt and prompts are long.
+    if not name:
+        desc = str(t.get("description") or t.get("label") or "").strip()
+        if desc:
+            parts.append(desc[:34] + ("…" if len(desc) > 34 else ""))
 
     head = " ".join(parts)
 
