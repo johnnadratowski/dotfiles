@@ -257,10 +257,29 @@ EOF
 window_name_from_names() {
   [ "$#" -eq 0 ] && { printf ''; return; }
   [ "$#" -eq 1 ] && { printf '%s' "$1"; return; }
-  local n roles count
+  local n roles count durable
   roles="$(for n in "$@"; do _role_of "$n"; done | sort -u)"
+
+  # A WINDOW IS NAMED FOR WHO LIVES IN IT, NOT FOR WHO IS VISITING. `subagents` stacks a
+  # reviewer/tester under the pane that spawned it, so the lead's own window transiently holds
+  # {team-lead, review} — and the multi-role branch below renamed it `review-team-lead`, which
+  # is both wrong and unstable: it changes every time a review round starts and ends, so the
+  # window you learned to look for keeps moving. Task-scoped roles are dropped whenever a
+  # durable one is present; a window of ONLY subagents still names itself after them, since
+  # then there is nothing else to call it.
+  durable="$(printf '%s\n' "$roles" | grep -vxE 'review|test' || true)"
+  local residents
+  residents="$#"
+  if [ -n "$durable" ]; then
+    roles="$durable"
+    # Recount the AGENTS that survive the filter, not the names we were handed: a lead hosting
+    # two reviewers is one resident, and `_plural` would otherwise make its window `team-leads`.
+    residents="$(for n in "$@"; do _role_of "$n"; done | grep -vxE 'review|test' | grep -c .)"
+  fi
+
   count="$(printf '%s\n' "$roles" | grep -c .)"
-  if [ "$count" -eq 1 ]; then _plural "$roles"
+  if [ "$count" -eq 1 ]; then
+    if [ "$residents" -le 1 ]; then printf '%s' "$roles"; else _plural "$roles"; fi
   else printf '%s' "$roles" | tr '\n' '-' | sed 's/-$//'
   fi
 }
@@ -1172,6 +1191,49 @@ PY
 # 208-column window, since tmux keeps the surviving panes' geometry rather than reflowing.
 FL_LEAD_WIDTH_PCT="${WORKFLOW_LEAD_WIDTH_PCT:-60}"
 FL_LEAD_HEIGHT_PCT="${WORKFLOW_LEAD_HEIGHT_PCT:-65}"
+# _even_subagent_heights <lead-pane> — give every pane stacked under the lead an equal share.
+#
+# `join-pane -v` splits the TARGET, so each new subagent takes half of whatever the lead pane
+# has left — and the pane joined BEFORE it keeps whatever it had. With one subagent that is
+# fine; with two the earlier one was observed at ONE ROW TALL
+# (`124x41,0,0,1 124x1,0,42,102 124x20,0,44,101`), which is a pane you cannot read and cannot
+# tell apart from a rendering glitch. tmux will not rebalance on its own, and `select-layout`
+# is the wrong tool — it restructures the whole window, including the companion column.
+#
+# So: measure the column, subtract what the lead keeps and one row per divider, and divide the
+# rest evenly. The LAST pane is deliberately not resized — it absorbs the rounding remainder,
+# which is also what keeps the arithmetic from fighting tmux's own clamping.
+_even_subagent_heights() {  # <lead-pane>
+  local lead="$1" win col_left lead_top lead_h col_h avail n each i p
+  win="$(_win_of "$lead")"; [ -n "$win" ] || return 0
+  col_left="$(tmux display-message -p -t "$lead" '#{pane_left}' 2>/dev/null)"
+  lead_top="$(tmux display-message -p -t "$lead" '#{pane_top}'  2>/dev/null)"
+  lead_h="$(tmux display-message -p -t "$lead" '#{pane_height}' 2>/dev/null)"
+  case "$col_left$lead_top$lead_h" in ''|*[!0-9]*) return 0 ;; esac
+
+  # Panes sharing the lead's column and sitting below it, top to bottom.
+  local stack
+  stack="$(tmux list-panes -t "$win" -F '#{pane_top} #{pane_id} #{pane_left}' 2>/dev/null |
+           awk -v L="$col_left" -v T="$lead_top" '$3==L && $1>T {print $1, $2}' | sort -n | awk '{print $2}')"
+  [ -n "$stack" ] || return 0
+  n="$(printf '%s\n' "$stack" | wc -l | tr -d ' ')"
+  [ "$n" -ge 1 ] || return 0
+
+  col_h="$(tmux display-message -p -t "$win" '#{window_height}' 2>/dev/null)"
+  case "$col_h" in ''|*[!0-9]*) return 0 ;; esac
+  avail=$(( col_h - lead_h - n ))            # one divider row per pane below the lead
+  [ "$avail" -ge "$n" ] || return 0          # nothing sensible to distribute
+  each=$(( avail / n ))
+  [ "$each" -ge 1 ] || return 0
+
+  i=0
+  for p in $stack; do
+    i=$(( i + 1 ))
+    [ "$i" -lt "$n" ] || break               # last pane absorbs the remainder
+    _rw resize-pane -t "$p" -y "$each" 2>/dev/null || true
+  done
+}
+
 _normalize_agent_window() {  # <lead-pane>
   local p="$1" win w h
   win="$(_win_of "$p")"; [ -n "$win" ] || return 0
@@ -1392,6 +1454,7 @@ layout_subagents() {
 $rows
 EOF
   _normalize_agent_window "$target"
+  _even_subagent_heights "$target"
   echo "fleet-layout subagents: placed $n"
 }
 
