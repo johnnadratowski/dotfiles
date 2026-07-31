@@ -399,6 +399,37 @@ has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "se
 unset WORKFLOW_FLEET_LAYOUT_SH
 
 echo
+echo "alive_in — the function every kill is gated on, unstubbed"
+
+# ZERO COVERAGE until now: both lib() and bootlib() blanket-override alive_in, so replacing its
+# whole body with `return 1` left the suite 67/0 — while `down` gates every kill on it and
+# `boot` gates its double-boot refusal on it. Here it runs as shipped, against a real process
+# this suite owns, with only fleet_agent_in_dir (the _fleet.sh primitive that reaches into the
+# process table) stubbed.
+mkdir -p "$LANES/av-lane"
+AVP="$(cd "$LANES/av-lane" && pwd -P)"
+
+# The contract is a PHYSICAL path: lane_path is logical, and on macOS /var symlinks to
+# /private/var, so a lane resolved logically matches no process and every lookup silently
+# reports an empty lane.
+eq "resolves the lane to its physical path before matching" "$AVP" \
+   "$(env TEAM_BOOT_LIB=1 HOME="$FHOME" WORKFLOW_LANES_DIR="$LANES" bash -c '
+        . "'"$SCRIPT"'"; fleet_agent_in_dir() { printf %s "$1"; }; alive_in av-lane')"
+
+eq "a lane with nobody in it returns non-zero and prints nothing" "1:" \
+   "$(env TEAM_BOOT_LIB=1 HOME="$FHOME" WORKFLOW_LANES_DIR="$LANES" bash -c '
+        . "'"$SCRIPT"'"; fleet_agent_in_dir() { return 1; }
+        out="$(alive_in av-lane)"; printf "%s:%s" "$?" "$out"')"
+
+eq "a lane that does not exist is not-running, never an error" "1" \
+   "$(env TEAM_BOOT_LIB=1 HOME="$FHOME" WORKFLOW_LANES_DIR="$LANES" bash -c '
+        . "'"$SCRIPT"'"; fleet_agent_in_dir() { printf 999; }; alive_in no-such-lane >/dev/null 2>&1; echo $?')"
+
+eq "the pid comes back verbatim, so down kills what alive_in named" "4242" \
+   "$(env TEAM_BOOT_LIB=1 HOME="$FHOME" WORKFLOW_LANES_DIR="$LANES" bash -c '
+        . "'"$SCRIPT"'"; fleet_agent_in_dir() { printf 4242; }; alive_in av-lane')"
+
+echo
 echo "LANES_DIR — derived from the repo, never a hardcoded project"
 
 # This file ships in dotfiles and runs in every repo. It used to fall back to one product's

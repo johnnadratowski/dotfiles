@@ -453,6 +453,39 @@ run_hook "$CBH3" "$CBBARE" "$(payload startup)" sessionstart >/dev/null 2>&1
 ok "self-heal leaves a genuinely BARE repo core.bare=true untouched" '[ "$(git -C "$CBBARE" config --get core.bare)" = true ]'
 rm -rf "$CBH" "$CBR" "$CBH2" "$CBR2" "$CBH3" "$CBBARE"
 
+echo
+echo "== registry round-trip: the WRITER and its READER must agree on the token =="
+
+# THE MISSING ORACLE. Every row above checks entry NAMES (reg_ls) or compares a snapshot to
+# itself (reg_snapshot), so replacing the written token with a constant — `printf "WRONGTOKEN"`
+# — left the suite fully green. A uniformly wrong token compares equal to itself. Nothing
+# anywhere pinned that what register-agent.sh WRITES is what fleet_find_self READS, and that
+# token is the key mark-busy, fleet-layout attribution and every self-lookup depend on.
+RTH="$(mkH)"; RTR="$(mktemp -d)"; ( cd "$RTR" && git init -q . ) >/dev/null 2>&1
+mkdir -p "$RTR/.claude"; : > "$RTR/.claude/workflow.config"
+session_json "$RTH" round-trip
+run_hook "$RTH" "$RTR" "$(payload startup)" sessionstart >/dev/null 2>&1
+
+# The reader is the REAL one, run in the same environment the writer saw — that equality is the
+# whole contract, and it is invisible to any assertion made on filenames.
+found="$( cd "$RTR" && env -u TMUX -u TMUX_PANE HOME="$RTH" bash -c '
+    . "$HOME/../.claude/scripts/_fleet.sh" 2>/dev/null ||
+    . "'"$(cd "$(dirname "$0")/../scripts" && pwd)"'/_fleet.sh"
+    fleet_find_self "$HOME/.claude/running-agents" 2>/dev/null' )"
+ok "fleet_find_self recovers the name the hook registered" '[ -n "$found" ]'
+
+# And the value itself is the token the reader computes, not merely SOME stable string.
+tok_ok="$( cd "$RTR" && env -u TMUX -u TMUX_PANE HOME="$RTH" bash -c '
+    . "'"$(cd "$(dirname "$0")/../scripts" && pwd)"'/_fleet.sh"
+    want="$(fleet_self_token)"
+    for f in "$HOME"/.claude/running-agents/*; do
+      [ -f "$f" ] || continue
+      [ "$(cat "$f")" = "$want" ] && { echo match; exit 0; }
+    done
+    echo "MISMATCH want=$want"' )"
+ok "the entry holds exactly fleet_self_token's value" '[ "$tok_ok" = match ]'
+rm -rf "$RTH" "$RTR"
+
 # Orphaned settle sleepers from the scheduling tests (3600s) reference THIS hook path — and so
 # does every LIVE agent's pending settle job, because settings.json invokes the hook through
 # ~/.claude/hooks (a symlink into this directory) and both sides build the path with `cd … &&
