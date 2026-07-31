@@ -1,12 +1,6 @@
 {
   "$schema": "https://www.schemastore.org/claude-code-keybindings.json",
   "$docs": "https://code.claude.com/docs/en/keybindings",
-  "bindings": [
-    {
-      "context": "Scroll",
-      "bindings": {
-        "ctrl+e": "scroll:bottom"
-      }
-    }
-  ]
+  "$note": "No custom bindings. scroll:bottom is already Ctrl+End by default; ctrl+e was reclaimed for end-of-line. This file is kept as the symlinked scaffold for future overrides.",
+  "bindings": []
 }
