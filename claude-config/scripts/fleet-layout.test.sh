@@ -868,7 +868,7 @@ van_out="$(HOME="$VHOME" FLEET_TMUX_SOCKET="$SOCKET" FLEET_LAYOUT_LIB=1 bash -c 
     TMUX_PANE='%901'; fleet_tmux_ok() { return 0; }
     DRY_RUN=1; layout_subagents" 2>&1)"
 case "$van_out" in
-  *"not a registered fleet agent"*) pass=$((pass+1)); echo "  PASS: a non-fleet session is left alone" ;;
+  *"not a fleet agent"*) pass=$((pass+1)); echo "  PASS: a non-fleet session is left alone" ;;
   *) fail=$((fail+1)); printf '  FAIL: a non-fleet session is left alone\n        got: [%s]\n' "$van_out" ;;
 esac
 case "$van_out" in

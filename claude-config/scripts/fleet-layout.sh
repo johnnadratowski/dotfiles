@@ -1320,6 +1320,19 @@ $(_attr)
 EOF
 }
 
+# Is this pane standing in a lane? Process-first membership, for the case the registry misses.
+# Resolved through fleet_lanes_dir so no product path is named here; unresolvable means "no",
+# which keeps a session outside any fleet from qualifying.
+_pane_is_in_a_lane() {  # <pane-id>
+  local cwd lanes
+  cwd="$(_abs "$(tmux display-message -p -t "$1" '#{pane_current_path}' 2>/dev/null)")"
+  [ -n "$cwd" ] || return 1
+  command -v fleet_lanes_dir >/dev/null 2>&1 || return 1
+  lanes="$(_abs "$(fleet_lanes_dir 2>/dev/null || true)")"
+  [ -n "$lanes" ] || return 1
+  case "$cwd/" in "$lanes"/*/) return 0 ;; *) return 1 ;; esac
+}
+
 layout_subagents() {
   fleet_tmux_ok || { echo "fleet-layout subagents: not inside tmux — nothing to place" >&2; return 0; }
 
@@ -1331,12 +1344,18 @@ layout_subagents() {
   #
   # The discriminator is the registry: an agent that registered has an entry whose token matches
   # ours. No entry ⇒ this session is not part of a fleet ⇒ return before any mutation.
-  if ! fleet_find_self "$HOME/.claude/running-agents" >/dev/null 2>&1; then
-    echo "fleet-layout subagents: this session is not a registered fleet agent — leaving its panes alone"
+  local target="$TMUX_PANE" leadcwd rows n=0
+
+  # Membership is PROCESS-FIRST, with the registry as a hint — the same asymmetry team-boot.sh
+  # documents. The registry only holds agents whose SessionStart hook fired AND completed; the
+  # lead was observed missing from it while plainly being the lead, which made a registry-only
+  # test lock lane 0 out of placing its own subagents. Standing in a lane is the durable fact.
+  if ! fleet_find_self "$HOME/.claude/running-agents" >/dev/null 2>&1 &&
+     ! _pane_is_in_a_lane "$target"; then
+    echo "fleet-layout subagents: this session is not a fleet agent — leaving its panes alone"
     return 0
   fi
 
-  local target="$TMUX_PANE" leadcwd rows n=0
   leadcwd="$(_abs "$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null)")"
   rows="$(_subagent_panes "$leadcwd")" || true
 
