@@ -1288,12 +1288,31 @@ ensure_lead_window() {  # <lead-pane> [cwd]
 # spawned it — `subagents` owns that placement, and this verb must not compete for it. Observed:
 # without the filter, every reviewer got its own monocle companion and then its own window,
 # which is the exact arrangement the canonical spawn rule exists to prevent.
+#
+# AGENTS ALONE IN THEIR WINDOW ONLY. Everything this verb does is expressed as a share of the
+# WINDOW — the split, the count-based idempotency, the resize, and _seed_companion's "top-right
+# pane" — so in a window holding two agents (which is exactly what `wide` and `dual` build) all
+# of it aims at the wrong target: each agent demands 60% of the full width and 65% of the full
+# height and the last write wins, the companion count is satisfied by the OTHER agent's pane so
+# a cell that lost its own is never rebuilt, and the seed fires once per resident against one
+# shared pane. That is the same "percentage of the WINDOW, not of the cell" defect _balance_cell
+# already records as fixed once. Multi-agent windows are cells, and cells belong to build_cell +
+# _balance_cell, which do the arithmetic in absolute columns.
 ensure_agent_windows() {
-  local name token comps
+  local name token comps win others o_name o_tok
+  local agents; agents="$(live_agents)"
   while IFS="$TAB" read -r name token comps; do
     [ -n "$token" ] || continue
     case "$(_role_of "$name")" in feature|coordinator|lead|team-lead) ;; *) continue ;; esac
-    [ -n "$(_win_of "$token")" ] || continue     # a registry token whose pane is gone
+    win="$(_win_of "$token")"; [ -n "$win" ] || continue   # a registry token whose pane is gone
+    others=0
+    while IFS="$TAB" read -r o_name o_tok _c _r; do
+      [ -n "$o_tok" ] && [ "$o_tok" != "$token" ] && [ "$(_win_of "$o_tok")" = "$win" ] &&
+        others=$((others + 1))
+    done <<INNER
+$agents
+INNER
+    [ "$others" -eq 0 ] || continue
     _ensure_companion "$token" || continue
     _normalize_agent_window "$token"
   done <<EOF

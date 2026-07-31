@@ -12,9 +12,12 @@
 # lane, start the lead, and have the lead spawn teammates fresh. No work is lost,
 # because the work lives in the lane on disk, not in the team.
 #
-#   boot [--with-team [N]] [--fresh]  start the lead in lane 0 (tmux window of its own);
-#                           --with-team then asks the LEAD to staff N lanes (default: all of
-#                           them); --fresh starts a NEW conversation instead of resuming
+#   boot [--with-team [N]] [--fresh] [--debug]
+#                           start the lead in lane 0 (tmux window of its own); --with-team then
+#                           asks the LEAD to staff N lanes (default: all of them); --fresh starts
+#                           a NEW conversation instead of resuming; --debug passes --debug to
+#                           claude, so the harness prints why it skips things it was configured
+#                           to do
 #   spawn-prompt <lane>   print the exact prompt to hand the lead for one teammate
 #   status       what is actually alive, verified against processes not config
 #   down         stop every agent occupying a lane (idle-gated)
@@ -233,11 +236,12 @@ lane_has_transcript() {  # <lane-path>
 }
 
 cmd_boot() {
-  WITH_TEAM=""; WITH_TEAM_N=""; FRESH=""
+  WITH_TEAM=""; WITH_TEAM_N=""; FRESH=""; DEBUG=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --with-team) WITH_TEAM=1; case "${2:-}" in ""|-*) ;; *) WITH_TEAM_N="$2"; shift ;; esac ;;
       --fresh) FRESH=1 ;;
+      --debug) DEBUG=1 ;;
       *) die "unknown flag: $1" ;;
     esac; shift
   done
@@ -307,6 +311,10 @@ cmd_boot() {
   # --fresh is the deliberate opt-out: a context worth abandoning (wedged, poisoned, or simply
   # a new line of work) is a real state, and the alternative was deleting transcripts by hand.
   if [ -z "$FRESH" ] && lane_has_transcript "$p"; then launch="$launch --continue"; fi
+  # --debug makes the harness print its own reasoning to the pane — the only way to see WHY it
+  # declines to do something it was configured to do. Passed straight through rather than
+  # interpreted here: what it turns on is the harness's business, not this script's.
+  [ -n "$DEBUG" ] && launch="$launch --debug"
   [ -n "$reuse" ] && launch="cd $(printf '%q' "$p") && $launch"
 
   # WINDOW SHAPE BEFORE THE PROCESS. fleet-layout owns pane topology — this asks it to build the

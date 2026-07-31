@@ -345,6 +345,22 @@ err="$(bootlib "$EMPTY" 'cmd_boot --fresh --bogus' 2>&1 >/dev/null)"
 has "boot: --fresh does not swallow the next flag" "$err" "unknown flag: --bogus"
 
 echo
+echo "cmd_boot — --debug is passed through to the harness"
+
+# The one way to see WHY the harness declines something it was configured to do. Passed
+# through rather than interpreted: what it enables is the harness's business.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot --debug" >/dev/null 2>&1
+has "boot --debug: the flag reaches the launch line" "$(cat "$TMUXLOG")" "--debug"
+
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+hasnt "boot: …and only when asked for" "$(cat "$TMUXLOG")" "--debug"
+
+err="$(bootlib "$EMPTY" 'cmd_boot --debug --bogus' 2>&1 >/dev/null)"
+has "boot: --debug does not swallow the next flag" "$err" "unknown flag: --bogus"
+
+echo
 echo "cmd_boot — the lead's window is built before the lead starts"
 
 # The lead's window is not a cell, so build_cell never gave it a companion column and it came

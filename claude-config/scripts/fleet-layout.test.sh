@@ -820,6 +820,19 @@ lib "ensure_agent_windows" >/dev/null 2>&1
 eq "a review/test window is left alone" "$revbefore" \
    "$(t list-panes -t "$W_REV" -F x | wc -l | tr -d ' ')"
 
+# A SHARED window is a cell, and cells belong to build_cell/_balance_cell. Everything this verb
+# does is a share of the WINDOW, so applied to two agents in one window each demands 60% of the
+# full width and the last write wins — the "percentage of the WINDOW, not of the cell" defect
+# _balance_cell already records as fixed once.
+t new-window -d -t main -n wshared -c "$T/proj-2" 'sleep 600'
+SH1="$(t list-panes -t main:wshared -F '#{pane_id}' | head -1)"
+t join-pane -h -s "$P_I" -t "$SH1"          # x-3 now co-tenants this window
+W_SH="$(t list-panes -a -F '#{pane_id} #{window_id}' | awk -v p="$P_I" '$1==p{print $2}')"
+shbefore="$(t list-panes -t "$W_SH" -F x | wc -l | tr -d ' ')"
+lib "ensure_agent_windows" >/dev/null 2>&1
+eq "an agent sharing a window is left to build_cell" "$shbefore" \
+   "$(t list-panes -t "$W_SH" -F x | wc -l | tr -d ' ')"
+
 # A pane id that is not live is a caller error, not something to guess at: splitting "the
 # current window" would build the column in whatever window happened to be active.
 lib "ensure_lead_window '%99999'" >/dev/null 2>&1
