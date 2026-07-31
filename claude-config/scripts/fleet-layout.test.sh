@@ -212,7 +212,7 @@ printf '%s\n' "$T/proj" > "$FAKEHOME/.claude/agents/x-dead.cwd"
 # reaches the settle loop, which only waits on kills it actually attempted.
 # Reproduce the old bug with:  TMUX_PANE='%59' bash fleet-layout.test.sh
 export TMUX_PANE='%fl-test'
-lib(){ HOME="$FAKEHOME" FLEET_TMUX_SOCKET="$SOCKET" FLEET_LAYOUT_LIB=1 bash -c "source '$SCRIPT'; $*"; }
+lib(){ HOME="$FAKEHOME" FLEET_TMUX_SOCKET="$SOCKET" FLEET_LAYOUT_LIB=1 FAKE_SELF="${FAKE_SELF:-%901}" FAKE_SIB="${FAKE_SIB:-%902}" bash -c "source '$SCRIPT'; $*"; }
 run(){ HOME="$FAKEHOME" FLEET_TMUX_SOCKET="$SOCKET" bash "$SCRIPT" "$@"; }
 
 echo "fleet-layout.sh — socket=$SOCKET"
@@ -332,8 +332,17 @@ nocom(){ grep -vE '^[[:space:]]*#' "$SCRIPT"; }
 eq "kill-server never appears"                      "0" "$(nocom | grep -c 'kill-server')"
 eq "the only kill-window is the placeholder drop"   "1" "$(nocom | grep -c 'kill-window')"
 eq "the only kill-session is _teardown_ext's (via _rw)" "1" "$(nocom | grep -c 'kill-session')"
-# down never signals pids: the only `kill -` in the file is the kill -0 liveness probe.
-eq "no pid signal other than kill -0" "0" "$(nocom | grep -E 'kill +-' | grep -vc 'kill -0' | tail -1)"
+# This file signals NO pid. `down` and its kill -0 liveness probe moved to team-boot.sh, so the
+# absence is now total rather than "everything except the probe".
+#
+# The row it replaces could not fail: `grep -E 'kill +-' | grep -vc 'kill -0'` prints 0 when the
+# FIRST grep matches nothing, so it passed on a file with no `kill` in it — and equally on a
+# file where the thing it was protecting had been deleted. A bare `grep -c` cannot do that.
+eq "the file signals no pid at all" "0" "$(nocom | grep -cE 'kill +-')"
+#
+# All four rows above are SOURCE GREPS, and they catch a literal only: a mutation that builds
+# the verb from parts (`_k=kill; tmux "${_k}-server"`) passes every one of them. They are an
+# anti-copy-paste tripwire, not a safety property — the property itself is unpinned.
 # _teardown_ext must never destroy a session that still hosts an agent.
 eq "_teardown_ext refuses while a live agent's pane is in the external session" "refused" \
    "$(lib 'FL_HOME_SESSION=notmain; FL_EXT_SESSION=main
@@ -516,19 +525,15 @@ eq "_teardown_ext refuses when tmux answers nothing at all" "refused" \
            tmux(){ case "$1" in kill-session) echo KILLED;; *) return 1;; esac; }
            out=$(_teardown_ext 2>&1); case "$out" in *"not answering"*) echo refused;; *KILLED*) echo FAIL_OPEN;; *) echo "$out";; esac')"
 
-# The tty parse: iTerm returning a winid with NO tty must not pass the non-empty guard.
-eq "_spawn_ext_client rejects a winid with no tty" "rejected" \
-   "$(lib 'res="22361"
-           winid="${res%% *}"; wintty="${res##* }"
-           case "$res" in *" "*) : ;; *) wintty="" ;; esac
-           case "$wintty" in /dev/*) : ;; *) wintty="" ;; esac
-           [ -n "$winid" ] && [ -n "$wintty" ] && echo accepted || echo rejected')"
-eq "_spawn_ext_client accepts a real winid + tty" "accepted" \
-   "$(lib 'res="22361 /dev/ttys016"
-           winid="${res%% *}"; wintty="${res##* }"
-           case "$res" in *" "*) : ;; *) wintty="" ;; esac
-           case "$wintty" in /dev/*) : ;; *) wintty="" ;; esac
-           [ -n "$winid" ] && [ -n "$wintty" ] && echo accepted || echo rejected')"
+# The tty parse USED TO BE TESTED HERE, and was not: two rows re-implemented _spawn_ext_client's
+# parser inside the test body and asserted on that copy, so gutting the real validation left the
+# suite green. Deleted rather than left to look like coverage.
+#
+# The function is also structurally unreachable from this harness — _can_spawn requires
+# FLEET_TMUX_SOCKET to be EMPTY and every invocation here sets it — so testing it for real needs
+# either an extracted parser helper or a harness that can run without the scratch socket. Neither
+# is worth inventing for a parse that only runs when an iTerm window is being spawned; recorded
+# as a known gap instead of a fake row.
 
 # An empty pane enumeration must never read as "no agents here".
 eq "_teardown_ext fails CLOSED when it cannot enumerate the session" "refused" \
@@ -832,6 +837,22 @@ shbefore="$(t list-panes -t "$W_SH" -F x | wc -l | tr -d ' ')"
 lib "ensure_agent_windows" >/dev/null 2>&1
 eq "an agent sharing a window is left to build_cell" "$shbefore" \
    "$(t list-panes -t "$W_SH" -F x | wc -l | tr -d ' ')"
+
+# A SUBAGENT MUST NOT PLACE ITS SIBLINGS. Selection is by cwd and a subagent never leaves the
+# tree it was spawned in, so from one reviewer's pane its sibling matches the same test — and
+# the SubagentStart hook fires this verb in EVERY agent's pane. Observed live: `subagents
+# --dry-run` from a reviewer emitted `join-pane -v -s %62 -t %61`, %61 being that reviewer.
+sub_out="$(FLEET_SUBAGENT_ROWS_STUB=1 lib '
+  _subagent_panes() { printf "%s\t%s\t%s\n" "$FAKE_SELF" rev-a reviewer; printf "%s\t%s\t%s\n" "$FAKE_SIB" rev-b reviewer; }
+  TMUX_PANE="$FAKE_SELF"; fleet_tmux_ok() { return 0; }; layout_subagents' 2>&1)"
+case "$sub_out" in
+  *"itself a subagent"*) pass=$((pass+1)); echo "  PASS: a subagent declines to place its siblings" ;;
+  *) fail=$((fail+1)); printf '  FAIL: a subagent declines to place its siblings\n        got: [%s]\n' "$sub_out" ;;
+esac
+case "$sub_out" in
+  *join-pane*) fail=$((fail+1)); printf '  FAIL: …and proposes no join\n        got: [%s]\n' "$sub_out" ;;
+  *) pass=$((pass+1)); echo "  PASS: …and proposes no join" ;;
+esac
 
 # A pane id that is not live is a caller error, not something to guess at: splitting "the
 # current window" would build the column in whatever window happened to be active.

@@ -1325,6 +1325,20 @@ layout_subagents() {
   local target="$TMUX_PANE" leadcwd rows n=0
   leadcwd="$(_abs "$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null)")"
   rows="$(_subagent_panes "$leadcwd")" || true
+
+  # A SUBAGENT MUST NOT PLACE ITS SIBLINGS. Selection is by cwd, and a subagent never moves out
+  # of the tree it was spawned in — so from rev-a's pane, rev-b matches the same test and
+  # rev-a proposes stacking it under ITSELF. Observed: `subagents --dry-run` run from a
+  # reviewer's own pane emitted `join-pane -v -s %62 -t %61`, where %61 was that reviewer.
+  # The SubagentStart hook fires this in EVERY agent's pane, so the race was routine.
+  #
+  # The discriminator is our own pane appearing in the list: whoever is listed is a subagent,
+  # and its parent — the one pane in that window that is NOT listed — owns the placement.
+  if printf '%s\n' "$rows" | cut -f1 | grep -qxF "$target"; then
+    echo "fleet-layout subagents: this pane is itself a subagent — its parent places it"
+    return 0
+  fi
+
   if [ -z "$rows" ]; then
     echo "fleet-layout subagents: no live subagent panes to place"
     _normalize_agent_window "$target"       # sizing drifts with or without subagents
