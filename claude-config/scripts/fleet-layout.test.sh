@@ -842,6 +842,9 @@ eq "an agent sharing a window is left to build_cell" "$shbefore" \
 # tree it was spawned in, so from one reviewer's pane its sibling matches the same test — and
 # the SubagentStart hook fires this verb in EVERY agent's pane. Observed live: `subagents
 # --dry-run` from a reviewer emitted `join-pane -v -s %62 -t %61`, %61 being that reviewer.
+# Register the fake session, or the not-a-fleet-agent guard returns before the sibling check.
+mkdir -p "$FAKEHOME/.claude/running-agents"
+printf '%s\n' "%901" > "$FAKEHOME/.claude/running-agents/rev-a.999"
 sub_out="$(FLEET_SUBAGENT_ROWS_STUB=1 lib '
   _subagent_panes() { printf "%s\t%s\t%s\n" "$FAKE_SELF" rev-a reviewer; printf "%s\t%s\t%s\n" "$FAKE_SIB" rev-b reviewer; }
   TMUX_PANE="$FAKE_SELF"; fleet_tmux_ok() { return 0; }; layout_subagents' 2>&1)"
@@ -853,6 +856,31 @@ case "$sub_out" in
   *join-pane*) fail=$((fail+1)); printf '  FAIL: …and proposes no join\n        got: [%s]\n' "$sub_out" ;;
   *) pass=$((pass+1)); echo "  PASS: …and proposes no join" ;;
 esac
+
+# NOT A FLEET AGENT ⇒ TOUCH NOTHING. `subagents` is hook-driven: place-subagents.sh runs on
+# every SubagentStart in EVERY session on this machine. A plain claude in an unrelated repo,
+# in a tmux window of its own, used to reach the bottom of layout_subagents with nothing to
+# place and still have its pane resized to the fleet's proportions — and, via the dispatcher,
+# `renumber-windows` switched on GLOBALLY, reaching every session on the server.
+VHOME="$T/vanilla-home"; mkdir -p "$VHOME/.claude/running-agents"
+van_out="$(HOME="$VHOME" FLEET_TMUX_SOCKET="$SOCKET" FLEET_LAYOUT_LIB=1 bash -c "
+    source '$SCRIPT'
+    TMUX_PANE='%901'; fleet_tmux_ok() { return 0; }
+    DRY_RUN=1; layout_subagents" 2>&1)"
+case "$van_out" in
+  *"not a registered fleet agent"*) pass=$((pass+1)); echo "  PASS: a non-fleet session is left alone" ;;
+  *) fail=$((fail+1)); printf '  FAIL: a non-fleet session is left alone\n        got: [%s]\n' "$van_out" ;;
+esac
+case "$van_out" in
+  *resize-pane*|*join-pane*|*"set-option"*) fail=$((fail+1)); printf '  FAIL: …and no tmux mutation is proposed\n        got: [%s]\n' "$van_out" ;;
+  *) pass=$((pass+1)); echo "  PASS: …and no tmux mutation is proposed" ;;
+esac
+
+# The global -g options belong to the window-MOVING verbs only, never to the hook-driven one.
+eq "subagents proposes no global tmux option" "0" \
+   "$(HOME="$VHOME" run subagents --dry-run 2>&1 | grep -c ' -g ')"
+ok "…while a layout verb still sets them" \
+   '[ "$(run single --dry-run 2>&1 | grep -c " -g ")" -ge 2 ]'
 
 # A pane id that is not live is a caller error, not something to guess at: splitting "the
 # current window" would build the column in whatever window happened to be active.

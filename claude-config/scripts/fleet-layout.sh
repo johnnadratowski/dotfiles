@@ -1322,6 +1322,20 @@ EOF
 
 layout_subagents() {
   fleet_tmux_ok || { echo "fleet-layout subagents: not inside tmux — nothing to place" >&2; return 0; }
+
+  # NOT A FLEET AGENT ⇒ TOUCH NOTHING. This verb is hook-driven — `place-subagents.sh` runs on
+  # every SubagentStart in EVERY session on this machine, fleet or not. A plain claude in some
+  # unrelated repo, sitting in a tmux window of its own, would reach the bottom of this function
+  # with nothing to place and still get `_normalize_agent_window` resizing its pane to the
+  # fleet's proportions. Someone else's terminal is not ours to lay out.
+  #
+  # The discriminator is the registry: an agent that registered has an entry whose token matches
+  # ours. No entry ⇒ this session is not part of a fleet ⇒ return before any mutation.
+  if ! fleet_find_self "$HOME/.claude/running-agents" >/dev/null 2>&1; then
+    echo "fleet-layout subagents: this session is not a registered fleet agent — leaving its panes alone"
+    return 0
+  fi
+
   local target="$TMUX_PANE" leadcwd rows n=0
   leadcwd="$(_abs "$(tmux display-message -p -t "$target" '#{pane_current_path}' 2>/dev/null)")"
   rows="$(_subagent_panes "$leadcwd")" || true
@@ -1416,14 +1430,20 @@ fi
   echo "fleet-layout: home session ('$FL_HOME_SESSION') and external session ('$FL_EXT_SESSION') must both be set and differ" >&2
   exit 2; }
 
-if [ "$verb" != "name-windows" ]; then
-  # A window sizes to the clients actually viewing it. Without this, attaching the laptop
-  # alongside the double-wide clamps every window to the laptop's width.
-  _rw set-window-option -g aggressive-resize on
-  # Moving an agent's last pane out of its window destroys that window, leaving holes in the
-  # index (1, 5, 7, 8 …). Renumber automatically instead. (DX-jn-cc-002)
-  _rw set-option -g renumber-windows on
-fi
+# GLOBAL tmux options — `-g` reaches every session on the server, including the ones this
+# fleet has nothing to do with. Only the verbs that MOVE WINDOWS need them, and only those set
+# them. `subagents` is excluded because it is hook-driven (`place-subagents.sh`, on every
+# SubagentStart in every session): a plain claude in an unrelated tmux window would otherwise
+# have `renumber-windows` switched on globally the first time it spawned any subagent.
+case "$verb" in
+  single|dual|wide|attach|balance|reapply)
+    # A window sizes to the clients actually viewing it. Without this, attaching the laptop
+    # alongside the double-wide clamps every window to the laptop's width.
+    _rw set-window-option -g aggressive-resize on
+    # Moving an agent's last pane out of its window destroys that window, leaving holes in the
+    # index (1, 5, 7, 8 …). Renumber automatically instead. (DX-jn-cc-002)
+    _rw set-option -g renumber-windows on ;;
+esac
 
 case "$verb" in
   name-windows) name_windows ;;
