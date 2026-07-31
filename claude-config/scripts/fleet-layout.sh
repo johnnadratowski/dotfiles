@@ -1279,10 +1279,15 @@ ensure_lead_window() {  # <lead-pane> [cwd]
 # shape instead of drifting away from it.
 #
 # One agent's failure never stops the rest: a half-laid-out fleet is worse than a reported one.
+# LANE AGENTS ONLY. A reviewer or tester is task-scoped and belongs stacked under the pane that
+# spawned it — `subagents` owns that placement, and this verb must not compete for it. Observed:
+# without the filter, every reviewer got its own monocle companion and then its own window,
+# which is the exact arrangement the canonical spawn rule exists to prevent.
 ensure_agent_windows() {
   local name token comps
   while IFS="$TAB" read -r name token comps; do
     [ -n "$token" ] || continue
+    case "$(_role_of "$name")" in feature|coordinator|lead|team-lead) ;; *) continue ;; esac
     [ -n "$(_win_of "$token")" ] || continue     # a registry token whose pane is gone
     _ensure_companion "$token" || continue
     _normalize_agent_window "$token"

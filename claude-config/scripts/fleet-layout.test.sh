@@ -810,6 +810,16 @@ lib "ensure_agent_windows" >/dev/null 2>&1
 eq "re-running adds nothing — the shape converges" "$after" \
    "$(t list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
 
+# LANE AGENTS ONLY. A reviewer/tester is task-scoped and belongs stacked under the pane that
+# spawned it — `subagents` owns that placement. Without this filter every reviewer got its own
+# companion column and then its own window, the exact arrangement the canonical spawn rule
+# exists to prevent. Observed live on 2026-07-30 immediately after a staffing.
+W_REV="$(t list-panes -a -F '#{pane_id} #{window_id}' | awk -v p="$P_F" '$1==p{print $2}')"
+revbefore="$(t list-panes -t "$W_REV" -F x | wc -l | tr -d ' ')"
+lib "ensure_agent_windows" >/dev/null 2>&1
+eq "a review/test window is left alone" "$revbefore" \
+   "$(t list-panes -t "$W_REV" -F x | wc -l | tr -d ' ')"
+
 # A pane id that is not live is a caller error, not something to guess at: splitting "the
 # current window" would build the column in whatever window happened to be active.
 lib "ensure_lead_window '%99999'" >/dev/null 2>&1
