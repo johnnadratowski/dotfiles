@@ -107,6 +107,15 @@
       {
         "hooks": [
           {
+            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\" clear",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
             "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks on-stop --agent claude",
             "type": "command",
             "timeout": 3600

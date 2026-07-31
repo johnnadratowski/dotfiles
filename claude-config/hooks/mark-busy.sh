@@ -1,10 +1,28 @@
 #!/bin/bash
 # UserPromptSubmit + PreToolUse hook: mark this agent BUSY.
+# Stop hook, invoked as `mark-busy.sh clear`: mark it IDLE again.
 #
 # UserPromptSubmit marks the turn START; PreToolUse re-touches the marker on
 # every tool call so it stays FRESH through turns that never had a prompt
 # submit at all — background-task notifications and Stop-hook continuations
 # start turns without UserPromptSubmit, and were invisible to the idle-guard.
+# Stop marks the turn END by REMOVING the marker.
+#
+# The `clear` half arrived late, and its absence was a live bug rather than a
+# missing nicety. Nothing removed the marker between SessionStart and SessionEnd,
+# so the ONLY thing that ever made a finished agent read idle was fleet_busy's
+# 30-minute staleness window: for half an hour after finishing, an idle agent
+# looked busy to `down`, to fanout's skip lists, and to every status surface. And
+# `fleet_turn_open` — marker present, ANY age, the "may I type into this pane"
+# guard — was permanently TRUE for any agent that had ever run a turn, so its
+# keystroke path could never fire. The comment in _fleet.sh describing the healthy
+# state as "no marker between turns (Stop clears it)" documented an intent that no
+# hook implemented.
+#
+# It also makes a marker MEAN something it could not mean before: present but not
+# freshly touched = the turn opened and never closed with no tool activity since,
+# which is what an agent parked on a question, a permission prompt or a plan
+# approval looks like. fleet-status.sh renders that state as `waiting`.
 #
 # WHO READS THIS. `fleet_busy` (_fleet.sh), and through it:
 #   - team-boot.sh's `down` verb, which is IDLE-GATED — it refuses to stop an
@@ -62,8 +80,12 @@ else
   self_name="$(_find_self_inline "$reg" 2>/dev/null || true)"
 fi
 if [ -n "$self_name" ]; then
-  mkdir -p "$HOME/.claude/agent-busy"
-  : > "$HOME/.claude/agent-busy/$self_name"
+  if [ "${1:-}" = clear ]; then
+    rm -f "$HOME/.claude/agent-busy/$self_name" 2>/dev/null || true
+  else
+    mkdir -p "$HOME/.claude/agent-busy"
+    : > "$HOME/.claude/agent-busy/$self_name"
+  fi
 
   # KEEP THE CWD SIDECAR HONEST. register-agent.sh writes ~/.claude/agents/<name>.cwd ONCE, at
   # SessionStart — and a teammate boots in the LEAD's worktree and only moves itself afterwards
