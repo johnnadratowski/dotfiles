@@ -361,6 +361,48 @@ err="$(bootlib "$EMPTY" 'cmd_boot --debug --bogus' 2>&1 >/dev/null)"
 has "boot: --debug does not swallow the next flag" "$err" "unknown flag: --bogus"
 
 echo
+echo "cmd_boot — --session picks the fleet's tmux session, and creates it if absent"
+
+# boot used to `die` when the session was missing, which made it unusable as the FIRST thing
+# you run: a fresh terminal, or any session name that is not `main`, was a hard stop. Creating
+# it is what lets one fleet own one terminal window — `--session goals-b` on a second monitor
+# instead of two fleets interleaving windows in `main`.
+#
+# NOSESSION is the stub that distinguishes the two paths: `has-session` FAILS, everything else
+# behaves as before. The suite's default stub returns 0 for every subcommand, so under it
+# has-session always succeeds — which is why the other 70-odd cases never see this branch.
+NOSESSION='tmux() {
+  echo "tmux $*" >> "$TMUXLOG"
+  case "$*" in
+    has-session*)         return 1 ;;
+    new-window*)          echo "%99" ;;
+    *"#{session_name}"*)  echo "main" ;;
+    display-message*)     echo "%1"  ;;
+  esac
+  return 0
+}'
+
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$NOSESSION; $NOTMUX cmd_boot --session goals-b" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has "boot --session: the named session is the one probed"   "$log" "has-session -t goals-b"
+has "boot --session: an absent session is created detached" "$log" "new-session -d -s goals-b"
+
+# Idempotent: a session that exists is probed and left alone. Without this, booting into the
+# session you are already sitting in would try to create it every time.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot --session goals-b" >/dev/null 2>&1
+hasnt "boot --session: an existing session is NOT re-created" "$(cat "$TMUXLOG")" "new-session"
+
+# The default is unchanged when the flag is absent — this adds a choice, it does not move one.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$NOSESSION; $NOTMUX cmd_boot" >/dev/null 2>&1
+has "boot: without --session the default session is used" "$(cat "$TMUXLOG")" "has-session -t main"
+
+err="$(bootlib "$EMPTY" 'cmd_boot --session' 2>&1 >/dev/null)"
+has "boot: --session with no name is refused" "$err" "--session needs a name"
+
+echo
 echo "cmd_boot — the lead's window is built before the lead starts"
 
 # The lead's window is not a cell, so build_cell never gave it a companion column and it came

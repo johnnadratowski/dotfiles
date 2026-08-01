@@ -486,6 +486,66 @@ tok_ok="$( cd "$RTR" && env -u TMUX -u TMUX_PANE HOME="$RTH" bash -c '
 ok "the entry holds exactly fleet_self_token's value" '[ "$tok_ok" = match ]'
 rm -rf "$RTH" "$RTR"
 
+# ── role composition: engine preamble + role file + project overlay ──────────────────────
+#
+# The preamble exists so machine-level doctrine (tmux panes, lane placement, SendMessage
+# semantics) stops living in a product repo's CLAUDE.md. That only works if it is resolved
+# INDEPENDENTLY of which role file wins — a repo that ships its own agent-roles/<role>.md
+# beats the engine's copy of that file, and must still receive the preamble. Test 4 is the
+# one that would catch losing it.
+#
+# Hermetic: the engine dir is scratch, so these assert on the MECHANISM, not on whatever the
+# real agent-roles/ happens to contain today.
+echo "== 8. role composition =="
+mkengine(){ # -> path to a scratch engine root with hooks/ scripts/ agent-roles/
+  local e; e="$(mktemp -d)"; mkdir -p "$e/hooks" "$e/scripts" "$e/agent-roles"
+  cp "$HOOK" "$e/hooks/register-agent.sh"
+  cp "$REAL_FLEET" "$e/scripts/_fleet.sh" 2>/dev/null || true
+  cp "$REAL_LAYOUT" "$e/scripts/fleet-layout.sh" 2>/dev/null || true
+  printf '%s' "$e"
+}
+# Same as run_hook, but through a scratch engine copy of the hook.
+run_engine(){ # ENGINE HOME REPO
+  ( cd "$3" && env -u TMUX -u TMUX_PANE -u WORKFLOW_AGENT_SKIP_RENAME HOME="$2" PATH="$STUB:$PATH" \
+      WORKFLOW_AGENT_SETTLE_SECONDS=3600 bash "$1/hooks/register-agent.sh" sessionstart <<<"$(payload resume)" )
+}
+
+E="$(mkengine)"; H="$(newhome)"; R="$(newrepo)"
+printf 'COMMON-DOCTRINE\n'   > "$E/agent-roles/_common.md"
+printf 'LEAD-ONLY-DOCTRINE\n'> "$E/agent-roles/_common.team-lead.md"
+printf 'ENGINE-FEATURE-ROLE\n' > "$E/agent-roles/feature.md"
+OUT="$(run_engine "$E" "$H" "$R")"
+ok "_common.md reaches a feature agent"        'case "$OUT" in *COMMON-DOCTRINE*) true ;; *) false ;; esac'
+ok "the engine role file is used when the repo has none" \
+                                               'case "$OUT" in *ENGINE-FEATURE-ROLE*) true ;; *) false ;; esac'
+ok "a role-scoped preamble for ANOTHER role is not injected" \
+                                               'case "$OUT" in *LEAD-ONLY-DOCTRINE*) false ;; *) true ;; esac'
+
+# 4 — the regression the design must not have: a repo role file wins, preamble survives.
+mkdir -p "$R/.claude/agent-roles"; printf 'REPO-FEATURE-ROLE\n' > "$R/.claude/agent-roles/feature.md"
+OUT="$(run_engine "$E" "$H" "$R")"
+ok "a repo role file overrides the engine's copy" \
+                                               'case "$OUT" in *REPO-FEATURE-ROLE*) true ;; *) false ;; esac'
+ok "…and the engine preamble is STILL prepended to it" \
+                                               'case "$OUT" in *COMMON-DOCTRINE*) true ;; *) false ;; esac'
+ok "the overridden engine role file is not ALSO included" \
+                                               'case "$OUT" in *ENGINE-FEATURE-ROLE*) false ;; *) true ;; esac'
+
+# 5 — ordering: preamble, then role, then project overlay. Asserted as a single ordered
+# match, because three independent "is present" checks pass on any permutation.
+mkdir -p "$R/.claude/project/roles"; printf 'PROJECT-OVERLAY\n' > "$R/.claude/project/roles/feature.md"
+OUT="$(run_engine "$E" "$H" "$R")"
+ok "order is preamble -> role -> project overlay" \
+   'case "$OUT" in *COMMON-DOCTRINE*REPO-FEATURE-ROLE*PROJECT-OVERLAY*) true ;; *) false ;; esac'
+
+# 6 — an engine with no preamble files behaves exactly as it did before they existed.
+E2="$(mkengine)"; printf 'ENGINE-FEATURE-ROLE\n' > "$E2/agent-roles/feature.md"
+H2="$(newhome)"; R2="$(newrepo)"
+OUT="$(run_engine "$E2" "$H2" "$R2")"
+ok "no preamble files present -> the role still loads" \
+                                               'case "$OUT" in *ENGINE-FEATURE-ROLE*) true ;; *) false ;; esac'
+rm -rf "$E" "$E2"
+
 # Orphaned settle sleepers from the scheduling tests (3600s) reference THIS hook path — and so
 # does every LIVE agent's pending settle job, because settings.json invokes the hook through
 # ~/.claude/hooks (a symlink into this directory) and both sides build the path with `cd … &&

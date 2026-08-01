@@ -12,12 +12,15 @@
 # lane, start the lead, and have the lead spawn teammates fresh. No work is lost,
 # because the work lives in the lane on disk, not in the team.
 #
-#   boot [--with-team [N]] [--fresh] [--debug]
+#   boot [--with-team [N]] [--fresh] [--debug] [--session NAME]
 #                           start the lead in lane 0 (tmux window of its own); --with-team then
 #                           asks the LEAD to staff N lanes (default: all of them); --fresh starts
 #                           a NEW conversation instead of resuming; --debug passes --debug to
 #                           claude, so the harness prints why it skips things it was configured
-#                           to do
+#                           to do; --session picks (and CREATES if absent) the tmux session
+#                           the fleet lives in, so two fleets can occupy two terminal windows
+#                           instead of interleaving windows in one. Default: $WORKFLOW_FLEET_SESSION,
+#                           else `main`.
 #   spawn-prompt <lane>   print the exact prompt to hand the lead for one teammate
 #   status       what is actually alive, verified against processes not config
 #   down         stop every agent occupying a lane (idle-gated)
@@ -242,6 +245,11 @@ cmd_boot() {
       --with-team) WITH_TEAM=1; case "${2:-}" in ""|-*) ;; *) WITH_TEAM_N="$2"; shift ;; esac ;;
       --fresh) FRESH=1 ;;
       --debug) DEBUG=1 ;;
+      # Which tmux session the fleet lives in. One fleet per session means one terminal
+      # window per fleet — a second `boot --session goals-b` gives a wholly separate set of
+      # windows you can put on another monitor, instead of both fleets interleaving their
+      # windows in `main`.
+      --session) SESSION="${2:-}"; [ -n "$SESSION" ] || die "--session needs a name"; shift ;;
       *) die "unknown flag: $1" ;;
     esac; shift
   done
@@ -252,7 +260,22 @@ cmd_boot() {
     die "lead already running in $LEAD_LANE (pid $pid) — nothing to boot"
   fi
   command -v tmux >/dev/null 2>&1 || die "tmux required"
-  tmux has-session -t "$SESSION" 2>/dev/null || die "tmux session '$SESSION' not found"
+  # CREATE THE SESSION IF IT IS NOT THERE, rather than refusing.
+  #
+  # This used to `die "tmux session not found"`, which made `boot` unusable as the FIRST
+  # thing you run: the only way to get a fleet was to already have a tmux session named
+  # `main`, so a fresh terminal — or any session name that is not the default — was a hard
+  # stop with a message that told you nothing about how to fix it.
+  #
+  # Detached (`new-session -d`), because boot may be running from inside tmux already; the
+  # caller attaches (or switches) when it wants to look. Creating it is idempotent — the
+  # has-session check short-circuits whenever the session is there, including the common
+  # case of booting into the session you are sitting in.
+  if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    tmux new-session -d -s "$SESSION" 2>/dev/null ||
+      die "could not create tmux session '$SESSION'"
+    echo "created tmux session '$SESSION'"
+  fi
 
   # WHERE THE LEAD LANDS — a pane id, never a window NAME.
   #
@@ -498,6 +521,7 @@ case "${1:-status}" in
   *) cat >&2 <<EOF
 usage: team-boot.sh <verb>
   status                 what is alive, verified by process cwd (not team config)
+  boot [--session NAME]  start the lead; the tmux session is created if it does not exist
   boot [--with-team [N]] start the lead in lane 0. --with-team then ASKS THE LEAD to spawn
                          teammates (N lanes, default all) — the lead must do the spawning or
                          they are unaddressable

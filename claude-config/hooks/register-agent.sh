@@ -478,10 +478,33 @@ if [ "$source" = "sessionstart" ]; then
   [ -z "$role" ] && role="$(resolve_role "$name")"
   # Repo-rooted, not script-relative -- see the note at config_loader above.
   _rr="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "$PWD")}"
+  _engine_roles="$(cd "$(dirname "$0")/../agent-roles" 2>/dev/null && pwd)"
   role_file="$_rr/.claude/agent-roles/$role.md"
-  [ -r "$role_file" ] || role_file="$(cd "$(dirname "$0")/../agent-roles" 2>/dev/null && pwd)/$role.md"
+  [ -r "$role_file" ] || role_file="$_engine_roles/$role.md"
   if [ -f "$role_file" ]; then
-    role_context="$(cat "$role_file")"
+    # ENGINE PREAMBLE, ahead of the repo's own role text. `_common.md` is doctrine every
+    # agent needs (where a spawned agent lands, what SendMessage's success means);
+    # `_common.<role>.md` is doctrine only one role needs (fleet ops, for the lead). Both
+    # live with the ENGINE, never in a consuming repo, because they describe this machine's
+    # tmux/lane setup rather than any product — that is the whole reason they exist: they
+    # were 18% of one project's CLAUDE.md, loaded into every session of a repo whose other
+    # engineers have no tmux fleet at all.
+    #
+    # Prepended rather than appended, and resolved INDEPENDENTLY of which role file won: a
+    # repo that ships its own agent-roles/<role>.md beats the engine's copy of THAT file, and
+    # must still get the preamble. Missing files are simply skipped, so an engine without
+    # them behaves exactly as before.
+    role_context=""
+    for _pre in "$_engine_roles/_common.md" "$_engine_roles/_common.$role.md"; do
+      [ -n "$_engine_roles" ] && [ -f "$_pre" ] || continue
+      role_context="${role_context:+$role_context
+
+}$(cat "$_pre")"
+      log "prepended engine role preamble: $_pre"
+    done
+    role_context="${role_context:+$role_context
+
+}$(cat "$role_file")"
     log "loaded role context: role=$role file=$role_file"
     # Project overlay: a repo may customize the generic base role with project-specific
     # content at .claude/project/roles/<role>.md — appended when present, absent ⇒ just the
