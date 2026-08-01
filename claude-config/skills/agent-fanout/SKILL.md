@@ -1,6 +1,6 @@
 ---
 name: agent-fanout
-description: Inspect and manage the agent fleet's live processes — show fleet status (incl. per-agent context usage), force-restart idle agents (kill the pane's claude, relaunch with `claude --continue`), and inject `/compact` into agents that are filling up. Backed by `~/.claude/scripts/agent-fanout.sh` (one allow-listed command per action). Messaging is NOT here — a lead addresses a teammate with native `SendMessage`. High blast-radius; every restart and compact is confirmed first. Use for "show me the fleet", "restart feature-2", "compact the full agents".
+description: Inspect and manage the fleet's live processes: status with per-agent context usage, force-restart idle agents, inject /compact into agents filling up. Messaging is NOT here — use native SendMessage. High blast-radius; every action is confirmed. Use for "show me the fleet", "restart feature-2", "compact the full agents".
 ---
 
 # agent-fanout — fleet process management

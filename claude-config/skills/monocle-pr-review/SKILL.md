@@ -1,6 +1,6 @@
 ---
 name: monocle-pr-review
-description: Review a GitHub PR locally in Monocle — check out the PR, show its diff natively, surface the PR's own inline review comments as annotations on the exact code they reference, add the agent's own annotations linking non-obvious ranges to the repo's docs, then block on the reviewer's verdict. Use when the user says "review this PR in monocle", "monocle review PR <n>", or "pull PR <url> into monocle".
+description: Review a GitHub PR in the Monocle human-review engine. Use for "review PR <n> in monocle".
 ---
 
 # monocle-pr-review — review a GitHub PR in Monocle

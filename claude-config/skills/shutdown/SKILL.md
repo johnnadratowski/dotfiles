@@ -1,6 +1,6 @@
 ---
 name: shutdown
-description: Shut agents down cleanly and in order — ask each teammate to stop itself via the native shutdown_request protocol (so IT decides when its work is safe), verify each one actually died, then, only when shutting down everything, the lead closes its own companion panes and exits last, leaving its tmux window alive at a shell. Takes targets, so one agent can be stopped without touching the fleet. Use for "shut down the fleet", "stop feature-2", "close all the agents", "kill the fleet".
+description: Stop fleet agents in order — teammates first, lead last — via the native shutdown_request protocol, verifying death by process rather than trusting the send. Takes targets, so one agent cycles alone. Use for "shut down the fleet", "stop feature-3".
 ---
 
 # shutdown — stop the fleet in order, without orphans

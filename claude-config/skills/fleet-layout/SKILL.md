@@ -1,6 +1,6 @@
 ---
 name: fleet-layout
-description: Rearrange the agent fleet's tmux panes for the monitors you have, (re)label every tmux window from its resident agents, and restack a lead's subagent panes so they are readable. Three layout modes — `wide` (ultra-wide: all 4 feature agents in one 2x2 window), `dual` (ordinary 2nd monitor: 2 agents per window, two windows), `single` (laptop: one window per agent) — plus `subagents` (restack a lead's reviewer/tester panes beneath its own pane). Starting and stopping agents lives in `team-boot.sh`, not here. Use when the user says "switch to my double-wide", "I'm on one monitor now", "put the agents on the second screen", "fix the tab names", "relayout the fleet", "my subagent panes are unreadable", "move the subagents". Every verb here restructures only — it never kills a pane, never starts or stops an agent.
+description: Rearrange the fleet's tmux panes for the monitors you have, relabel windows from their resident agents, and restack a lead's subagent panes. Modes: wide, dual, single, plus subagents. Restructures only — never starts or stops an agent. Use for "relayout the fleet", "I'm on one monitor now", "fix the tab names", "my subagent panes are unreadable".
 ---
 
 # fleet-layout — retopologize the fleet for the monitors you have
