@@ -1,3 +1,8 @@
+---
+name: monocle-review
+description: Send a diff or plan to the Monocle human-review engine and BLOCK on the verdict, attaching the issue and its plan as stable-id artifacts so re-sends update in place. Only when the engine is live for this repo. Use for "/monocle-review plan <ID>", "/monocle-review diff <ID>", "send this to monocle", and the Monocle option at the /todo review gates.
+---
+
 # monocle-review — opt-in Monocle review at the user-review gates
 
 Offer to send a review to Monocle **when (and only when) the Monocle engine is live
