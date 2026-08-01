@@ -70,7 +70,13 @@ busy_old(){ : > "$FAKEHOME/.claude/agent-busy/$1"; touch -t 202601010000 "$FAKEH
 # --once on EVERY invocation: watch is the default now, and a test that omits it hangs the
 # suite forever rather than failing. (It did, once — that is why this line says why.)
 run(){ HOME="$FAKEHOME" COLUMNS="${COLUMNS:-160}" bash "$SCRIPT" --once --lanes-dir "$LANES" "$@" </dev/null 2>&1; }
-row(){ run | grep -E "^ +. +$1 " ; }
+# A row is now MULTI-LINE: the agent line plus its indented 📌 / ❓ continuations. grep for
+# the name, then take every following indented continuation until the next agent line.
+row(){ run | awk -v n="$1" '
+  $0 ~ ("^ +[^ ]+ +" n " ") {show=1; print; next}
+  show && /^      / {print; next}
+  show {show=0}
+'; }
 
 echo "fleet-status.sh"
 
@@ -82,8 +88,8 @@ lane delta                # lane on disk, nothing occupying it
 lane echo_;  dead echo_
 
 has "a freshly-touched marker reads busy"                       " busy "    "$(row alpha)"
-has "an old marker reads waiting, NOT busy (fleet_busy would say busy for 30m)" \
-                                                                " waiting " "$(row bravo)"
+has "an old marker reads quiet, NOT busy (fleet_busy would say busy for 30m)" \
+                                                                " quiet " "$(row bravo)"
 has "no marker reads idle"                                      " idle "    "$(row chas)"
 has "a lane with no live registration reads down"               " down "    "$(row delta)"
 has "a dead pid does not count as live"                         " down "    "$(row echo_)"
@@ -93,7 +99,7 @@ eq  "down rows show no context or uptime" "- -" \
 # ── the header tally ─────────────────────────────────────────────────────────────────────
 has "header counts live lanes"       "3/5 lanes up"      "$(run | head -1)"
 has "header counts busy lanes"       "1 busy"            "$(run | head -1)"
-has "header counts who wants you"    "1 waiting on you"  "$(run | head -1)"
+hasnt "a stale busy marker does NOT wear a question mark" "needs you" "$(run | head -1)"
 
 # ── facts read off the lane ──────────────────────────────────────────────────────────────
 printf 'FEAT-42\thttps://example.invalid/FEAT-42\n# a comment\nresume prose that is not an id\n' \
@@ -119,19 +125,22 @@ has "a 📌 pushed past the first 512KB tail is still found" "BURIED summary" "$
 # ── needs-input outranks the summary ─────────────────────────────────────────────────────
 printf 'park FEAT-6 or rerun once #111 lands?\n' > "$LANES/alpha/.claude/needs-input"
 has "needs-input is shown"                   "park FEAT-6"   "$(row alpha)"
-hasnt "needs-input displaces the summary"    "LAST summary"  "$(row alpha)"
-has "a lane that wrote needs-input counts as waiting on you" "2 waiting on you" "$(run | head -1)"
+has "the summary is still shown alongside the question" "LAST summary" "$(row alpha)"
+has "only an explicit needs-input counts as needing you" "❓ 1 needs you" "$(run | head -1)"
 
 # ── alignment ────────────────────────────────────────────────────────────────────────────
 # ❓ is two cells wide where len() counts one; if that is not accounted for, the rows whose
 # icon is ❓ skew one column against the rest.
-widths="$(run | tail -n +2 | python3 -c '
-import sys
+widths="$(run | python3 -c '
+import sys, re
+# NOT the geometric shapes (U+25CB/CF/D4 — ○ ● ◔): terminals render those single-width,
+# and inventing a wide range for them made this probe disagree with a correctly aligned
+# table. Only true wide/emoji ranges belong here.
 W=[(0x1F300,0x1F64F),(0x2753,0x2755),(0x1F900,0x1F9FF)]
 def w(s): return sum(2 if any(a<=ord(c)<=b for a,b in W) else 1 for c in s)
-# column of the state word: everything up to and including the name field
-print(len({w(l.split(" busy")[0].split(" idle")[0].split(" waiting")[0].split(" down")[0])
-           for l in sys.stdin if l.strip()}))')"
+# agent lines only: two leading spaces, an icon, the name, then a state word.
+rows=[l for l in sys.stdin if re.match(r"^  \S+ +\S+ +(busy|idle|quiet|down) ", l)]
+print(len({w(re.split(r" (busy|idle|quiet|down) ", l)[0]) for l in rows}) if rows else 0)')"
 eq "every row puts its state column at the same cell" "1" "$widths"
 
 # ── subagents: live agents that occupy no lane ───────────────────────────────────────────

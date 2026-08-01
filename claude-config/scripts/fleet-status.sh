@@ -79,14 +79,16 @@ is_alive() {  # pid token — canonical predicate when sourced, plain pid check 
 #                                                                       a plan approval)
 #
 # FLEET_BUSY_FRESH_SEC bounds "recently". It is a display threshold, so it fails toward
-# `waiting` — the state that draws the eye — rather than toward a confident `idle`.
+# `quiet` rather than toward a confident `idle`. It is deliberately NOT rendered as ❓: a
+# stale marker is a guess about an agent, and two lanes wore a question mark for hours with
+# nothing to answer. Only an agent's own .claude/needs-input earns that marker.
 agent_state() {  # name
   local m="$HOME/.claude/agent-busy/$1"
   [ -f "$m" ] || { echo idle; return; }
   if [ -n "$(find "$m" -newermt "-${FLEET_BUSY_FRESH_SEC:-120} seconds" 2>/dev/null)" ]; then
     echo busy
   else
-    echo waiting
+    echo quiet
   fi
 }
 
@@ -96,7 +98,35 @@ resolve_lanes_dir() {
   fleet_lanes_dir 2>/dev/null
 }
 
-# Emit one TAB-separated record per lane: name, path, state, uptime.
+# parent_session_for <cwd> — the transcript belonging to the agent that OWNS this cwd.
+#
+# Why this is needed at all: a subagent runs in its spawner's cwd, so a cwd can host several
+# live sessions and "newest .jsonl in the project dir" picks whichever wrote last. That made
+# the lead's context read 56% while its own status line said 70% — it was reporting a
+# REVIEWER's context under the lead's name.
+#
+# The exact key is in the subagent's argv: `--parent-session-id <uuid>`, and that uuid IS the
+# parent's transcript filename. So any subagent in this cwd names its parent for us. With no
+# subagents there is no ambiguity to resolve and the caller's newest-file rule is right.
+parent_session_for() {  # <cwd>
+  local reg="$HOME/.claude/running-agents" f bn pid cwd cand
+  for f in "$reg"/*; do
+    [ -f "$f" ] || continue
+    bn="$(basename "$f")"; pid="${bn##*.}"
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    kill -0 "$pid" 2>/dev/null || continue
+    cwd="$(cat "$HOME/.claude/agents/${bn%.*}.cwd" 2>/dev/null)"
+    [ "$cwd" = "$1" ] || continue
+    cand="$(ps -o command= -p "$pid" 2>/dev/null | tr ' ' '\n' |
+            grep -A1 -x -- '--parent-session-id' | tail -1)"
+    case "$cand" in
+      [0-9a-f]*-*) printf '%s' "$cand"; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Emit one TAB-separated record per lane: name, path, state, uptime, kind, session.
 # Everything else is read from the lane's own files by the renderer.
 collect() {
   local dir="$1" registry="$HOME/.claude/running-agents" p name f bn pid token state up
@@ -116,7 +146,7 @@ collect() {
         break
       fi
     done
-    printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$p" "$state" "$up" "lane"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$p" "$state" "$up" "lane" "$(parent_session_for "$p" 2>/dev/null || true)"
   done
 
   # EVERY OTHER LIVE AGENT — reviewers, testers, planners. They occupy no lane (they run in
@@ -135,7 +165,7 @@ collect() {
     seen="${seen:-} $name"
     p="$(cat "$HOME/.claude/agents/$name.cwd" 2>/dev/null)"
     up="$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ')"
-    printf '%s\t%s\t%s\t%s\t%s\n' "$name" "${p:-}" "$(agent_state "$name")" "$up" "subagent"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "${p:-}" "$(agent_state "$name")" "$up" "subagent" ""
   done
 }
 

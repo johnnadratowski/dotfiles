@@ -10,6 +10,7 @@ stdout  aligned table, or one JSON object per lane under FLEET_JSON=1
 
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +18,7 @@ from _agent_facts import (  # noqa: E402
     MARK, context_for, fmt_secs, needs_input, summary_for, todo_for,
 )
 
-STATE_ICON = {"busy": "●", "waiting": "❓", "idle": "○", "down": "·"}
+STATE_ICON = {"busy": "●", "quiet": "◔", "idle": "○", "down": "·"}
 
 # Emoji occupy two terminal cells while len() counts them as one, so a column padded with
 # %-*s containing ❓ lands one cell right of its neighbours and the whole table skews. These
@@ -66,6 +67,15 @@ def rows():
             continue
         name, path, state, up = f[0], f[1], f[2], f[3]
         kind = f[4] if len(f) > 4 else "lane"
+        session = f[5] if len(f) > 5 else ""
+        # An exact transcript beats "newest file in the project dir" whenever a cwd hosts more
+        # than one live session — see parent_session_for in fleet-status.sh.
+        tpath = ""
+        if session and path:
+            cand = os.path.join(os.path.expanduser("~/.claude/projects"),
+                                re.sub(r"[^A-Za-z0-9]", "-", path), session + ".jsonl")
+            if os.path.exists(cand):
+                tpath = cand
 
         # A SUBAGENT SHARES ITS SPAWNER'S cwd, and every per-cwd fact would therefore be its
         # spawner's. Reporting the lead's context and the lead's summary on a reviewer's row
@@ -78,7 +88,7 @@ def rows():
                    "issue": "", "needs_input": "", "summary": ""}
             continue
 
-        used, win = context_for(path)
+        used, win = context_for(path, tpath or None)
         yield {
             "name": name,
             "path": path,
@@ -86,10 +96,15 @@ def rows():
             "uptime": fmt_uptime(up),
             "kind": kind,
             "tokens": used,
-            "context_pct": round(100 * used / win) if used and win else None,
+            # Percent of the USABLE window (80% of max — the auto-compact threshold), which
+            # is what ccstatusline's context widget and every other surface here report.
+            # Dividing by the full window instead read 57% where the agent's own status line
+            # said 70%, and a number that disagrees with the one beside it is worse than no
+            # number: you cannot tell which lied.
+            "context_pct": round(100 * used / (win * 0.8)) if used and win else None,
             "issue": todo_for(path),
             "needs_input": needs_input(path),
-            "summary": summary_for(path),
+            "summary": summary_for(path, tpath or None),
         }
 
 
@@ -110,14 +125,17 @@ def main():
     subs = [r for r in data if r.get("kind") == "subagent"]
     live = sum(1 for r in lanes if r["state"] != "down")
     busy = sum(1 for r in data if r["state"] == "busy")
-    # Two independent ways an agent says it needs you: it wrote the reason down, or its turn
-    # is open with nothing happening. Counted once either way.
-    ask = [r for r in data if r["needs_input"] or r["state"] == "waiting"]
+
+    # ❓ MEANS "THIS AGENT ASKED YOU SOMETHING", AND NOTHING ELSE. It used to also mean
+    # `quiet` — turn open, no tool activity — which is a guess about an agent, not a request
+    # from one. Two lanes wore a question mark for hours with nothing to answer, which is how
+    # an attention marker stops being worth looking at.
+    ask = [r for r in data if r["needs_input"]]
     head = "FLEET  %d/%d lanes up  %d busy" % (live, len(lanes), busy)
     if subs:
         head += "  %d subagent%s" % (len(subs), "" if len(subs) == 1 else "s")
     if ask:
-        head += "  ❓ %d waiting on you" % len(ask)
+        head += "  ❓ %d needs you" % len(ask)
     # The clock is what tells you the view is live rather than a frozen pane you left open.
     head += "  ·  " + os.environ.get("FLEET_NOW", "")
     sys.stdout.write(head.rstrip() + "\n")
@@ -127,7 +145,15 @@ def main():
         return
 
     wn = max(len(r["name"]) for r in data)
-    wi = max([len(r["issue"]) for r in data] + [1])
+
+    def wrap(text, indent):
+        """One line, hard-truncated. The second line owns the full width, so a summary is
+        readable here in a way it never was when it had to share a row with six columns."""
+        room = cols - indent - 1
+        if room < 12:
+            return ""
+        return " " * indent + (text if dwidth(text) <= room else text[:room - 1] + "…")
+
     for r in data:
         pct = "%d%%" % r["context_pct"] if r["context_pct"] is not None else "-"
         # A lane that is down has no live context or uptime; showing the last known values
@@ -136,24 +162,28 @@ def main():
             pct, up = "-", "-"
         else:
             up = r["uptime"] or "-"
+        icon = "❓" if r["needs_input"] else STATE_ICON.get(r["state"], "?")
         # Subagents are guests of whoever spawned them, so they are indented rather than
         # listed as peers of the lanes.
-        lead_in = "   └ " if r.get("kind") == "subagent" else "  "
-        left = lead_in + pad(STATE_ICON.get(r["state"], "?"), 2) + " " + \
-            pad(r["name"], wn) + "  " + pad(r["state"], 7) + " " + \
-            pad(pct, 4, right=True) + " " + pad(up, 6, right=True) + "  " + \
-            pad(r["issue"] or "-", wi)
-        room = cols - dwidth(left) - 3
-        tail = ""
-        # A question outranks the summary for the leftover width: one is addressed to you,
-        # the other is background.
-        if r["needs_input"] and room >= 12:
-            q = r["needs_input"]
-            tail = "  ❓ " + (q if len(q) <= room else q[:room - 1] + "…")
-        elif r["summary"] and room >= 20:
-            s = r["summary"]
-            tail = "  " + MARK + " " + (s if len(s) <= room else s[:room - 1] + "…")
-        sys.stdout.write((left + tail).rstrip() + "\n")
+        sub = r.get("kind") == "subagent"
+        lead_in = "   └ " if sub else "  "
+        line = lead_in + pad(icon, 2) + " " + pad(r["name"], wn) + "  " + \
+            pad(r["state"], 7) + " " + pad(pct, 5, right=True) + " " + \
+            pad(up, 7, right=True)
+        if not sub:
+            line += "  ▸ " + (r["issue"] or "—")
+        sys.stdout.write(line.rstrip() + "\n")
+
+        # SECOND LINE: what it is actually doing. A question outranks the summary — one is
+        # addressed to you, the other is background — and both are shown when both exist.
+        if r["needs_input"]:
+            out = wrap("❓ " + r["needs_input"], 6)
+            if out:
+                sys.stdout.write(out + "\n")
+        if r["summary"]:
+            out = wrap(MARK + " " + r["summary"], 6)
+            if out:
+                sys.stdout.write(out + "\n")
 
 
 if __name__ == "__main__":
