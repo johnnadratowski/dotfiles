@@ -155,6 +155,11 @@ def main():
         return " " * indent + (text if dwidth(text) <= room else text[:room - 1] + "…")
 
     for r in data:
+        # A BLANK LINE BEFORE EVERY BLOCK, including the first. Each agent now owns two or
+        # three lines, so without a separator the table reads as one wall of text and the eye
+        # cannot tell where one agent ends and the next begins. Leading rather than trailing,
+        # so the pane never ends on empty space.
+        sys.stdout.write("\n")
         pct = "%d%%" % r["context_pct"] if r["context_pct"] is not None else "-"
         # A lane that is down has no live context or uptime; showing the last known values
         # would read as current.
