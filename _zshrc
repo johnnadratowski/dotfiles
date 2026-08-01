@@ -87,11 +87,37 @@ if [[ $OSTYPE == 'darwin'* ]]; then
   fi
 fi
 
-if [[ "$TMUX" = "" && "$SSH_CLIENT" == "" && "$SSH_TTY" == "" ]]; then 
+# Auto-attach a fresh terminal to tmux.
+#
+# THE SESSION NAME IS A VARIABLE, not a constant. It used to be a hardcoded `main`, which
+# meant every iTerm window you opened attached to the SAME session: the second window
+# mirrored the first, both fought over which tmux window was active, and the size of both
+# was clamped to the smaller terminal. That is one session viewed twice, not two workspaces.
+#
+# Set TMUX_SESSION in an iTerm profile (Profiles -> General -> Send text at start, or an
+# environment variable) to give that profile its own workspace — e.g. a `goals-b` profile on
+# the second monitor running a separate fleet. Unset, the behaviour is exactly as before.
+#
+# `-A` still means attach-if-exists, so reopening a window rejoins its own session rather
+# than piling up duplicates.
+if [[ "$TMUX" = "" && "$SSH_CLIENT" == "" && "$SSH_TTY" == "" ]]; then
 	if command -v tmux &>/dev/null; then
-		exec tmux -2 new-session -A -s main
+		exec tmux -2 new-session -A -s "${TMUX_SESSION:-main}"
 	fi
 fi
+
+# t [name] — jump to a tmux session by name, creating it if absent. From outside tmux it
+# attaches; from inside it switches the current client, which is the case a bare
+# `tmux attach` refuses. No argument lists what exists.
+t() {
+	if [[ -z "$1" ]]; then
+		tmux list-sessions -F '#{session_name}: #{session_windows} windows#{?session_attached, (attached),}' 2>/dev/null ||
+			echo "no tmux server running"
+		return 0
+	fi
+	tmux has-session -t "$1" 2>/dev/null || tmux new-session -d -s "$1"
+	if [[ -n "$TMUX" ]]; then tmux switch-client -t "$1"; else tmux attach -t "$1"; fi
+}
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 

@@ -26,10 +26,21 @@
 # Silent and always exit 0: a layout tweak must never fail a tool call.
 
 set -u
-cat >/dev/null 2>&1 || true   # drain the hook payload (unused)
+payload="$(cat 2>/dev/null || true)"   # the hook payload; kept for the log below
+
+# A SILENT HOOK IS AN UNDIAGNOSABLE HOOK. This one ran for weeks placing nothing, and the
+# only symptom was panes in the wrong column — indistinguishable from "the feature does not
+# exist". One append-only line per invocation costs nothing and answers the two questions
+# that actually matter: did it fire, and whose TMUX_PANE did it fire with. The second is the
+# open question: `fleet-layout subagents` treats $TMUX_PANE as the PARENT's pane, so if the
+# hook is handed the NEW agent's pane instead, it silently arranges nothing.
+PLACE_LOG="$HOME/.claude/debug/place-subagents.log"
+mkdir -p "$(dirname "$PLACE_LOG")" 2>/dev/null || true
+plog() { printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$PLACE_LOG" 2>/dev/null || true; }
+plog "fired. TMUX_PANE=${TMUX_PANE:-<unset>} pane_title=$(tmux display -p -t "${TMUX_PANE:-}" '#{pane_title}' 2>/dev/null || echo '?') payload=$(printf '%s' "$payload" | tr -d '\n' | cut -c1-200)"
 
 # tmux-only. Without it there are no panes to arrange and nothing to do.
-[ -n "${TMUX_PANE:-}" ] || exit 0
+[ -n "${TMUX_PANE:-}" ] || { plog "exit: no TMUX_PANE"; exit 0; }
 command -v tmux >/dev/null 2>&1 || exit 0
 
 LAYOUT="$HOME/.claude/scripts/fleet-layout.sh"
@@ -56,10 +67,11 @@ PLACE_GAP="${PLACE_SUBAGENTS_GAP:-2}"
     sleep "$PLACE_GAP"
     out="$(TMUX_PANE="$TMUX_PANE" bash "$LAYOUT" subagents 2>/dev/null)" || continue
     case "$out" in
-      *"placed 0"*|*"no live subagent panes"*) continue ;;   # nothing attributed yet — wait
-      *"placed "*) break ;;                                  # done
-      *) continue ;;
+      *"placed 0"*|*"no live subagent panes"*) plog "try $i: nothing attributed yet ($out)"; continue ;;
+      *"placed "*) plog "try $i: SUCCESS ($out)"; break ;;
+      *) plog "try $i: unrecognized output ($out)"; continue ;;
     esac
+    [ "$i" -lt "$PLACE_TRIES" ] || plog "gave up after $PLACE_TRIES tries" 
   done
 ) >/dev/null 2>&1 &
 
