@@ -550,3 +550,23 @@ exercises, exercising it is part of the fix.
 `DISABLE TRIGGER USER` is table- and window-wide; the actual safety rested on a pinned start
 block keeping the table empty. A confident wrong rationale is worse than none, because it
 stops the next reader from checking.
+
+## 2026-07-20 — a mocked seam must reproduce the dependency's ACTUAL failure surface
+
+**Before mocking a dependency's failure mode, read its error path.** Reproduce the failure
+surface it actually exhibits — rejection, error-return, or swallowed-and-resolved. A guard test
+that passes against a failure shape the real dependency cannot produce is theatre: it is green
+because the mock is wrong, and it will stay green through the outage it claims to cover.
+Reviewing one, trace the real dependency's catch blocks before trusting the pin.
+
+**Corollary — an exactly-once or durable-dedupe consumer needs a delivery SIGNAL from its
+egress, not the absence of an exception.** "It didn't throw" is not "it arrived."
+
+**Second corollary, the same class one level down: for HTTP egress, delivery is
+`response.ok`, never a resolved promise.** `fetch` resolves on 4xx and 5xx, so a delivery
+signal that only maps rejections reads a 503 outage, a 429, or a revoked webhook as "sent".
+Pin the resolve-shape failure (`{ok: false}`) alongside the rejection-shape one.
+
+_The worked example — a mock that rejected where the real client swallowed and resolved,
+permanently suppressing a critical page — is in the product repo's own review-lessons file,
+which keeps the subsystem detail. Only the transferable rule lives here._
