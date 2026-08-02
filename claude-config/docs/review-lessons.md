@@ -514,3 +514,39 @@ parser for `.claude/current-work` had its semantics changed with no test at all 
 a file with **no trailing newline** silently yielded zero ids, because `while read` returns
 non-zero at EOF-without-newline before the loop body runs. All four are the same failure:
 **an obligation stated in one place, and unreachable from where it has to fire.**
+
+## 2026-07-31 — a new required input is only real at the sites that SUPPLY it
+
+**A change that makes something required is not finished when the consumer reads it. It is
+finished when every supplier provides it.** FEAT-9 made `PONDER_URL` a required env var. The
+code was correct and the reviewer still found two blockers, because the *suppliers* were not
+part of the change's mental model:
+
+- the **Docker build context** (`.dockerignore` excluded the file the new import compiles
+  against — the failure is `TS2307` inside the image, not a missing-context error), and
+- the **deploy template** (terraform injected the var only when non-empty, so the apply
+  succeeded and the server died in envalid on the next roll).
+
+Then the *fix* for the terraform half was itself half-done: the mechanism changed but three
+`terraform.tfvars.example` files and four "two-phase" comments still taught the old ordering
+— including the two comments an operator reads *at the moment they copy the value*.
+
+**The check:** for anything newly required, enumerate every place a value enters the system —
+build context, deploy template, example/tfvars files, local `.env`, test harness, CI — and
+confirm each one supplies it. `git grep` the variable name and read every hit, rather than
+patching the sites a reviewer happened to name.
+
+**Corollary — verify by executing, not by inspecting.** The `.dockerignore` fix looked
+obviously correct and was. Actually running `docker build` proved it *and* revealed the image
+had been unbuildable for five unrelated pre-existing reasons (corepack absent from
+node:25-slim, a `prepare` script hard-failing on absent `.git`, `**/build` swallowing
+`server/scripts/build/` tooling source, an excluded `vaults.json`, `pnpm deploy` missing
+`--legacy`) — every one already solved correctly in the sibling `subgraph/Dockerfile`. **A
+build no CI job runs is a build that is already broken.** If a fix targets an artifact nothing
+exercises, exercising it is part of the fix.
+
+**And: a comment that sounds like a reason may not be one.** The same round shipped
+"suppressing these triggers is safe because a test has no subscribers" — plausible, and wrong.
+`DISABLE TRIGGER USER` is table- and window-wide; the actual safety rested on a pinned start
+block keeping the table empty. A confident wrong rationale is worse than none, because it
+stops the next reader from checking.
