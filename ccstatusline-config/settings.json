@@ -98,7 +98,7 @@
       {
         "id": "fleet-todo",
         "type": "custom-command",
-        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; s=\"$r/.claude/scripts/statusline-todo.sh\"; [ -x \"$s\" ] || exit 0; out=$(\"$s\" </dev/null) || exit 0; [ -n \"$out\" ] && printf \"\\033[38;5;16m%s\\033[39m\" \"$out\"; exit 0'",
+        "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; for q in \"$HOME/.claude/scripts/statusline-todo.sh\" \"$r/.claude/scripts/statusline-todo.sh\"; do [ -x \"$q\" ] || continue; out=$(\"$q\" </dev/null) || exit 0; [ -n \"$out\" ] && printf \"\\033[38;5;16m%s\\033[39m\" \"$out\"; break; done; exit 0'",
         "timeout": 2000,
         "preserveColors": true
       }

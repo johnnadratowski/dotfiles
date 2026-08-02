@@ -38,8 +38,23 @@ command -v tmux >/dev/null 2>&1 || exit 0
 LAYOUT="$HOME/.claude/scripts/fleet-layout.sh"
 [ -r "$LAYOUT" ] || exit 0
 
-WIN="${1:-}"
-[ -n "$WIN" ] || WIN="$(tmux display-message -p '#{window_id}' 2>/dev/null)"
+# TARGETED BY THE NEW PANE'S ID, resolved to its window here.
+#
+# NOT `#{hook_pane}` or `#{hook_window}`. Both are documented in tmux 3.7b's man page and
+# both expand to the EMPTY STRING at fire time — measured, by pointing the hook at
+# `echo 'pane=#{hook_pane} win=#{hook_window} active=#{pane_id}'`. Only `#{pane_id}` was
+# populated, and at after-split-window it names the pane that was just created, which is
+# what we want.
+#
+# The empty expansion was invisible: the script fell back to "the currently active window",
+# which for a real teammate spawn IS the right window, so placement worked. It only showed up
+# when a background (`-d`) split in an unrelated window resolved to a third window entirely —
+# and even then did no damage, because layout_subagents refuses a window holding no fleet
+# agent. A wrong target that silently no-ops is the shape of bug this hook has had twice now.
+PANE="${1:-}"
+[ -n "$PANE" ] || PANE="$(tmux display-message -p '#{pane_id}' 2>/dev/null)"
+[ -n "$PANE" ] || exit 0
+WIN="$(tmux display-message -p -t "$PANE" '#{window_id}' 2>/dev/null)"
 [ -n "$WIN" ] || exit 0
 
 # The window's resident agent = the FIRST pane (by tmux's own order) running any claude.
