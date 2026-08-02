@@ -570,3 +570,35 @@ Pin the resolve-shape failure (`{ok: false}`) alongside the rejection-shape one.
 _The worked example — a mock that rejected where the real client swallowed and resolved,
 permanently suppressing a critical page — is in the product repo's own review-lessons file,
 which keeps the subsystem detail. Only the transferable rule lives here._
+
+## 2026-08-02 — `git rev-parse` echoes an unresolvable rev to STDOUT; it is not a presence test
+
+Asked for a blob that does not exist, `git rev-parse <rev>:<path>` **prints the argument back
+on stdout** and exits 128 with a `fatal:` on stderr. Measured:
+
+```
+$ git rev-parse "origin/master:.claude/skills/test/SKILL.md"
+fatal: path '.claude/skills/test/SKILL.md' does not exist in 'origin/master'   # stderr
+origin/master:.claude/skills/test/SKILL.md                                     # STDOUT
+$ echo $?
+128
+```
+
+So a script that captures stdout and ignores the exit status receives **its own input, shaped
+like an answer**. Comparing two such captures makes every path that is absent on both sides
+compare as two different strings — i.e. as a DIFFERENCE. That is the worst direction for the
+error to run: absent-on-both is the case you are most likely to be enumerating, and the
+overstatement is silent.
+
+It was caught in the field only because the resulting file list named things the author knew
+had been deleted on both sides. The count was 4x too high — 26 "changed" files against a real
+6 — while ruling on whether a review anchor could be advanced, i.e. on whether unreviewed work
+was about to be marked reviewed.
+
+**The check:** use `git diff --name-only <a> <b>` to ask what differs, and `git cat-file -e
+<rev>:<path>` to ask whether something exists. Never infer presence from rev-parse's stdout.
+
+**The general form, which is the transferable half:** a command that writes usable-looking text
+to stdout on failure cannot be used as a predicate by reading its output. Check the exit
+status, or use a command whose failure is silent. This is the same family as `cmd | head; echo
+$?` reading head's status rather than cmd's.
