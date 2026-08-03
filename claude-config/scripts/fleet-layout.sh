@@ -1301,6 +1301,45 @@ _even_subagent_heights() {  # <lead-pane>
   done
 }
 
+# _even_companion_heights <lead-pane> — equalise the COMPANION COLUMN, right of the chat.
+#
+# `_even_subagent_heights` above does this for panes stacked under the lead IN THE LEAD'S OWN
+# COLUMN. The column beside it had no such treatment, and it drifts for the same reason: every
+# `split-window -h` halves whatever the pane it split had left, so the first companion keeps a
+# large share and each subsequent one gets half of the remainder. Observed at 36 rows against
+# 27 in the same column — not broken, just visibly lopsided, and it never self-corrects because
+# tmux does not rebalance and `select-layout` would reflow the chat too.
+#
+# Grouped by `pane_left` rather than "everything right of the lead", so a window that grows a
+# second companion column evens each one independently instead of averaging across both.
+_even_companion_heights() {  # <lead-pane>
+  local lead="$1" win lead_left col_h lefts left stack n each i p
+  win="$(_win_of "$lead")"; [ -n "$win" ] || return 0
+  lead_left="$(tmux display-message -p -t "$lead" '#{pane_left}' 2>/dev/null)"
+  col_h="$(tmux display-message -p -t "$win" '#{window_height}' 2>/dev/null)"
+  case "$lead_left" in ''|*[!0-9]*) return 0 ;; esac
+  case "$col_h"     in ''|*[!0-9]*) return 0 ;; esac
+
+  lefts="$(tmux list-panes -t "$win" -F '#{pane_left}' 2>/dev/null |
+           awk -v L="$lead_left" '$1>L' | sort -n -u)"
+  [ -n "$lefts" ] || return 0
+
+  for left in $lefts; do
+    stack="$(tmux list-panes -t "$win" -F '#{pane_top} #{pane_id} #{pane_left}' 2>/dev/null |
+             awk -v L="$left" '$3==L {print $1, $2}' | sort -n | awk '{print $2}')"
+    n="$(printf '%s\n' "$stack" | grep -c .)"
+    [ "$n" -ge 2 ] || continue              # one pane already fills its column
+    each=$(( (col_h - n) / n ))             # one divider row per pane
+    [ "$each" -ge 1 ] || continue
+    i=0
+    for p in $stack; do
+      i=$(( i + 1 ))
+      [ "$i" -lt "$n" ] || break            # last absorbs the rounding remainder
+      _rw resize-pane -t "$p" -y "$each" 2>/dev/null || true
+    done
+  done
+}
+
 _normalize_agent_window() {  # <lead-pane>
   local p="$1" win w h
   win="$(_win_of "$p")"; [ -n "$win" ] || return 0
@@ -1315,6 +1354,8 @@ _normalize_agent_window() {  # <lead-pane>
     _rw resize-pane -t "$p" -y "$(( h * FL_LEAD_HEIGHT_PCT / 100 ))" 2>/dev/null || true
   fi
   _seed_companion "$win" "$p"
+  # After seeding, so a companion created on this pass is included in the division.
+  _even_companion_heights "$p"
 }
 
 # Is <pane> sitting at a bare shell prompt — i.e. running nothing of its own?

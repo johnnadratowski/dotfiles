@@ -807,6 +807,45 @@ eq "the companion is a SECOND COLUMN, not a stacked row" "yes" \
 eq "…and focus stays on the lead, which is mid-boot" "$LEADP" \
    "$(t display-message -p -t main:wlead '#{pane_id}')"
 
+# THE COMPANION COLUMN DIVIDES EVENLY. `split-window -h` halves whatever the pane it split had
+# left, so the first companion keeps a large share and each one after it gets half the
+# remainder — observed live at 36 rows against 27 in the same column. tmux never rebalances on
+# its own, and `select-layout` is the wrong tool because it would reflow the chat too.
+#
+# Two companions, then measured: a difference of more than one row is drift. One row of slack is
+# the rounding remainder the last pane deliberately absorbs, and asserting exact equality would
+# redden on any odd-height window.
+# ITS OWN WINDOW, deliberately: the first version split `wlead` and left a third pane behind,
+# reddening the idempotence assertion below that counts panes there. A fixture that mutates
+# state a later row asserts on is a test failing for a reason unrelated to its own subject.
+t new-window -d -t main -n wcol -c "$T/pr" 'sleep 600'
+COLP="$(t list-panes -t main:wcol -F '#{pane_id}' | head -1)"
+lib "ensure_lead_window '$COLP'" >/dev/null 2>&1
+t split-window -d -v -t "$(t list-panes -t main:wcol -F '#{pane_id} #{pane_left}' | awk -v l="$COLP" '$1!=l{print $1; exit}')" 'sleep 600'
+# FORCE THE DRIFT FIRST. A fresh `split-window -v` halves evenly, so the fixture as built has
+# nothing to correct — the assertion passed identically with the evener neutered, which is a
+# test that cannot fail for its own defect. The live 36-vs-27 came from resizes landing on the
+# column AFTER both panes existed, so reproduce that directly rather than hoping the build
+# order produces it.
+COLTOP="$(t list-panes -t main:wcol -F '#{pane_top} #{pane_id} #{pane_left}' |
+          awk -v l="$COLP" 'NR==FNR{next}1' /dev/null; t list-panes -t main:wcol -F '#{pane_top} #{pane_id} #{pane_left}' |
+          awk -v lp="$(t display-message -p -t "$COLP" '#{pane_left}')" '$3>lp' | sort -n | head -1 | awk '{print $2}')"
+t resize-pane -t "$COLTOP" -y 5 2>/dev/null || true
+LOP="$(t list-panes -t main:wcol -F '#{pane_id} #{pane_left} #{pane_height}' |
+       awk -v lp="$(t display-message -p -t "$COLP" '#{pane_left}')" '$2>lp{print $3}' | sort -n)"
+ok "fixture: the column really is lopsided before the fix" \
+   '[ "$(( $(printf "%s\n" "$LOP" | tail -1) - $(printf "%s\n" "$LOP" | head -1) ))" -gt 1 ]'
+lib "_even_companion_heights '$COLP'" >/dev/null 2>&1
+CH="$(t list-panes -t main:wcol -F '#{pane_id} #{pane_left} #{pane_height}' |
+      awk -v l="$COLP" '$1==l{x=$2} {a[NR]=$0} END{for(i=1;i<=NR;i++){split(a[i],f," "); if(f[2]>x) print f[3]}}' | sort -n)"
+eq "the companion column holds two panes to measure" "2" "$(printf '%s\n' "$CH" | grep -c .)"
+ok "…and they are within one row of each other" \
+   '[ "$(( $(printf "%s\n" "$CH" | tail -1) - $(printf "%s\n" "$CH" | head -1) ))" -le 1 ]'
+# The CHAT must not have been reflowed to match them — that is the whole reason this is a
+# targeted resize rather than select-layout.
+ok "…and the chat pane is still the tallest thing in the window" \
+   '[ "$(t display-message -p -t "$COLP" "#{pane_height}")" -gt "$(printf "%s\n" "$CH" | tail -1)" ]'
+
 # IDEMPOTENT BY COUNT is the whole safety story — boot calls this every time, and a window that
 # already has a companion (or a subagent stack) must not gain another pane per boot.
 lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
