@@ -24,6 +24,7 @@
 #   spawn-prompt <lane>   print the exact prompt to hand the lead for one teammate
 #   status       what is actually alive, verified against processes not config
 #   down         stop every agent occupying a lane (idle-gated)
+#   stop-engines [lane…]  stop the monocle review engines a lane owns; default all
 #
 # We deliberately do NOT spawn teammates ourselves, and `--with-team` does not change
 # that — it types a REQUEST into the lead's pane and lets the lead do the spawning.
@@ -584,6 +585,43 @@ cmd_down() {
   return "$rc"
 }
 
+# cmd_stop_engines [lane…] — stop the review engines a lane owns. Default: every lane.
+#
+# WHY THIS IS NOT COVERED BY KILLING PANES. A review engine is `monocle serve -C <lane>`, and
+# two things put one on this machine: the companion pane starts one, and — since the runtime
+# rebind landed — **`set_repo` AUTOSPAWNS a headless one** for any repo that has none. The
+# autospawned engine has no pane and no owner, so nothing reaps it: every agent that binds
+# leaves one behind, and every restart adds another. Four were found orphaned on `launchd`
+# still serving PRE-MIGRATION lane paths that no longer existed.
+#
+# SCOPED TO THE LANES DIR, deliberately and narrowly. An engine at `$HOME`, in another product,
+# or in a scratch directory belongs to the user or to another project — this fleet did not start
+# it and does not get to stop it. That is the same blast-radius rule as `tmux kill-server`:
+# in scope is what we created, nothing else.
+#
+# `serve-mcp` is NOT touched. Those are per-agent stdio children that die with their agent; a
+# kill here would race the agent's own shutdown for no gain.
+cmd_stop_engines() {
+  local want="$*" rc=0 pid dir name
+  echo "== stopping review engines under $LANES_DIR =="
+  for pid in $(pgrep -f 'monocle serve' 2>/dev/null); do
+    # `-C <dir>` identifies an ENGINE. serve-mcp carries no -C, so it is skipped by construction.
+    dir="$(ps -o command= -p "$pid" 2>/dev/null | sed -n 's/.*-C \([^ ]*\).*/\1/p')"
+    [ -n "$dir" ] || continue
+    case "$dir" in "$LANES_DIR"/*) ;; *) continue ;; esac
+    name="$(basename "$dir")"
+    if [ -n "$want" ]; then
+      case " $want " in *" $name "*) ;; *) continue ;; esac
+    fi
+    kill "$pid" 2>/dev/null || { echo "  $name: could not signal engine pid $pid"; rc=1; continue; }
+    # Verified by observation, like every other stop in this file — `kill` returning 0 means the
+    # signal was delivered, never that the process is gone.
+    if down_verify_dead "$pid"; then echo "  $name: engine stopped (pid $pid)"
+    else echo "  $name: FAILED — engine pid $pid alive after SIGTERM"; rc=1; fi
+  done
+  return "$rc"
+}
+
 # Sourcing this file as a library (TEAM_BOOT_LIB=1) defines the functions without running a
 # verb, so the test suite can drive cmd_down and its guards directly. Without it, `. team-boot.sh`
 # would execute `status` — and a test that has to shell out for every case cannot stub alive_in,
@@ -595,6 +633,7 @@ case "${1:-status}" in
   boot)         shift || true; cmd_boot "$@" ;;
   spawn-prompt) shift; cmd_spawn_prompt "$@" ;;
   down)         shift; cmd_down "$@" ;;
+  stop-engines) shift; cmd_stop_engines "$@" ;;
   *) cat >&2 <<EOF
 usage: team-boot.sh <verb>
   status                 what is alive, verified by process cwd (not team config)

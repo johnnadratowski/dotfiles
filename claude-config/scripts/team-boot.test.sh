@@ -568,6 +568,42 @@ hasnt "sourcing does not fall through to status" "$out" "team configs on disk"
 eq    "sourcing produces no output at all" "" "$out"
 
 echo
+echo "cmd_stop_engines — stops OUR review engines, and nothing else"
+
+# THE BLAST RADIUS IS THE WHOLE TEST. A review engine is `monocle serve -C <dir>`, and since the
+# runtime rebind landed, `set_repo` AUTOSPAWNS one for any repo lacking it — so they accumulate
+# unowned, and four were once found orphaned on launchd still serving pre-migration lane paths.
+# Reaping them is right; reaping the user's own engine at $HOME, or another product's, is not.
+#
+# Real processes again, and the assertions are the usual pairing: the out-of-scope witness must
+# SURVIVE, the in-scope one must die. A filter that silently does nothing looks identical to one
+# that works until you leave something alive for it to wrongly kill.
+mklane feature-9
+fake_engine() {  # fake_engine <dir> -> pid
+  bash -c 'exec -a "monocle serve -C '"$1"'" sleep 300' >/dev/null 2>&1 </dev/null &
+  local p=$!; SPAWNED="$SPAWNED $p"; printf '%s' "$p"
+}
+IN_SCOPE="$(fake_engine "$LANES/feature-9")"
+OUT_HOME="$(fake_engine "$FHOME")"
+OUT_OTHER="$(fake_engine "$TMP/some-other-product")"
+sleep 0.3
+
+out="$(lib 'cmd_stop_engines' 2>&1)"
+ok    "the lane's engine was stopped"          "! alive $IN_SCOPE"
+ok    "…the engine at \$HOME SURVIVED"          "alive $OUT_HOME"
+ok    "…and another product's engine SURVIVED"  "alive $OUT_OTHER"
+has   "…and it named the lane it stopped"      "$out" "feature-9"
+
+# Targeted form: naming one lane must not sweep the others.
+mklane feature-8
+KEEP="$(fake_engine "$LANES/feature-8")"
+DROP="$(fake_engine "$LANES/feature-9")"
+sleep 0.3
+lib 'cmd_stop_engines feature-9' >/dev/null 2>&1
+ok "a named lane stops only its own engine"    "! alive $DROP"
+ok "…leaving the unnamed lane's running"       "alive $KEEP"
+
+echo
 echo "fleet_not_a_lane — the duplicated copies must not drift"
 
 # THE HOUSE CONVENTION IS A CANONICAL DEFINITION PLUS PER-SCRIPT FALLBACKS, and the convention

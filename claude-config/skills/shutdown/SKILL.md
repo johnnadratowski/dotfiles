@@ -74,7 +74,8 @@ turn, instead of the lead guessing from outside.
 ## Step 3 — Verify, and clean up the stragglers
 
 ```bash
-~/.claude/scripts/team-boot.sh status     # every teammate's AGENT column must read "-"
+~/.claude/scripts/team-boot.sh status         # every teammate's AGENT column must read "-"
+~/.claude/scripts/team-boot.sh stop-engines   # the review engines the lanes own
 tmux list-windows -t main
 ```
 
@@ -94,6 +95,14 @@ tmux list-windows -t main
   target. This bullet used to say "escalate only that one", which the script cannot do.
 - **A rejected request (`approve: false`) is an answer, not an obstacle.** Relay the reason
   and stop — the user decides whether to force it.
+- **STOP THE REVIEW ENGINES — killing panes does not.** A lane's `monocle serve -C <lane>` is
+  started two ways: by the companion pane, and — since the runtime rebind landed — **autospawned
+  by `set_repo`** for any repo without one. The autospawned engine has no pane and no owner, so
+  nothing reaps it: every agent that binds leaves one, and every restart adds another. Four were
+  found orphaned on `launchd` still serving **pre-migration lane paths that no longer existed**.
+  `stop-engines` is scoped to the lanes dir, so an engine at `$HOME` or in another product is
+  left alone — same blast-radius rule as never running `tmux kill-server`. It does **not** touch
+  `serve-mcp`: those are per-agent stdio children that die with their agent.
 
 ## Step 4 — The lead exits last
 
