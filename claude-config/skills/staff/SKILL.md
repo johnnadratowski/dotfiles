@@ -163,8 +163,10 @@ answer is that it calls `set_repo` — one tool call, from where it already is.
 **Historical tell, still worth recognising:** `add_annotations` rejecting entries with *"file is
 not one of the review's changed files"* while `set_review_name` and `set_file_groups` accept
 happily. **Its absence is not a pass** — a plan review makes no validating call at all, so an
-unbound plan review looks entirely healthy. `review_status` now prefixes
-`[repo: <root> · review: <name>]`, which is the direct check that replaces all of this.
+unbound plan review looks entirely healthy. **The `set_repo` echo is the check** — it names the root it bound to. Do NOT rely on a
+`review_status` prefix: measured 2026-08-03, it returns a bare "No feedback pending." with no
+repo identity when no review is loaded, so it cannot tell a bound agent from an unbound one.
+`MONOCLE_REQUIRE_SET_REPO=1` refusing an unbound call is the backstop.
 
 ## Step 5 — Report
 

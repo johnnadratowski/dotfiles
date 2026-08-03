@@ -443,8 +443,10 @@ tree: a review you stage is invisible, and \`get_feedback\` returns "No feedback
 verdict that was actually submitted. That is a WRONG ANSWER, not an error, and it has already
 cost this fleet an afternoon.
 
-**Verify from the echo, do not assume.** \`set_repo\` returns the root it bound to, and
-\`review_status\` now prefixes \`[repo: <root> · review: <name>]\`. Check the root is YOUR lane.
+**Verify from the echo, do not assume.** \`set_repo\` returns the root it bound to —
+*"Monocle is now bound to <root>"*. Check that root is YOUR lane, not the lead's. **That echo is
+the only bind confirmation there is:** \`review_status\` does NOT carry a repo prefix when no
+review is loaded — it returns a bare "No feedback pending.", identical bound or unbound.
 This fleet runs with \`MONOCLE_REQUIRE_SET_REPO=1\`, so every review tool refuses until you have
 bound — a refusal means you skipped this step, not that Monocle is broken.
 
