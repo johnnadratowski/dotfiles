@@ -534,14 +534,28 @@ down_busy() {
 # DOWN_VERIFY_TRIES is a test seam, not a knob: the default 20 tries x 0.5s is the real
 # grace period, and only the test suite lowers it so the "refuses to claim a survivor is
 # dead" case does not cost 10s per assertion.
+#
+# A ZOMBIE IS DEAD. `kill -0` succeeds on a process that has already exited but whose parent has
+# not reaped it, so existence alone reports a corpse as a survivor. That is not hypothetical:
+# `stop-engines` declared three of four lane engines FAILED — every one had exited, and every one
+# was a zombie held by the still-running monocle TUI that spawned it. Nothing survived, and the
+# verb said otherwise for ten seconds each.
+#
+# A false FAILURE is the safe direction and still unacceptable here: these reports are the only
+# evidence a destructive verb offers, and one that cries wolf gets believed in the wrong
+# direction eventually.
+_pid_is_zombie() { case "$(ps -o state= -p "$1" 2>/dev/null | tr -d ' ')" in Z*) return 0 ;; *) return 1 ;; esac; }
+
 down_verify_dead() {  # <pid>
   local i=0 tries="${DOWN_VERIFY_TRIES:-20}"
   while [ "$i" -lt "$tries" ]; do
     kill -0 "$1" 2>/dev/null || return 0
+    _pid_is_zombie "$1" && return 0
     sleep 0.5; i=$((i + 1))
   done
-  kill -0 "$1" 2>/dev/null && return 1
-  return 0
+  kill -0 "$1" 2>/dev/null || return 0
+  _pid_is_zombie "$1" && return 0
+  return 1
 }
 
 cmd_down() {

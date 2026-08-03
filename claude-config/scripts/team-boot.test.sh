@@ -110,6 +110,19 @@ echo "down_verify_dead — the 'stopped' claim is earned by observation, not by 
 p="$(spawn)"; kill -9 "$p"; sleep 0.3
 eq "a genuinely dead pid verifies dead"   "dead"  "$(lib "down_verify_dead $p && echo dead || echo alive")"
 
+# A ZOMBIE IS DEAD. kill -0 succeeds on an exited-but-unreaped process, so existence alone
+# reports a corpse as a survivor. Measured, not theoretical: stop-engines declared three of four
+# lane engines FAILED when every one had exited and was being held as a zombie by the TUI that
+# spawned it — nothing had survived.
+#
+# Tested through _pid_is_zombie rather than by manufacturing a real zombie: producing one needs a
+# parent that outlives its child without waiting, and the first attempt at that hung this suite
+# on its own blocking fixtures. The predicate is the whole fix; down_verify_dead just consults it.
+eq "a live pid is not a zombie"    "no"  "$(lib "_pid_is_zombie $$ && echo yes || echo no")"
+eq "a nonexistent pid is not one"  "no"  "$(lib '_pid_is_zombie 999999 && echo yes || echo no')"
+ok "…and down_verify_dead consults it" \
+   "grep -q '_pid_is_zombie' '$SCRIPT'"
+
 imm="$(immortal)"; kill -TERM "$imm" 2>/dev/null
 eq "a pid that survives SIGTERM is NOT claimed dead" "alive" "$(lib "down_verify_dead $imm && echo dead || echo alive")"
 ok "…and the survivor really did survive (so the assertion above meant something)" "alive $imm"
