@@ -138,6 +138,27 @@ out, which once cut the lead to 62 columns of 208.
 Pass an explicit `single` / `dual` / `wide` only if the user names one. Pane ids survive
 `break-pane`, so routing follows the pane id, not the window.
 
+## Step 4b — Tell the user their MCP servers are bound to YOUR worktree
+
+Every teammate's MCP servers launch with its session, in the **lead's** cwd, and
+`EnterWorktree` moves the agent's shell — **not the already-running server**. So a teammate's
+Monocle reviews the LEAD's worktree, which is clean, and a reviewer opening it sees an empty
+diff. Reconfirmed 2026-08-03 on v2.1.220.
+
+**Only a human can fix it: `/mcp` in that teammate's own pane, reconnecting the server.** An
+agent cannot run it — built-in slash commands are not skills — and starting a second server in
+the lane does **not** rebind an already-connected client. So this belongs in the staffing
+report, not in a later debugging session.
+
+**The tell is `add_annotations`** rejecting entries with *"file is not one of the review's
+changed files"* while `set_review_name` and `set_file_groups` accept happily — they store
+strings and validate nothing.
+
+**AND ITS ABSENCE IS NOT A PASS.** A plan review, or any review with no changed files, makes
+no validating call at all, so the failure cannot surface — one agent's plan review looked
+entirely healthy and was unverifiable. For those, confirm separately:
+`git -C <lead-worktree> status --short` against the agent's own, or assume unbound.
+
 ## Step 5 — Report
 
 One line per lane: name, branch, pid, and where it is now. Then the fleet total. If anything
