@@ -568,5 +568,55 @@ hasnt "sourcing does not fall through to status" "$out" "team configs on disk"
 eq    "sourcing produces no output at all" "" "$out"
 
 echo
+echo "fleet_not_a_lane — the duplicated copies must not drift"
+
+# THE HOUSE CONVENTION IS A CANONICAL DEFINITION PLUS PER-SCRIPT FALLBACKS, and the convention
+# has no guard. `fleet_not_a_lane` lives in _fleet.sh and is repeated as a `command -v … ||`
+# fallback in team-boot.sh, fleet-status.sh and (in the goals-onchain clone) lanes.sh, so a
+# machine with no _fleet.sh still filters. The failure mode is silent and asymmetric: edit the
+# canonical copy alone and the fallbacks keep the OLD rule, so the same directory is a lane to
+# one script and not to another — and only on the machines using the fallback, which are by
+# definition the ones nobody is testing on.
+#
+# Same discipline as the review-lessons entry on config values only some readers can see: when
+# a value is duplicated on purpose, the test is what makes "on purpose" survive an edit.
+#
+# The predicate is compared by BEHAVIOUR, not by string. A textual comparison would redden on
+# reformatting and, worse, would pass two copies that differ only in a `case` arm's order.
+# Scoped to the three DOTFILES sites. The fourth copy lives in a consuming project's lanes.sh,
+# in a different repo that may be on any branch — reaching across for it made this suite's
+# result depend on what a sibling checkout happened to have checked out. That copy is asserted
+# against the canonical one by that project's own suite, where the dependency is local.
+DOTS="$(cd "$here" && pwd)"
+# Brace-depth extraction, because the canonical definition is multi-line while the fallbacks are
+# one-liners. A `sed` one-liner captured only `fleet_not_a_lane() {` from _fleet.sh and silently
+# probed an empty function — which reported the sites as AGREEING, the exact false green this
+# test exists to prevent.
+extract_fnl() {
+  awk '/fleet_not_a_lane\(\) \{/ && !f { f = 1 }
+       f { print; d += gsub(/\{/, "{") - gsub(/\}/, "}"); if (d <= 0) exit }' "$1"
+}
+probe_sites() {
+  for f in "$DOTS/_fleet.sh" "$DOTS/team-boot.sh" "$DOTS/fleet-status.sh"; do
+    [ -r "$f" ] || continue
+    def="$(extract_fnl "$f")"
+    [ -n "$def" ] || continue
+    printf '%s:' "$(basename "$f")"
+    for probe in agent-deadbeef .hidden '' feature-3 team-lead ui-2 agentic-2; do
+      printf '%s' "$(bash -c "$def"$'\n'"fleet_not_a_lane '$probe' && echo 1 || echo 0")"
+    done
+    printf '\n'
+  done
+}
+SITES="$(probe_sites)"
+eq "all three dotfiles sites are present" "3" "$(printf '%s\n' "$SITES" | grep -c ':')"
+eq "…and answer identically for every probe" "1" \
+   "$(printf '%s\n' "$SITES" | sed 's/^[^:]*://' | sort -u | grep -c .)"
+# Pin the ANSWER too, so three copies agreeing on a WRONG rule cannot pass. `agentic-2` is the
+# probe that matters: `agent-*` must not swallow a real lane whose name merely starts that way.
+eq "…on the right answer (agent-*/dot/empty are not lanes; agentic-2 is)" "1110000" \
+   "$(printf '%s\n' "$SITES" | head -1 | cut -d: -f2)"
+
+echo
 printf '  %d passed, %d failed\n\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
