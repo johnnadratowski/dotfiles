@@ -608,6 +608,26 @@ probe_sites() {
     printf '\n'
   done
 }
+# A BEHAVIOURAL COMPARISON ALONE IS BLIND TO AN ADDED `case` ARM, which is the likeliest future
+# edit ("also filter worktree-*"). The probe set below is fixed, so drift OUTSIDE it produces
+# identical answers from copies that genuinely disagree — demonstrated by adding `scratch-*` to
+# the canonical only: `scratch-9` classified differently in each copy and the agreement
+# assertion still read "all agree".
+#
+# So both comparisons run. Textual alone was rejected because it reddens on reformatting and
+# passes two copies differing only in arm ORDER — but "insufficient" argues for adding it
+# alongside, not for dropping it. Normalised to the pattern list itself, so indentation, the
+# `command -v` guard prefix and comment placement cannot redden it.
+norm_arms() {  # <file> — the case-arm patterns, whitespace-normalised, order preserved
+  extract_fnl "$1" | tr '\n' ' ' | sed -e 's/.*in *//' -e 's/esac.*//' \
+                                       -e 's/) *return [01] *;;/|/g' -e 's/[[:space:]]\{1,\}//g'
+}
+ARMS_CANON="$(norm_arms "$DOTS/_fleet.sh")"
+eq "the fallbacks' case arms are textually identical to the canonical (catches an ADDED arm)" \
+   "$ARMS_CANON|$ARMS_CANON" \
+   "$(norm_arms "$DOTS/team-boot.sh")|$(norm_arms "$DOTS/fleet-status.sh")"
+ok "…and that comparison is not vacuously empty" '[ -n "$ARMS_CANON" ]'
+
 SITES="$(probe_sites)"
 eq "all three dotfiles sites are present" "3" "$(printf '%s\n' "$SITES" | grep -c ':')"
 eq "…and answer identically for every probe" "1" \

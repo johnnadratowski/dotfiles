@@ -82,10 +82,18 @@ expected="$LANES_DIR/$agent_name"
 # every agent. One stderr line is the difference between "misconfigured, and it told me" and
 # "protected, apparently". stderr on a non-blocking hook exit is surfaced to the agent, not
 # to the user, which is the right audience: the agent is the thing standing in the wrong tree.
+# EMPTY counts as broken, not as "nothing to say". The first version of this gated on
+# `[ -n "$LANES_DIR" ] && [ ! -d … ]`, so a lanes dir that resolved to the empty string —
+# no fleet.env AND `_lanes_dir` unable to derive, e.g. a hook whose cwd is not a git repo —
+# fell straight through to `exit 0` with zero bytes of stderr. Measured: set-but-missing gave
+# two lines, empty gave none. That is the same silent-off class as the stale-derivation bug
+# this branch was written for, reachable by a different route, and it made "the guard cannot
+# go quiet" un-certifiable. Unresolvable and wrong are both misconfiguration; both say so.
 if [ ! -d "$expected" ]; then
-  if [ -n "$LANES_DIR" ] && [ ! -d "$LANES_DIR" ]; then
-    echo "lane-guard: INERT — lanes dir '$LANES_DIR' does not exist, so '$agent_name' cannot be" >&2
-    echo "placed. Set WORKFLOW_LANES_DIR (see ~/.claude/fleet.env). Writes are UNGUARDED." >&2
+  if [ -z "$LANES_DIR" ] || [ ! -d "$LANES_DIR" ]; then
+    echo "lane-guard: INERT — lanes dir '${LANES_DIR:-<unresolved>}' does not exist, so" >&2
+    echo "'$agent_name' cannot be placed. Set WORKFLOW_LANES_DIR (see ~/.claude/fleet.env)." >&2
+    echo "Writes are UNGUARDED." >&2
   fi
   exit 0
 fi

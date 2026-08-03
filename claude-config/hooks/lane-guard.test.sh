@@ -32,11 +32,14 @@ check() { # check <label> <expected-exit> <actual-exit>
 # The lanes dir is a parameter so a row can stub it to its FAILURE value — a directory that
 # does not exist — which is the only way to exercise the guard's silent-off path.
 as_teammate() { # as_teammate <name> <cwd> [lanes-dir]
-  local name="$1" dir="$2" lanes="${3:-$LANES}"
+  # `${3-…}`, NOT `${3:-…}`: row 6b passes an explicitly EMPTY lanes dir, and the colon form
+  # substitutes the default for empty as well as unset — so that row silently ran against the
+  # real $LANES, found the lane, and reported BLOCKED instead of exercising the branch it names.
+  local name="$1" dir="$2" lanes="${3-$LANES}" home="${4:-$HOME}"
   cat > "$TMP/fake-claude.sh" <<EOF
 #!/bin/bash
 cd "$dir" || exit 99
-WORKFLOW_LANES_DIR="$lanes" "$GUARD" </dev/null 2>"$TMP/err.txt"
+HOME="$home" WORKFLOW_LANES_DIR="$lanes" "$GUARD" </dev/null 2>"$TMP/err.txt"
 EOF
   chmod +x "$TMP/fake-claude.sh"
   /bin/bash "$TMP/fake-claude.sh" --agent-name "$name"
@@ -111,6 +114,26 @@ if grep -q 'INERT' "$TMP/err.txt" && grep -q 'UNGUARDED' "$TMP/err.txt"; then
 else
   fail=$((fail+1)); echo "  FAIL a non-existent lanes dir disabled the guard SILENTLY"
   sed 's/^/       /' "$TMP/err.txt"
+fi
+
+# 6b — AND AN UNRESOLVABLE LANES DIR IS THE SAME CLASS, reached by a different route: no
+# fleet.env AND `_lanes_dir` unable to derive (a hook whose cwd is not a git repo). The first
+# version of the loud branch gated on `[ -n "$LANES_DIR" ]`, so this case fell through to
+# exit 0 with zero bytes — set-but-missing shouted, empty stayed silent. A fix that closes one
+# route into a silent-off state and leaves the other open has not closed the class.
+# HOME is stubbed to an empty dir, and that is load-bearing rather than tidiness: the guard
+# sources ~/.claude/fleet.env, whose entries are `${VAR:-default}` — so an explicitly EMPTY
+# WORKFLOW_LANES_DIR gets the machine's real lanes dir substituted straight back in, and this
+# row would silently exercise the set-and-exists path on any machine that has a fleet. The
+# empty case is only REACHABLE where fleet.env is absent, which is exactly the machine this
+# row is about.
+mkdir -p "$TMP/nohome"
+as_teammate lgt-alpha "$TMP/elsewhere" "" "$TMP/nohome" >/dev/null 2>&1
+check "an UNRESOLVABLE lanes dir still fails OPEN" 0 "$?"
+if grep -q 'INERT' "$TMP/err.txt"; then
+  pass=$((pass+1)); echo "  ok   …and says so too, not only when the dir is merely missing"
+else
+  fail=$((fail+1)); echo "  FAIL an empty lanes dir disabled the guard SILENTLY"
 fi
 
 # Paired positive, so row 6 cannot pass by the guard shouting on every invocation: the ordinary
