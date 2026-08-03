@@ -12,8 +12,9 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **Blocked on a person?** `echo "<you> · <ISSUE>: <the decision>" > .claude/needs-input`; `rm`
   when answered. Nothing in the harness reports "waiting" — this is the only signal.
 - **Every question to a human names you first.** Your AskUserQuestion renders in the **lead's**
-  window, not yours: `header` = your agent name alone (~12 chars), `question` opens with
-  `<you> · <ISSUE>:` — **every** question in a multi-question prompt, since each is a separate
-  card. Same prefix in needs-input and in any message asking for a decision.
+  window, not yours, so `question` opens with `<label> (<name>) · <ISSUE>:` — **every** question
+  in a multi-question prompt, since each is a separate card. `header` stays **descriptive**
+  (~12 chars: what the question is about); your name is already in the text. Same prefix in
+  needs-input and in any message asking for a decision.
 
 Detail: `~/.claude/agent-roles/reference/fleet.md`.

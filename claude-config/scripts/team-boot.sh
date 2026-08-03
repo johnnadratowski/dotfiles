@@ -396,6 +396,13 @@ cmd_spawn_prompt() {
   local name="${1:-}"; [ -n "$name" ] || die "spawn-prompt needs a lane name"
   local p; p="$(lane_path "$name")"
   [ -d "$p" ] || die "no lane at $p"
+  # The agent's own short lane label, interpolated so the example in the prompt is the agent's
+  # real one rather than a placeholder it has to translate. Degrades to the name when
+  # _fleet.sh is absent or the name is not a lane, which makes the example read
+  # `feature-2 (feature-2)` — redundant, not wrong, and never a missing value.
+  local label="$name"
+  command -v fleet_lane_display_name >/dev/null 2>&1 &&
+    label="$(fleet_lane_display_name "$name" 2>/dev/null || printf '%s' "$name")"
   cat <<EOF
 --- hand this to the lead, verbatim, as the spawn prompt for '$name' ---
 You are teammate \`$name\`, working lane $name.
@@ -430,23 +437,31 @@ itself has no waiting-for-input state, so this is the only signal there is.
 ALWAYS LEAD THAT LINE — and any question you put to a human anywhere — with WHO IS ASKING
 and WHAT IT IS ABOUT, in this shape:
 
-    $name · <ISSUE-ID>: <the decision, in one line>
-    $name: <the decision>            # when no issue applies
+    $label ($name) · <ISSUE-ID>: <the decision, in one line>
+    $label ($name): <the decision>            # when no issue applies
+
+\`$label\` is your short speakable lane name — it is what the user reads on the tmux tab bar
+and in fleet-status, so it is the half they recognise at a glance. \`$name\` is your address:
+it is what SendMessage routes by and what every path on disk is named for. Both, in that
+order, exactly as a ticket id is given once in full and then abbreviated.
 
 The reader sees your question somewhere that does NOT name you. **Your AskUserQuestion prompts
 render in the LEAD's window, not yours** — that is the case this exists for: a multi-question
 prompt arrived there with no way to tell which of five agents raised it. The same is true of a
 notification or a relayed summary.
 
-AskUserQuestion specifically, because its two fields have different room:
+AskUserQuestion specifically:
 
-- **\`header\`** is ~12 characters — put your agent name there and nothing else: \`$name\`.
-- **\`question\`** starts with \`$name · <ISSUE-ID>:\` and then asks. Every question in a
-  multi-question prompt gets it, not just the first: they are rendered as separate cards and
+- **\`question\`** starts with \`$label ($name) · <ISSUE-ID>:\` and then asks. **Every question
+  in a multi-question prompt gets it**, not just the first: they render as separate cards and
   the reader may only ever see one of them.
+- **\`header\`** stays DESCRIPTIVE — it is the chip that says what the question is about
+  ("Retry cap", "Auth method"), and it is ~12 characters, so spending it on your name costs
+  the reader the one word telling them what they are being asked. The name is already in the
+  question text.
 
 An unattributed question is a question they cannot answer, because they cannot tell whose
-branch or whose issue it is about. Ticket second, so it stays greppable and clickable. Same
+branch or whose issue it is about. Ticket last, so it stays greppable and clickable. Same
 prefix in \`.claude/needs-input\` and in the first line of any message you send asking for a
 decision.
 
