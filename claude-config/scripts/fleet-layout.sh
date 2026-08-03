@@ -256,7 +256,11 @@ EOF
 # The window label for a set of resident agent names. Pure — this is the whole naming rule.
 window_name_from_names() {
   [ "$#" -eq 0 ] && { printf ''; return; }
-  [ "$#" -eq 1 ] && { printf '%s' "$1"; return; }
+  # A window holding one agent is named for that agent's LABEL (`ott`), not its id
+  # (`feature-2`) — a tab bar is read at a glance and a one-syllable name is what survives
+  # that. The id is unchanged everywhere it is load-bearing; this is display only, and
+  # fleet_lane_display_name returns the id unchanged for anything that is not a lane.
+  [ "$#" -eq 1 ] && { printf '%s' "$(fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1")"; return; }
   local n roles count durable
   roles="$(for n in "$@"; do _role_of "$n"; done | sort -u)"
 

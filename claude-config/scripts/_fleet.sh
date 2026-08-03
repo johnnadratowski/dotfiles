@@ -240,6 +240,65 @@ fleet_agent_id() {
 # Return status is a CONTRACT, matching fleet_manifest_path: resolvable → 0 + the path
 # on stdout; unresolvable (not a repo, degenerate basename) → non-zero + NO output.
 # Callers that mutate treat a failed resolution as a loud refusal.
+# fleet_lane_display_name <agent-name> — a short, speakable label for a lane.
+#
+# WHY: `feature-3` is precise and unmemorable. In a fleet of five you end up saying "the
+# third one" and pointing. A one-syllable name is something a human can hold, say out loud,
+# and spot in a tmux tab bar at a glance.
+#
+# IT IS A LABEL, NEVER AN ADDRESS. `feature-N` remains the only identity: SendMessage routes
+# by it, the branch and lane directory are named for it, the lane NUMBER (and therefore the
+# port block and hostname) is derived from it, and register-agent.sh resolves the role from
+# it. Nothing resolves a display name back to an agent, deliberately — the moment something
+# accepts "ott" where `feature-2` belongs there are two identities and a lookup that can fail.
+#
+# A FIXED TABLE INDEXED BY LANE NUMBER, not a hash or a generator. Lane 3 is `woo` today and
+# `woo` in a year; adding lane 9 cannot renumber lane 3. That stability is the whole point —
+# a label that drifts is worse than no label, because you learn it and then it lies. 64 entries
+# is far past any plausible fleet, and running off the end degrades to the bare agent name
+# rather than wrapping (which would collide) or erroring.
+#
+# Shapes are consonant+doubled-vowel or vowel+doubled-consonant, kept phonetically distinct so
+# they survive being said aloud across a desk.
+#
+# Override any of them in ~/.claude/fleet-lane-names, one `<agent-name>=<label>` per line.
+_FLEET_LANE_NAMES="ess vii ott woo jaa kee uzz moo laa nii epp zoo taa gee ubb boo \
+raa dee iss foo haa pii orr suu maa tee all vuu kaa wee umm noo \
+baa lee ozz guu paa mee iff too yaa cee udd joo naa hee onn buu \
+saa zee imm koo daa ree ull puu gaa fee att loo waa nee obb tuu"
+
+fleet_lane_display_name() {
+  local agent="${1:-}" n label ov
+  [ -n "$agent" ] || return 1
+
+  # Explicit override wins, so a lane can be renamed without touching this file.
+  ov="$HOME/.claude/fleet-lane-names"
+  if [ -r "$ov" ]; then
+    label="$(grep -E "^${agent}=" "$ov" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "[:space:]")"
+    [ -n "$label" ] && { printf '%s' "$label"; return 0; }
+  fi
+
+  # ONLY LANE AGENTS GET A LABEL. A subagent (rev-a, tester, a probe) occupies no lane, so it
+  # has no lane number — and an earlier version defaulted those to 0, handing every one of them
+  # the LEAD's label. Two agents wearing one name is worse than an unlabelled one, so anything
+  # that is not `team-lead` or `<prefix>-<digits>` degrades to its own name.
+  case "$agent" in
+    team-lead) n=0 ;;
+    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])
+      n="$(printf '%s' "$agent" | sed -n 's/.*-\([0-9][0-9]*\)$/\1/p')" ;;
+    *) printf '%s' "$agent"; return 0 ;;
+  esac
+  n=$((n + 0))
+
+  # shellcheck disable=SC2086
+  set -- $_FLEET_LANE_NAMES
+  if [ "$n" -ge 0 ] && [ "$n" -lt "$#" ]; then
+    eval "printf '%s' \"\${$((n + 1))}\""
+  else
+    printf '%s' "$agent"        # past the table: degrade to the identity, never wrap
+  fi
+}
+
 fleet_lanes_dir() {
   if [ -n "${WORKFLOW_LANES_DIR:-}" ]; then
     printf '%s' "$WORKFLOW_LANES_DIR"; return 0

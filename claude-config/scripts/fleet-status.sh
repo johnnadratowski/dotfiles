@@ -146,7 +146,7 @@ collect() {
         break
       fi
     done
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$p" "$state" "$up" "lane" "$(parent_session_for "$p" 2>/dev/null || true)"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$p" "$state" "$up" "lane" "$(parent_session_for "$p" 2>/dev/null || true)" "$(fleet_lane_display_name "$name" 2>/dev/null || true)"
   done
 
   # EVERY OTHER LIVE AGENT — reviewers, testers, planners. They occupy no lane (they run in
@@ -165,7 +165,7 @@ collect() {
     seen="${seen:-} $name"
     p="$(cat "$HOME/.claude/agents/$name.cwd" 2>/dev/null)"
     up="$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ')"
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "${p:-}" "$(agent_state "$name")" "$up" "subagent" ""
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "${p:-}" "$(agent_state "$name")" "$up" "subagent" "" ""
   done
 }
 

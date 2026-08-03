@@ -68,6 +68,16 @@ def rows():
         name, path, state, up = f[0], f[1], f[2], f[3]
         kind = f[4] if len(f) > 4 else "lane"
         session = f[5] if len(f) > 5 else ""
+        # A short speakable label for the lane (`ott`), empty for anything that is not one.
+        # Rendered BESIDE the id rather than instead of it: the id is what you type into
+        # SendMessage and what every path on disk is named for, so hiding it would make the
+        # console the one place the fleet is described in a vocabulary nothing else accepts.
+        label = f[6] if len(f) > 6 else ""
+        # A label equal to the id is not a label. fleet_lane_display_name degrades to the
+        # agent's own name for anything that is not a lane, so passing that through would
+        # render `rev-a  rev-a` — a column of duplicates that costs width and says nothing.
+        if label == name:
+            label = ""
         # An exact transcript beats "newest file in the project dir" whenever a cwd hosts more
         # than one live session — see parent_session_for in fleet-status.sh.
         tpath = ""
@@ -84,7 +94,7 @@ def rows():
         # the columns that cannot be attributed are left empty.
         if kind == "subagent":
             yield {"name": name, "path": path, "state": state, "uptime": fmt_uptime(up),
-                   "kind": kind, "tokens": None, "context_pct": None,
+                   "kind": kind, "label": label, "tokens": None, "context_pct": None,
                    "issue": "", "needs_input": "", "summary": ""}
             continue
 
@@ -95,6 +105,7 @@ def rows():
             "state": state,
             "uptime": fmt_uptime(up),
             "kind": kind,
+            "label": label,
             "tokens": used,
             # Percent of the USABLE window (80% of max — the auto-compact threshold), which
             # is what ccstatusline's context widget and every other surface here report.
@@ -145,6 +156,7 @@ def main():
         return
 
     wn = max(len(r["name"]) for r in data)
+    wl = max((len(r.get("label") or "") for r in data), default=0)
 
     def wrap(text, indent):
         """One line, hard-truncated. The second line owns the full width, so a summary is
@@ -172,7 +184,8 @@ def main():
         # listed as peers of the lanes.
         sub = r.get("kind") == "subagent"
         lead_in = "   └ " if sub else "  "
-        line = lead_in + pad(icon, 2) + " " + pad(r["name"], wn) + "  " + \
+        lbl = (pad(r.get("label") or "", wl) + "  ") if wl else ""
+        line = lead_in + pad(icon, 2) + " " + lbl + pad(r["name"], wn) + "  " + \
             pad(r["state"], 7) + " " + pad(pct, 5, right=True) + " " + \
             pad(up, 7, right=True)
         if not sub:
