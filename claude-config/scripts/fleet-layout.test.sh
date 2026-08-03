@@ -240,7 +240,13 @@ ok "another agent's claude pane is never a companion" \
 eq "x-pr has a claude pane and no companions" "$P_F|" "$(lib 'attribute_panes' | awk -F'\t' '$1=="x-pr"{print $2"|"$3}')"
 
 echo; echo "window_name_from_names"
-eq "one agent -> its own name"            "x-1"         "$(lib 'window_name_from_names x-1')"
+# A SINGLE-AGENT WINDOW IS NAMED FOR THE AGENT'S LABEL, not its id. `fleet_lane_display_name`
+# maps a lane number to a fixed short name (lane 1 -> vii, 2 -> ott, 3 -> woo, 4 -> jaa), and
+# the tab bar is the one surface where a one-syllable name beats a precise one — it is read at
+# a glance and truncated hard. The id still owns every address (SendMessage, paths, branches).
+# These fixtures are `x-N`, which parses as a lane number exactly as `feature-N` does, so they
+# get labels too; that is the intended behaviour and not fixture-specific.
+eq "one agent -> its lane label"          "vii"         "$(lib 'window_name_from_names x-1')"
 eq "two features -> the plural role"      "features"    "$(lib 'window_name_from_names x-1 x-2')"
 eq "review + test -> sorted, hyphenated"  "review-test" "$(lib 'window_name_from_names x-pr x-test-1')"
 eq "no agents -> empty (window untouched)" ""           "$(lib 'window_name_from_names')"
@@ -254,8 +260,8 @@ run name-windows >/dev/null 2>&1
 # Anchored to the AGENTS' panes, not window indices: name-windows also reorders the session
 # (cc, features, review/test, others), so an index no longer identifies a fixture window.
 wname(){ t list-panes -a -F '#{pane_id} #{window_name}' | awk -v q="$1" '$1==q{print $2; exit}'; }
-eq "the window with one claude pane is named for its agent" "x-1"         "$(wname "$P_A")"
-eq "x-2's window is named for it"                           "x-2"         "$(wname "$P_D")"
+eq "the window with one claude pane is named for its agent" "vii"         "$(wname "$P_A")"
+eq "x-2's window is named for it"                           "ott"         "$(wname "$P_D")"
 eq "the review + test co-tenant window is named by role"    "review-test" "$(wname "$P_F")"
 eq "…and both co-tenants agree on it"                       "review-test" "$(wname "$P_G")"
 
@@ -746,7 +752,7 @@ eq "still 12 panes; nothing destroyed" "12" "$(t list-panes -a -F '#{pane_id}' |
 echo; echo "single: every feature agent comes home to its own window"
 run single >/dev/null 2>&1
 eq "single exits 0" "0" "$?"
-eq "each feature agent is alone in a window named for it" "x-1 x-2 x-3 x-4" \
+eq "each feature agent is alone in a window named for it" "jaa ott vii woo" \
    "$(for p in $P_A $P_D $P_I $P_K; do win_of "$p"; done | sort | tr '\n' ' ' | sed 's/ $//')"
 eq "no feature agent is left in a features* window" "0" \
    "$(for p in $P_A $P_D $P_I $P_K; do win_of "$p"; done | grep -c '^features' || true)"

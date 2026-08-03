@@ -46,6 +46,8 @@ fi
 # other product's fleet resolved to one particular product's lanes — silently, since the path
 # exists on this machine. Same derivation as fleet_lanes_dir: the main clone's basename plus
 # `-worktrees`, taken from the shared git common dir so it is worktree-invariant.
+command -v fleet_not_a_lane >/dev/null 2>&1 ||
+  fleet_not_a_lane() { case "${1:-}" in agent-*|.*|'') return 0 ;; *) return 1 ;; esac; }
 _derive_lanes_dir() {
   local common parent base
   common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
@@ -192,6 +194,7 @@ _boot_request_team() {  # <lead-pane>
   for d in "$LANES_DIR"/*/; do
     [ -d "$d" ] || continue
     name="$(basename "$d")"
+    fleet_not_a_lane "$name" && continue
     [ "$name" = "$LEAD_LANE" ] && continue
     lanes+=("$name")
   done
@@ -378,6 +381,7 @@ cmd_boot() {
   local d name
   for d in "$LANES_DIR"/*/; do
     name="$(basename "$d")"
+    fleet_not_a_lane "$name" && continue
     [ "$name" = "$LEAD_LANE" ] && continue
     echo "  team-boot.sh spawn-prompt $name"
   done
@@ -485,6 +489,7 @@ cmd_down() {
   for d in "$LANES_DIR"/*/; do
     [ -d "$d" ] || continue
     name="$(basename "$d")"
+    fleet_not_a_lane "$name" && continue
     pid="$(alive_in "$name")" || { echo "  $name: not running"; continue; }
 
     if [ -n "$self_pid" ] && [ "$pid" = "$self_pid" ]; then

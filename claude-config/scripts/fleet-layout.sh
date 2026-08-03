@@ -1406,7 +1406,15 @@ _pane_is_in_a_lane() {  # <pane-id>
   command -v fleet_lanes_dir >/dev/null 2>&1 || return 1
   lanes="$(_abs "$(fleet_lanes_dir 2>/dev/null || true)")"
   [ -n "$lanes" ] || return 1
-  case "$cwd/" in "$lanes"/*/) return 0 ;; *) return 1 ;; esac
+  case "$cwd/" in "$lanes"/*/) ;; *) return 1 ;; esac
+  # Being UNDER the lanes dir is no longer sufficient: it is now the main clone's
+  # .claude/worktrees/, which the harness also fills with `agent-<hex>` throwaways for every
+  # isolation:"worktree" subagent. One of those would answer "yes, I am a lane agent" and get
+  # broken out into a window of its own, which is exactly the placement rule this predicate
+  # exists to keep it out of.
+  local rest="${cwd#"$lanes"/}"
+  fleet_not_a_lane "${rest%%/*}" && return 1
+  return 0
 }
 
 layout_subagents() {

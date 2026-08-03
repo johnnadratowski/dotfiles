@@ -41,6 +41,13 @@ _lanes_dir() {
   case "$base" in ''|'/'|'.') return 1 ;; esac
   printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
 }
+# Machine-local layout (see the long note in scripts/_fleet.sh). Sourced DIRECTLY rather than
+# via _fleet.sh, because this hook must stay dependency-free — and read from a FILE rather than
+# taken from the environment, because a hook's environment is the one its claude process was
+# launched with. A lane directory that moves while the fleet is up would otherwise leave this
+# guard computing a path that no longer exists, and line 69 below turns that into a silent
+# exit 0: the guard would be off and nothing would say so.
+[ -r "$HOME/.claude/fleet.env" ] && . "$HOME/.claude/fleet.env"
 LANES_DIR="${WORKFLOW_LANES_DIR:-$(_lanes_dir 2>/dev/null || true)}"
 
 # Walk up the process tree to find the claude process and read its --agent-name.

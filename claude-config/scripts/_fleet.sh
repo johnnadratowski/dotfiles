@@ -11,6 +11,42 @@
 # all work headless. Only live remote-drive (restart, compact, rename) needs tmux —
 # callers gate those on fleet_tmux_ok and skip gracefully when it's absent.
 
+# MACHINE-LOCAL FLEET ENVIRONMENT (~/.claude/fleet.env), sourced by every fleet script
+# through this file, and independently by lane-guard.sh and _zshrc.
+#
+# WHY A FILE RATHER THAN AN EXPORT. The knobs here describe where this machine keeps its
+# lanes, and the readers are not all shells: lane-guard.sh and register-agent.sh run as HOOKS
+# inside a claude process, whose environment was frozen when that claude was launched. Put
+# WORKFLOW_LANES_DIR in .zshrc and it reaches a fresh shell but NOT the fleet that is already
+# running — so the guard derives one path while the lead spawns into another, and the guard
+# silently goes inert (it exits 0 when the lane it computed does not exist). A file is read at
+# call time by whoever needs it, with no inheritance chain to break.
+#
+# WHY NOT the project's workflow.config[.local]. That is repo-relative and per-worktree, so
+# the value would have to be written into all five lanes and re-written into every new one;
+# and team-boot.sh — the script that most needs it — does not source it at all.
+#
+# ENV STILL WINS: entries write `VAR="${VAR:-default}"`, so a per-invocation export overrides.
+[ -r "$HOME/.claude/fleet.env" ] && . "$HOME/.claude/fleet.env"
+
+# fleet_not_a_lane <basename> — true when a directory sitting in the lanes dir is NOT a lane.
+#
+# THE LANES DIR IS NO LONGER EXCLUSIVELY OURS. It is now the main clone's
+# `.claude/worktrees/`, which is also where the harness puts the throwaway checkout for every
+# `isolation: "worktree"` subagent — `agent-<hex>`, created and abandoned without asking us.
+# Left unfiltered they enumerate as lanes: `status` printed five of them, and because the lane
+# NUMBER is parsed off the trailing digits of the name, `agent-ab7f523804544e60a` resolved to
+# lane 0 and claimed team-lead's 8080/3000 port block. A dev stack started against that would
+# have collided with the lead's.
+#
+# Matching the harness's own prefix (plus dotfiles) rather than allow-listing `feature-*` and
+# `team-lead`: an allow-list would silently drop a lane the moment someone names one `ui-2`,
+# and dropping a real lane is the more expensive mistake — it makes an agent invisible to
+# status, shutdown and staffing at once.
+fleet_not_a_lane() {
+  case "${1:-}" in agent-*|.*|'') return 0 ;; *) return 1 ;; esac
+}
+
 # Identity token for THIS process.
 fleet_self_token() {
   if [ -n "${TMUX_PANE:-}" ]; then printf '%s' "$TMUX_PANE"; else printf 'cwd:%s' "$PWD"; fi

@@ -119,6 +119,15 @@ t() {
 	if [[ -n "$TMUX" ]]; then tmux switch-client -t "$1"; else tmux attach -t "$1"; fi
 }
 
+# Machine-local fleet layout (~/.claude/fleet.env — not in this repo; it names one product's
+# checkout on one machine). Exported here so a `claude` launched from an interactive shell
+# carries it, and re-read from the file by every fleet script and by the lane-guard hook, whose
+# environment is frozen at its claude's launch. Absent on a machine with no fleet: harmless.
+if [ -r ~/.claude/fleet.env ]; then
+	source ~/.claude/fleet.env
+	export WORKFLOW_LANES_DIR
+fi
+
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
 # bun completions (BUN_INSTALL set in env-vars.sh; nvm loaded via init.sh)
