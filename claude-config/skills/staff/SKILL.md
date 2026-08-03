@@ -54,24 +54,41 @@ role doc from it.
 > reorder, or "improve" the prompt. Until that call lands, `lane-guard` refuses the teammate's
 > every write, which is a blocked tool call rather than silent corruption of lane 0.
 
-> ### ⚠️ EVERY TEAMMATE WILL STOP AT A PERMISSION PROMPT. Warn the user BEFORE spawning.
+> ### ⚠️ PUT THE LEAD IN bypassPermissions BEFORE SPAWNING, or every teammate stalls.
 >
-> `EnterWorktree` into a lane is a **permission-root relocation to a path outside
-> `.claude/worktrees/`**, so the harness asks. It is the teammate's FIRST action, so this
-> fires on every spawn, and the prompt appears **in the teammate's own pane** — not in the
-> lead's, and not anywhere `status` can see. The lane simply never fills.
+> `EnterWorktree` into a lane is a **permission-root relocation outside `.claude/worktrees/`**,
+> and it is each teammate's FIRST action. **No permission rule can pre-approve it** — the
+> worktrees doc is explicit that an `EnterWorktree` rule and "don't ask again" both fail, and
+> only `bypassPermissions` mode skips it. So without the step below, `/staff` stalls: N panes
+> each sitting on `Do you want to proceed?`, in the teammates' own panes, where `status` cannot
+> see them. Step 3 polls for a pid, and a teammate parked at a prompt is indistinguishable from
+> a slow one.
 >
-> **`/staff` is therefore never unattended.** Nothing below detects this: step 3 polls for a
-> pid in the lane, and a teammate parked at a prompt looks identical to one that is slow.
+> **The fix is a keystroke, not a config change: teammates inherit the lead's CURRENT permission
+> mode at spawn time, not its launch flags.** Measured — every teammate spawned while the lead
+> sat in `auto` got `--permission-mode auto`; one spawned while the lead was in bypass got
+> `--dangerously-skip-permissions` and entered its worktree silently, with no prompt and no
+> click.
 >
-> So before step 2, tell the user in one line: *"N permission prompts are about to appear —
-> one per teammate, in windows X–Y. Press 1 in each."* Then spawn. Without that warning a
-> full re-staff silently stalls, and the symptom is four idle panes and a `status` table of
-> dashes — which reads as a spawn failure, not a wait.
+> So the staffing sequence is:
 >
-> **The lead must not answer them.** Approving a permission prompt on a teammate's behalf is
-> the escalation the teammate-permission rules exist to prevent, and a lead doing it for its
-> own fleet is exactly the shape those rules describe. Surface and wait.
+> 1. **Ask the user to shift+tab the lead into `bypassPermissions`.** It is four presses from
+>    `auto` (the cycle is `default → acceptEdits → plan → bypassPermissions → auto`, and `auto`
+>    is last). This requires the lead to have been launched with
+>    `--allow-dangerously-skip-permissions`, which `team-boot.sh` does.
+> 2. Spawn (step 2 below). Teammates come up in bypass and enter their lanes silently.
+> 3. **Tell the user to shift+tab the lead back to `auto`**, and each teammate down to `auto`
+>    too. **Leaving bypass is always allowed; only entering is gated**, so a teammate can always
+>    step down but could never have stepped up.
+>
+> **The lead must never answer a teammate's prompt on its behalf**, and must not keystroke into
+> a teammate's pane — auto mode's classifier blocks exactly that, treating it as Claude altering
+> its own oversight. If a teammate does stall, surface it and wait.
+>
+> **Why not relocate lanes under `.claude/worktrees/` instead?** Tested and rejected: a probe
+> entering `<lane>/.claude/worktrees/<name>` prompted anyway, so the carve-out does not resolve
+> against a worktree's own `.claude/`. The main-clone variant is untested and moot given the
+> above.
 
 ## Step 3 — Verify each one actually landed (the reason this exists)
 
