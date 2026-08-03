@@ -1,13 +1,24 @@
 #!/bin/bash
-# SubagentStart hook — put a newly-spawned subagent's pane where its parent can read it.
+# SubagentStart hook — place an IN-PROCESS subagent's pane under its parent.
 #
-# With `teammateMode: "tmux"` an Agent-tool spawn becomes a REAL pane, and the harness places it
-# wherever tmux puts a new pane — in practice appended into the cell's right-hand companion
-# column, squeezed under whatever else lives there. Several at once make the window unusable.
+# ⚠️ READ THIS BEFORE DEBUGGING PANE PLACEMENT. This hook does NOT handle agent-team
+# teammates, and on a fleet running `teammateMode: "tmux"` that means it does not handle the
+# case you are probably looking at. `SubagentStart` fires for in-session subagents only; with
+# tmux teammate mode EVERY `Agent` spawn is a teammate instead, and NO hook fires on teammate
+# creation — `TeammateIdle` is the only team hook and it fires on idle, not spawn. Verified
+# twice: against the Claude Code hook-event list, and empirically by instrumenting this file
+# and observing a probe spawn produce no log line at all.
 #
-# This fires for EVERY agent that spawns a subagent, not just the lead: `fleet-layout subagents`
-# targets `$TMUX_PANE`, so each agent stacks its own subagents beneath its own chat pane, and an
-# agent's subagents never migrate to somebody else's window.
+# The teammate case is handled by tmux's own `after-split-window`, in the sibling script
+# `place-subagents-tmux.sh`. That is the one to edit if panes are landing in the wrong column.
+#
+# This file is kept because it IS correct for its own case — a subagent spawned with
+# `run_in_background: false`, or any spawn in a session not using tmux teammate mode. It fires
+# for every agent that spawns one, not just the lead: `fleet-layout subagents` targets
+# `$TMUX_PANE`, so each agent stacks its own subagents beneath its own chat pane.
+#
+# The header used to claim it handled the tmux-teammate case. It did not, had never run for
+# one, and the resulting silence read as "this feature does not exist" for weeks.
 #
 # WHY IT RETRIES, rather than sleeping once. The hook fires as the subagent STARTS. The pane may
 # not exist yet, and — the case that actually bit — it may exist while `fleet-layout` still

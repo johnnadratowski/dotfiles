@@ -738,6 +738,16 @@ layout_reapply() {
     # the operator's screen is exactly the thing they asked to be deterministic.
     *) echo "fleet-layout: remembered layout '$mode' is not one of single|dual|wide — ignoring" >&2; return 1 ;;
   esac
+
+  # RENAME AFTER MOVING PANES, because a window's name is computed from its residents and
+  # nothing else recomputes it. name_windows otherwise runs only from the SessionStart hook,
+  # so a window keeps whatever name it had the last time a session began — and the moment the
+  # lead spawns teammates into its own window, that name becomes `feature-team-lead` and stays
+  # wrong until someone starts a session. Observed exactly that after a full re-staff.
+  #
+  # Placed here rather than inside each layout_* verb: reapply is the verb that runs after
+  # panes have moved, which is precisely when the names are stale.
+  name_windows
 }
 
 layout_wide() {

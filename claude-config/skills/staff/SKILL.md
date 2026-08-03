@@ -54,6 +54,25 @@ role doc from it.
 > reorder, or "improve" the prompt. Until that call lands, `lane-guard` refuses the teammate's
 > every write, which is a blocked tool call rather than silent corruption of lane 0.
 
+> ### ⚠️ EVERY TEAMMATE WILL STOP AT A PERMISSION PROMPT. Warn the user BEFORE spawning.
+>
+> `EnterWorktree` into a lane is a **permission-root relocation to a path outside
+> `.claude/worktrees/`**, so the harness asks. It is the teammate's FIRST action, so this
+> fires on every spawn, and the prompt appears **in the teammate's own pane** — not in the
+> lead's, and not anywhere `status` can see. The lane simply never fills.
+>
+> **`/staff` is therefore never unattended.** Nothing below detects this: step 3 polls for a
+> pid in the lane, and a teammate parked at a prompt looks identical to one that is slow.
+>
+> So before step 2, tell the user in one line: *"N permission prompts are about to appear —
+> one per teammate, in windows X–Y. Press 1 in each."* Then spawn. Without that warning a
+> full re-staff silently stalls, and the symptom is four idle panes and a `status` table of
+> dashes — which reads as a spawn failure, not a wait.
+>
+> **The lead must not answer them.** Approving a permission prompt on a teammate's behalf is
+> the escalation the teammate-permission rules exist to prevent, and a lead doing it for its
+> own fleet is exactly the shape those rules describe. Surface and wait.
+
 ## Step 3 — Verify each one actually landed (the reason this exists)
 
 A spawn returning is not an agent in its lane. Poll until each target lane shows a pid:
