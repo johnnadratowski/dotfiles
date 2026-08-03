@@ -11,8 +11,9 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **A background agent goes idle, not away.** It stays addressable until stopped.
 - **Blocked on a person?** `echo "<you> · <ISSUE>: <the decision>" > .claude/needs-input`; `rm`
   when answered. Nothing in the harness reports "waiting" — this is the only signal.
-- **Every question to a human starts with who is asking and what it is about** — the same
-  `<you> · <ISSUE>:` prefix, in needs-input, in an AskUserQuestion header, and in the first
-  line of any message. They see it somewhere that does not name you.
+- **Every question to a human names you first.** Your AskUserQuestion renders in the **lead's**
+  window, not yours: `header` = your agent name alone (~12 chars), `question` opens with
+  `<you> · <ISSUE>:` — **every** question in a multi-question prompt, since each is a separate
+  card. Same prefix in needs-input and in any message asking for a decision.
 
 Detail: `~/.claude/agent-roles/reference/fleet.md`.

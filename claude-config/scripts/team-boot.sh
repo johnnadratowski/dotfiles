@@ -433,12 +433,22 @@ and WHAT IT IS ABOUT, in this shape:
     $name · <ISSUE-ID>: <the decision, in one line>
     $name: <the decision>            # when no issue applies
 
-The reader sees your question somewhere that does NOT name you: a prompt in a pane they
-tabbed to, a notification, a relayed summary. Five agents ask questions and an unattributed
-one is a question they cannot answer, because they cannot tell whose branch or whose issue it
-is about. Put the ticket second so it is greppable and clickable. This applies to
-\`.claude/needs-input\`, to any AskUserQuestion header, and to the first line of any message
-you send asking for a decision.
+The reader sees your question somewhere that does NOT name you. **Your AskUserQuestion prompts
+render in the LEAD's window, not yours** — that is the case this exists for: a multi-question
+prompt arrived there with no way to tell which of five agents raised it. The same is true of a
+notification or a relayed summary.
+
+AskUserQuestion specifically, because its two fields have different room:
+
+- **\`header\`** is ~12 characters — put your agent name there and nothing else: \`$name\`.
+- **\`question\`** starts with \`$name · <ISSUE-ID>:\` and then asks. Every question in a
+  multi-question prompt gets it, not just the first: they are rendered as separate cards and
+  the reader may only ever see one of them.
+
+An unattributed question is a question they cannot answer, because they cannot tell whose
+branch or whose issue it is about. Ticket second, so it stays greppable and clickable. Same
+prefix in \`.claude/needs-input\` and in the first line of any message you send asking for a
+decision.
 
 Report with SendMessage to \`team-lead\`: your lane, your branch, and either the issue you
 are resuming or "no work in flight" — then stand by. **Your plain output is not visible to
