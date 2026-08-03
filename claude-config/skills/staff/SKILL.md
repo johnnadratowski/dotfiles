@@ -56,6 +56,31 @@ one. `/staff 3` when three lanes are free means the first three by lane number.
   branch, a port block and a Caddy import — durable, user-visible changes that should not
   happen as a side effect of "add an agent". Say which lane is missing and offer the command.
 
+## Step 1.5 — Engines up BEFORE agents, or every bind is refused
+
+A teammate calls `set_repo` as its **second act**, and the fleet launches with
+`MONOCLE_REQUIRE_SET_REPO=1`. **`set_repo` does not autospawn an engine** — measured twice,
+against a reading of `EnsureServe` that said it did. So a lane with no `monocle serve`
+running gets a hard refusal at bind time. Step 4 is too late: it builds the companion pane
+that would have started the engine, long after the agent already tried to bind.
+
+```bash
+LANES="$(bash -c '. ~/.claude/scripts/_fleet.sh; fleet_lanes_dir')"
+for n in <targets>; do
+  pgrep -f "monocle serve -C $LANES/$n" >/dev/null 2>&1 ||
+    (nohup monocle serve -C "$LANES/$n" >/dev/null 2>&1 &)
+done
+sleep 2; pgrep -laf 'monocle serve -C'   # one line per target lane
+```
+
+- **A live `monocle` TUI is not proof of a live engine.** The TUI spawns the engine as a
+  child and holds it; kill the engine and the TUI survives engine-less — and no reseed
+  replaces it, because the pane is still there. `pgrep` for `monocle serve`, and kill a
+  stale TUI by **pane id** so step 4 rebuilds it.
+- **Verify by process, never by the absence of an error.** A dead engine behind a correct
+  binding answers `review_status` with "No feedback pending." That is a wrong answer, not a
+  failure, and it is the worst thing this fleet has produced.
+
 ## Step 2 — Spawn, one teammate per lane
 
 Get each prompt verbatim and spawn them **all in one message** so they boot concurrently:
