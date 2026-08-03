@@ -1354,7 +1354,11 @@ _normalize_agent_window() {  # <lead-pane>
     _rw resize-pane -t "$p" -y "$(( h * FL_LEAD_HEIGHT_PCT / 100 ))" 2>/dev/null || true
   fi
   _seed_companion "$win" "$p"
-  # After seeding, so a companion created on this pass is included in the division.
+  # Seed FIRST, then split beneath it: _seed_companion picks the top-right pane, and adding the
+  # shell before it would just mean seeding into a pane that is about to be halved.
+  _ensure_cwd_pane "$p"
+  # Last, so both column panes exist and get an equal share. This is what stops the shell from
+  # arriving as a sliver — `split-window -v` halves the companion, and nothing rebalances after.
   _even_companion_heights "$p"
 }
 
@@ -1433,6 +1437,50 @@ _ensure_companion() {  # <claude-pane> [cwd]
   # process, which is the risk _pane_is_shell exists to avoid.
   local i=0
   while [ -n "$new" ] && [ "$i" -lt 40 ] && ! _pane_is_shell "$new"; do sleep 0.05; i=$((i + 1)); done
+}
+
+# _ensure_cwd_pane <claude-pane> [cwd] — a plain shell UNDER the companion, in the lane.
+#
+# WHY A THIRD PANE. The companion column runs the review tool; there was nowhere in an agent's
+# window to just look at the lane — check a `git status`, read a file, run one command — without
+# borrowing the tool's pane or opening a window somewhere else and then having to remember which
+# lane it was for. This pane is deliberately BARE: nothing is seeded into it, so it stays yours.
+#
+# THE CWD IS THE POINT, and it is why the pane is created here rather than by hand. A shell you
+# opened yourself lands wherever that window was; this one lands in the lane it belongs to, so
+# the pane can never be about a different worktree than the agent beside it.
+#
+# IDEMPOTENT BY COLUMN COUNT, matching _ensure_companion: the right column is brought to exactly
+# two panes and then left alone. A window that already has them — or that a human has split
+# further — is untouched, so every caller stays safe to re-run.
+_ensure_cwd_pane() {  # <claude-pane> [cwd]
+  local p="$1" cwd="${2:-}" win lead_left col n top_right
+  win="$(_win_of "$p")"; [ -n "$win" ] || return 0
+  lead_left="$(tmux display-message -p -t "$p" '#{pane_left}' 2>/dev/null)"
+  case "$lead_left" in ''|*[!0-9]*) return 0 ;; esac
+
+  # Panes to the RIGHT of the chat, top-first. The companion column, whatever is in it.
+  col="$(tmux list-panes -t "$win" -F '#{pane_top} #{pane_id} #{pane_left}' 2>/dev/null |
+         awk -v L="$lead_left" '$3>L {print $1, $2}' | sort -n | awk '{print $2}')"
+  n="$(printf '%s\n' "$col" | grep -c .)"
+  [ "$n" -eq 1 ] || return 0        # no column yet (_ensure_companion's job), or already built
+  top_right="$(printf '%s\n' "$col" | head -1)"
+
+  # The agent's own pane is the authority on the lane — it is the thing standing in it. Falling
+  # back to the companion's cwd would inherit whatever the review tool left it at.
+  [ -n "$cwd" ] || cwd="$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)"
+
+  if [ "$DRY_RUN" = "1" ]; then
+    _rw split-window -v -d ${cwd:+-c "$cwd"} -t "$top_right"
+    return 0
+  fi
+  # -d again: this runs while claude may still be booting in the chat pane, and stealing focus
+  # would send the launch keystrokes to a shell.
+  tmux split-window -v -d ${cwd:+-c "$cwd"} -t "$top_right" 2>/dev/null || return 0
+  # No apostrophe in this default, deliberately: inside ${x:-...} bash still parses quotes, so
+  # a lone ' opens one and unbalances the rest of the FILE. It reported the error 60 lines
+  # later, in code this change never touched.
+  echo "  cwd-pane     added below the companion, in ${cwd:-the pane cwd}"
 }
 
 # The lead's window, built and sized. Boot's entry point, when the lead is the only agent alive.

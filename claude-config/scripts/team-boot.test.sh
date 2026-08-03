@@ -303,7 +303,7 @@ INFLEET='TMUX=/fake/sock TMUX_PANE=%7;'
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 has   "boot: the pane id is asked of new-window itself"        "$log" "-P -F #{pane_id}"
-has   "boot: …and the lead is typed into exactly that pane"    "$log" "send-keys -t %99 -l claude"
+has   "boot: …and the lead is typed into exactly that pane"    "$log" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
 hasnt "boot: …never into one resolved by window name"          "$log" "-t %1"
 has   "boot: the window opens in the lane, not where boot ran" "$log" "-c $LEADP"
 
@@ -328,7 +328,7 @@ has "boot from a pane outside the fleet session: a window is created" "$log" "ne
 bootlib "$BOOTL" "$TSTUB; _boot_request_team() { :; }; $INFLEET cmd_boot --with-team" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 has "boot --with-team: takes its own window even inside the fleet session" "$log" "new-window"
-has "boot --with-team: …so the lead is typed there, not into the caller's" "$log" "send-keys -t %99 -l claude"
+has "boot --with-team: …so the lead is typed there, not into the caller's" "$log" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
 
 echo
 echo "cmd_boot — the lead comes back to its own conversation"
@@ -359,7 +359,7 @@ echo "cmd_boot — --fresh opts out of resuming"
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot --fresh" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 hasnt "boot --fresh: the transcript is ignored"  "$log" "--continue"
-has   "boot --fresh: …but the lead still launches" "$log" "send-keys -t %99 -l claude"
+has   "boot --fresh: …but the lead still launches" "$log" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
 
 err="$(bootlib "$EMPTY" 'cmd_boot --fresh --bogus' 2>&1 >/dev/null)"
 has "boot: --fresh does not swallow the next flag" "$err" "unknown flag: --bogus"
@@ -450,14 +450,14 @@ has "boot: …with the lane pinned, not the pane's transient cwd" "$log" "--cwd=
 # ORDER IS THE POINT: the split resizes the pane, and a TUI started at its final size never
 # reflows. Both calls succeed in either order, so only position can catch a regression.
 ok "boot: …before the launch keystrokes, not after" \
-   '[ "$(printf %s "$log" | grep -n "fleet-layout lead-window" | cut -d: -f1)" -lt "$(printf %s "$log" | grep -n "send-keys -t %99 -l claude" | cut -d: -f1)" ]'
+   '[ "$(printf %s "$log" | grep -n "fleet-layout lead-window" | cut -d: -f1)" -lt "$(printf %s "$log" | grep -n "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude" | cut -d: -f1)" ]'
 
 # A machine without fleet-layout gets a bare-pane lead — which is what every boot produced
 # before this existed — and must still boot.
 export WORKFLOW_FLEET_LAYOUT_SH="$TMP/does-not-exist.sh"
 : > "$TMUXLOG"
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
-has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "send-keys -t %99 -l claude"
+has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
 unset WORKFLOW_FLEET_LAYOUT_SH
 
 echo

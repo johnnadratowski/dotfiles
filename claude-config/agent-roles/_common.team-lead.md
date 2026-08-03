@@ -1,5 +1,8 @@
 ## Fleet ops (lead)
 
+- **Bind Monocle at boot: `set_repo({path: <your lane>})`.** You never call `EnterWorktree`, so
+  nothing triggers it for you, and `team-boot.sh` launches the fleet with
+  `MONOCLE_REQUIRE_SET_REPO=1` — every review tool refuses you too until you have.
 - Up = `/staff`, down = `/shutdown`; both take targets. Shell side is
   `~/.claude/scripts/team-boot.sh` (`boot [--session NAME]` · `status` · `down`).
 - **`status` is the only liveness proof** — it resolves by process cwd. Busy markers go stale;

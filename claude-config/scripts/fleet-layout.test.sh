@@ -778,6 +778,8 @@ eq "features-1 holds f1 + f2" "features-1 features-1" "$(win_of "$P_A") $(win_of
 eq "features-2 holds f3 + f4" "features-2 features-2" "$(win_of "$P_I") $(win_of "$P_K")"
 eq "dual STACKS the pair: f2 below f1" "yes" \
    "$(t list-panes -a -F '#{pane_id} #{pane_top}' | awk -v a="$P_A" -v b="$P_D" '$1==a{x=$2} $1==b{y=$2} END{print (y>x)?"yes":"no"}')"
+# `dual` only regroups windows; it does not normalize an agent window, so no cwd pane is
+# built here and the count is unchanged. Contrast the `single` block below, which does.
 eq "still 12 panes; nothing destroyed" "12" "$(t list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
 
 echo; echo "single: every feature agent comes home to its own window"
@@ -787,7 +789,10 @@ eq "each feature agent is alone in a window named for it" "jaa ott vii woo" \
    "$(for p in $P_A $P_D $P_I $P_K; do win_of "$p"; done | sort | tr '\n' ' ' | sed 's/ $//')"
 eq "no feature agent is left in a features* window" "0" \
    "$(for p in $P_A $P_D $P_I $P_K; do win_of "$p"; done | grep -c '^features' || true)"
-eq "still 12 panes; nothing destroyed" "12" "$(t list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
+# 16, not 12: normalizing an agent window now also builds the bare cwd pane under the
+# companion, so each of the four agent windows gains one. The assertion is still "nothing was
+# DESTROYED" — it is pinned to an exact count precisely so a silently-lost pane cannot hide.
+eq "no pane destroyed; four cwd panes added" "16" "$(t list-panes -a -F '#{pane_id}' | wc -l | tr -d ' ')"
 eq "the review/test co-tenant window is untouched by single" "1" \
    "$(t list-windows -a -F '#{window_name}' | grep -cx review-test)"
 
@@ -800,7 +805,9 @@ echo; echo "lead-window: the lead's own window is built, not left bare"
 t new-window -d -t main -n wlead -c "$T/pr" 'sleep 600'
 LEADP="$(t list-panes -t main:wlead -F '#{pane_id}' | head -1)"
 lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
-eq "a one-pane lead window gains exactly one companion" "2" \
+# Three now: chat, companion, and the bare cwd shell beneath it. Still an exact count, so an
+# extra split on a re-run reddens.
+eq "a one-pane lead window is built into a three-pane cell" "3" \
    "$(t list-panes -t main:wlead -F x | wc -l | tr -d ' ')"
 eq "the companion is a SECOND COLUMN, not a stacked row" "yes" \
    "$(t list-panes -t main:wlead -F '#{pane_id} #{pane_left}' | awk -v l="$LEADP" '$1==l{x=$2} $1!=l{y=$2} END{print (y>x)?"yes":"no"}')"
@@ -820,8 +827,10 @@ eq "…and focus stays on the lead, which is mid-boot" "$LEADP" \
 # state a later row asserts on is a test failing for a reason unrelated to its own subject.
 t new-window -d -t main -n wcol -c "$T/pr" 'sleep 600'
 COLP="$(t list-panes -t main:wcol -F '#{pane_id}' | head -1)"
+# No manual split any more: ensure_lead_window now builds the companion AND the cwd pane, so
+# the column already holds the two panes this row measures. Splitting again would make it three
+# and the row would be measuring a shape the fleet never produces.
 lib "ensure_lead_window '$COLP'" >/dev/null 2>&1
-t split-window -d -v -t "$(t list-panes -t main:wcol -F '#{pane_id} #{pane_left}' | awk -v l="$COLP" '$1!=l{print $1; exit}')" 'sleep 600'
 # FORCE THE DRIFT FIRST. A fresh `split-window -v` halves evenly, so the fixture as built has
 # nothing to correct — the assertion passed identically with the evener neutered, which is a
 # test that cannot fail for its own defect. The live 36-vs-27 came from resizes landing on the
@@ -850,8 +859,32 @@ ok "…and the chat pane is still the tallest thing in the window" \
 # already has a companion (or a subagent stack) must not gain another pane per boot.
 lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
 lib "ensure_lead_window '$LEADP'" >/dev/null 2>&1
-eq "re-running never splits the window again" "2" \
+eq "re-running never splits the window again" "3" \
    "$(t list-panes -t main:wlead -F x | wc -l | tr -d ' ')"
+
+# THE THIRD PANE: a bare shell under the companion, in the LANE. Its own window again, because
+# the rows above count panes in wlead and this adds one.
+t new-window -d -t main -n wcwd -c "$T/pr" 'sleep 600'
+CWDP="$(t list-panes -t main:wcwd -F '#{pane_id}' | head -1)"
+lib "_ensure_companion '$CWDP' '$T/pr'" >/dev/null 2>&1
+lib "_ensure_cwd_pane '$CWDP' '$T/pr'"  >/dev/null 2>&1
+eq "the window gains a third pane" "3" "$(t list-panes -t main:wcwd -F x | wc -l | tr -d ' ')"
+# It must land in the COMPANION column, not as a row under the chat — that is the difference
+# between "beside the tool" and "squeezing the chat".
+LEFTX="$(t display-message -p -t "$CWDP" '#{pane_left}')"
+eq "…in the companion column, not under the chat" "2" \
+   "$(t list-panes -t main:wcwd -F '#{pane_left}' | awk -v l="$LEFTX" '$1>l' | wc -l | tr -d ' ')"
+# IDEMPOTENT: re-running a layout verb must not keep stacking shells.
+lib "_ensure_cwd_pane '$CWDP' '$T/pr'" >/dev/null 2>&1
+lib "_ensure_cwd_pane '$CWDP' '$T/pr'" >/dev/null 2>&1
+eq "…and re-running adds no more" "3" "$(t list-panes -t main:wcwd -F x | wc -l | tr -d ' ')"
+# A window with no companion column yet is _ensure_companion's job, not this one's — otherwise
+# the first call on a lone pane would split the chat itself.
+t new-window -d -t main -n wbare -c "$T/pr" 'sleep 600'
+BAREP="$(t list-panes -t main:wbare -F '#{pane_id}' | head -1)"
+lib "_ensure_cwd_pane '$BAREP' '$T/pr'" >/dev/null 2>&1
+eq "a window with no column is left alone" "1" \
+   "$(t list-panes -t main:wbare -F x | wc -l | tr -d ' ')"
 
 # THE SEED MUST LAND ON THE FIRST CALL. A pane reports the exec'ing process for a few hundred
 # ms after it is created, which _pane_is_shell reads as "busy — hands off". Boot calls this
@@ -878,7 +911,7 @@ t list-panes -t "$W_K" -F '#{pane_id}' | grep -vx "$P_K" | while read -r dead; d
 eq "fixture: x-4 is alone in its window, as a new teammate is" "1" \
    "$(t list-panes -t "$W_K" -F x | wc -l | tr -d ' ')"
 lib "ensure_agent_windows" >/dev/null 2>&1
-eq "a lone agent's window gains its companion column back" "2" \
+eq "a lone agent's window is rebuilt into a three-pane cell" "3" \
    "$(t list-panes -t "$W_K" -F x | wc -l | tr -d ' ')"
 eq "…and the agent's own pane survived it" "1" \
    "$(t list-panes -t "$W_K" -F '#{pane_id}' | grep -cx "$P_K")"

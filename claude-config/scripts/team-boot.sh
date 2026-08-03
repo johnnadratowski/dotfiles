@@ -322,7 +322,23 @@ cmd_boot() {
   # The reuse path prefixes a `cd`: new-window gets the lane via -c, but a pane we adopt is
   # sitting wherever its shell was left, and the lead's cwd IS its lane identity — alive_in
   # and every other fleet lookup match agents by process cwd.
-  local launch="claude --teammate-mode tmux --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_LANE"
+  # MONOCLE_REQUIRE_SET_REPO=1 — strict binding, scoped to the fleet and nothing else.
+  #
+  # Monocle resolves its repo from the MCP client's advertised roots, which for a teammate are
+  # the LEAD's — teammates boot in the lead's worktree and `EnterWorktree` moves the agent, not
+  # the already-advertised root. The result was not an error: `get_feedback` answered "No
+  # feedback pending" for a review that had been approved in another engine. A silent wrong
+  # answer on a review verdict is the worst failure this fleet has produced.
+  #
+  # `set_repo` fixes it, but it is opt-in, and an agent that forgets gets exactly that silent
+  # wrong answer back. Strict mode turns forgetting into a hard refusal.
+  #
+  # SET HERE, ON THE LEAD'S LAUNCH, because teammates inherit the lead's environment — so one
+  # assignment covers the whole fleet and NOTHING else on the machine. Monocle's own default is
+  # off for good reason: the single-repo, zero-config user is correctly bound by the launch dir
+  # and would be regressed into a mandatory ritual. The danger lives only where agents move
+  # between worktrees, which is exactly here.
+  local launch="MONOCLE_REQUIRE_SET_REPO=1 claude --teammate-mode tmux --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_LANE"
   # CONTINUITY: a relaunched lead resumes ITS OWN conversation. Without this a shutdown/boot
   # cycle read as amnesia — the lead came back knowing nothing of the work it had just been
   # doing, which is the whole reason the cycle exists.
@@ -415,6 +431,22 @@ the lane-guard hook.
 
 Confirm with a single command: pwd && git rev-parse --abbrev-ref HEAD
 Expect: $p and branch $name.
+
+SECOND, immediately after that: bind Monocle to this lane.
+
+    set_repo({path: "$p"})
+
+**This is not optional and it is not deferrable to when you first need a review.** Monocle
+resolves its repo from the MCP client's advertised roots, and yours are the LEAD's — entering
+your worktree moved you, not the advertised root. Unbound, Monocle answers about the lead's
+tree: a review you stage is invisible, and \`get_feedback\` returns "No feedback pending" for a
+verdict that was actually submitted. That is a WRONG ANSWER, not an error, and it has already
+cost this fleet an afternoon.
+
+**Verify from the echo, do not assume.** \`set_repo\` returns the root it bound to, and
+\`review_status\` now prefixes \`[repo: <root> · review: <name>]\`. Check the root is YOUR lane.
+This fleet runs with \`MONOCLE_REQUIRE_SET_REPO=1\`, so every review tool refuses until you have
+bound — a refusal means you skipped this step, not that Monocle is broken.
 
 THEN RESUME — you are re-occupying a lane, not starting one. A teammate is spawned fresh
 every time (no \`--continue\` exists for you: the lead creates you through the Agent tool,

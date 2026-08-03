@@ -138,26 +138,33 @@ out, which once cut the lead to 62 columns of 208.
 Pass an explicit `single` / `dual` / `wide` only if the user names one. Pane ids survive
 `break-pane`, so routing follows the pane id, not the window.
 
-## Step 4b — Tell the user their MCP servers are bound to YOUR worktree
+## Step 4b — Verify every teammate bound Monocle to its own lane
 
-Every teammate's MCP servers launch with its session, in the **lead's** cwd, and
-`EnterWorktree` moves the agent's shell — **not the already-running server**. So a teammate's
-Monocle reviews the LEAD's worktree, which is clean, and a reviewer opening it sees an empty
-diff. Reconfirmed 2026-08-03 on v2.1.220.
+Monocle resolves its repo from the **MCP client's advertised roots**, and a teammate's roots
+are the LEAD's — `EnterWorktree` moves the agent, not the advertised root. Unbound, a teammate's
+Monocle answers about your worktree: a review it stages is invisible, and `get_feedback` returns
+*"No feedback pending"* for a verdict that was actually submitted. **A wrong answer, not an
+error** — which is why this is a verification step and not a footnote.
 
-**Only a human can fix it: `/mcp` in that teammate's own pane, reconnecting the server.** An
-agent cannot run it — built-in slash commands are not skills — and starting a second server in
-the lane does **not** rebind an already-connected client. So this belongs in the staffing
-report, not in a later debugging session.
+**The spawn prompt makes `set_repo({path: <lane>})` the second first-act**, right after
+`EnterWorktree`, and `team-boot.sh` launches the lead with `MONOCLE_REQUIRE_SET_REPO=1` so the
+whole fleet inherits strict binding and nothing else on the machine does. **Confirm each
+teammate reported the root it bound to.** A teammate that says nothing about it has probably
+skipped it; under strict mode its first review call will hard-fail, which is the intended
+outcome but a worse place to find out.
 
-**The tell is `add_annotations`** rejecting entries with *"file is not one of the review's
-changed files"* while `set_review_name` and `set_file_groups` accept happily — they store
-strings and validate nothing.
+**The lead binds too.** You never call `EnterWorktree`, so you have no natural trigger, and
+strict mode refuses you like everyone else. Bind to your own lane at boot.
 
-**AND ITS ABSENCE IS NOT A PASS.** A plan review, or any review with no changed files, makes
-no validating call at all, so the failure cannot surface — one agent's plan review looked
-entirely healthy and was unverifiable. For those, confirm separately:
-`git -C <lead-worktree> status --short` against the agent's own, or assume unbound.
+**Do NOT reach for `/mcp` reconnect.** It was the fix before `set_repo` existed; it needs a
+human in each pane and rebinds nothing an agent can verify. If a teammate is unbound, the
+answer is that it calls `set_repo` — one tool call, from where it already is.
+
+**Historical tell, still worth recognising:** `add_annotations` rejecting entries with *"file is
+not one of the review's changed files"* while `set_review_name` and `set_file_groups` accept
+happily. **Its absence is not a pass** — a plan review makes no validating call at all, so an
+unbound plan review looks entirely healthy. `review_status` now prefixes
+`[repo: <root> · review: <name>]`, which is the direct check that replaces all of this.
 
 ## Step 5 — Report
 
