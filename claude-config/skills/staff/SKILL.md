@@ -20,6 +20,26 @@ launched any other way runs fine and is permanently unaddressable, which is the 
 verification after it is the part that has never existed —`boot --with-team` types a request
 into the lead's pane and then nothing confirms the outcome.
 
+## Step 0 — CHECK YOUR OWN cwd FIRST. A wandering lead blocks every teammate.
+
+```bash
+pwd    # must be the lead's own lane
+```
+
+**A teammate boots in the LEAD's process cwd**, and `EnterWorktree`'s carve-out resolves
+against *the repo it is standing in*. So if the lead has `cd`'d into another repo — trivially
+easy while editing dotfiles, config, or a sibling project — every teammate boots there, the
+lane path is not a worktree of that repo, and **all four are refused**. Not prompted: refused.
+
+Measured, 2026-08-03: a full staff-and-verify cycle burned because the lead's shell had drifted
+to `~/git/dotfiles`. Four teammates came up, each correctly diagnosed it, each wrote a blocker
+to `.claude/needs-input`, and all four had to be stopped and respawned. The signal was
+indistinguishable from a slow boot for three minutes — step 3 polls for a pid, and a refused
+teammate never gets one.
+
+`cd` back to the lane before spawning. If you cannot, say so and stop; do not spawn and hope.
+The failure is loud in the teammate's pane and silent everywhere the lead can see.
+
 ## Step 1 — Resolve targets, and refuse the two bad ones
 
 ```bash
