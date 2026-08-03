@@ -49,12 +49,12 @@ fi
 command -v fleet_not_a_lane >/dev/null 2>&1 ||
   fleet_not_a_lane() { case "${1:-}" in agent-*|.*|'') return 0 ;; *) return 1 ;; esac; }
 _derive_lanes_dir() {
-  local common parent base
+  local common parent
   common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
   [ -n "$common" ] || return 1
-  parent="$(dirname "$common")"; base="$(basename "$parent")"
-  case "$base" in ''|'/'|'.') return 1 ;; esac
-  printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
+  parent="$(dirname "$common")"          # the MAIN CLONE, from any linked worktree
+  case "$parent" in ''|'/'|'.') return 1 ;; esac
+  printf '%s/.claude/worktrees' "$parent"
 }
 # _derive_lanes_dir is the NO-_fleet.sh path only. With _fleet.sh present, fleet_lanes_dir
 # already honours WORKFLOW_LANES_DIR and runs the byte-identical `git rev-parse`, so a

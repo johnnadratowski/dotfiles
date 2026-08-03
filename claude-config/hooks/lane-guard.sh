@@ -11,12 +11,13 @@
 # that defers, forgets, or is interrupted before that call edits lane 0's files
 # believing they are its own.
 #
-# It also guards a second failure. Lanes live OUTSIDE the repo checkout root, and
-# EnterWorktree's schema says a switch made from inside a worktree must target
-# `.claude/worktrees/` of the same repo. It accepted the sibling path anyway. We
-# depend on that undocumented leniency; if a future release enforces the documented
-# rule, EnterWorktree starts failing and every teammate silently stays in lane 0.
-# This turns that from silent corruption into a refused tool call.
+# It also guards a second failure, though a smaller one than it used to. Lanes now live
+# INSIDE the main clone, at `<main clone>/.claude/worktrees/<agent>` — the one location
+# EnterWorktree's permission gate carves out, which is why staffing no longer needs a
+# human to approve a prompt per agent. This paragraph used to say the opposite: that lanes
+# sat outside the checkout root and we depended on undocumented leniency to enter them at
+# all. That leniency is no longer load-bearing. What remains is the window between boot and
+# the EnterWorktree call, which is what the guard is really for.
 #
 # CONTRACT
 #   PreToolUse, matcher Edit|Write|NotebookEdit. Exit 2 + stderr blocks the call.
@@ -34,12 +35,12 @@ set -u
 # hardcoded product path silently measured one product's lanes against another's writes.
 # Unresolvable leaves it empty, which the fail-open contract above already handles.
 _lanes_dir() {
-  local common parent base
+  local common parent
   common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
   [ -n "$common" ] || return 1
-  parent="$(dirname "$common")"; base="$(basename "$parent")"
-  case "$base" in ''|'/'|'.') return 1 ;; esac
-  printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
+  parent="$(dirname "$common")"          # the MAIN CLONE, from any linked worktree
+  case "$parent" in ''|'/'|'.') return 1 ;; esac
+  printf '%s/.claude/worktrees' "$parent"
 }
 # Machine-local layout (see the long note in scripts/_fleet.sh). Sourced DIRECTLY rather than
 # via _fleet.sh, because this hook must stay dependency-free — and read from a FILE rather than
@@ -73,7 +74,21 @@ expected="$LANES_DIR/$agent_name"
 
 # No lane provisioned under this name: we cannot say where it SHOULD be, so we do
 # not get to say it is in the wrong place.
-[ -d "$expected" ] || exit 0
+#
+# BUT SAY SO. This is the guard's whole silent-failure surface: a wrong LANES_DIR makes
+# every lane look unprovisioned, so the guard turns itself off for the entire fleet and
+# nothing anywhere reports it. That is not hypothetical — the derivation above went stale
+# when the lanes moved, and on any machine without ~/.claude/fleet.env this branch fired for
+# every agent. One stderr line is the difference between "misconfigured, and it told me" and
+# "protected, apparently". stderr on a non-blocking hook exit is surfaced to the agent, not
+# to the user, which is the right audience: the agent is the thing standing in the wrong tree.
+if [ ! -d "$expected" ]; then
+  if [ -n "$LANES_DIR" ] && [ ! -d "$LANES_DIR" ]; then
+    echo "lane-guard: INERT — lanes dir '$LANES_DIR' does not exist, so '$agent_name' cannot be" >&2
+    echo "placed. Set WORKFLOW_LANES_DIR (see ~/.claude/fleet.env). Writes are UNGUARDED." >&2
+  fi
+  exit 0
+fi
 
 # Resolve both sides through symlinks so /tmp vs /private/tmp style aliasing does
 # not produce a false block.

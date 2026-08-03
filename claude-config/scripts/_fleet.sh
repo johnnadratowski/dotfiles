@@ -268,13 +268,20 @@ fleet_agent_id() {
 # lanes.sh and fleet-layout.sh cannot disagree about where lanes live (the same
 # duplication that produced three drifting copies of the role patterns).
 #
-# WORKFLOW_LANES_DIR (env, or workflow.config[.local]) wins. Otherwise it derives from
-# the MAIN CLONE's basename + "-worktrees", via the shared git common dir — so it is
-# worktree-invariant by construction. A linked worktree's own toplevel basename differs
-# per worktree and would fork the default from every lane.
+# WORKFLOW_LANES_DIR (env, or ~/.claude/fleet.env, or workflow.config[.local]) wins. Otherwise
+# it derives `<main clone>/.claude/worktrees` via the shared git common dir — worktree-invariant
+# by construction, since the common dir is the same from every linked worktree.
+#
+# THE DERIVATION MUST MATCH WHERE LANES ACTUALLY LIVE, and for a while it did not. It used to
+# produce the sibling `<parent>/<basename>-worktrees`, which was right until the lanes moved
+# into the main clone's `.claude/worktrees/`. A stale derivation is not a cosmetic bug here:
+# `lane-guard.sh` treats a lanes dir that does not exist as "I cannot say where this agent
+# should be" and exits 0, so on any machine without `fleet.env` the guard was silently OFF for
+# every agent. Found in review, by stubbing the input to its failure value rather than reading
+# the happy path.
 #
 # Return status is a CONTRACT, matching fleet_manifest_path: resolvable → 0 + the path
-# on stdout; unresolvable (not a repo, degenerate basename) → non-zero + NO output.
+# on stdout; unresolvable (not a repo, degenerate path) → non-zero + NO output.
 # Callers that mutate treat a failed resolution as a loud refusal.
 # fleet_lane_display_name <agent-name> — a short, speakable label for a lane.
 #
@@ -339,13 +346,12 @@ fleet_lanes_dir() {
   if [ -n "${WORKFLOW_LANES_DIR:-}" ]; then
     printf '%s' "$WORKFLOW_LANES_DIR"; return 0
   fi
-  local common parent base
+  local common parent
   common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
   [ -n "$common" ] || return 1
-  parent="$(dirname "$common")"
-  base="$(basename "$parent")"
-  case "$base" in ''|'/'|'.') return 1 ;; esac
-  printf '%s/%s-worktrees' "$(dirname "$parent")" "$base"
+  parent="$(dirname "$common")"          # the MAIN CLONE, from any linked worktree
+  case "$parent" in ''|'/'|'.') return 1 ;; esac
+  printf '%s/.claude/worktrees' "$parent"
 }
 
 # fleet_manifest_path — echo the machine-local worktrees-manifest path (DX-jn-cc-014).

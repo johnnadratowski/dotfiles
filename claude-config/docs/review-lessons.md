@@ -602,3 +602,50 @@ was about to be marked reviewed.
 to stdout on failure cannot be used as a predicate by reading its output. Check the exit
 status, or use a command whose failure is silent. This is the same family as `cmd | head; echo
 $?` reading head's status rather than cmd's.
+
+---
+
+## A path-shape heuristic dies the moment a human directory moves into the harness's namespace
+
+**Found:** 2026-08-03, reviewing the change that moved the fleet's lanes into the main clone's
+`.claude/worktrees/`. Found by the reviewer auditing that very change, about its own guard.
+
+`reviewer.md`'s first act gated **every destructive operation** — the `git checkout --detach`
+pin, mutation experiments, `git checkout -- . && git clean -fd` — on one test:
+
+```
+permitted only when `git rev-parse --show-toplevel` contains `/.claude/worktrees/`
+```
+
+That was sound for as long as it was true that only the harness put things there. It encoded
+"am I in a throwaway isolation worktree?" as "is this path under a directory the harness owns?"
+— and the second question stopped answering the first the day a human's live checkout moved
+into the same directory.
+
+**The failure is not that the guard got weaker. It is that it kept saying YES.** A reviewer
+spawned into a lane whose `isolation: worktree` silently failed to bind now passes its own
+check and believes it may reset the tree. The author's uncommitted work is what it would
+have reset.
+
+This was not hypothetical. It happened during the review of the moving change itself: the
+reviewer's isolation did not bind, its guard passed, and only its separate instruction to run
+`git rev-parse --show-toplevel` and *report the path* surfaced that it was standing in the
+author's live `team-lead` checkout. Had it followed step 2 in order, the detach would have run
+first.
+
+**The check:** when a guard discriminates "mine" from "someone else's" by **where** a thing
+sits, ask what else may legitimately arrive at that location. A namespace shared with a
+human is not a capability. Prefer a test on the shape of the thing itself — here the basename
+`agent-<hex>`, which the harness generates and a person would not choose — over a test on its
+neighbourhood.
+
+**The general form:** any predicate of the form "path contains X, therefore it is safe to
+destroy" has a lifetime bounded by the first time something you did not put there appears under
+X. Write it so that the diff which moves something into X is forced to notice — the same
+reflex as C-12: a change that alters the *meaning* of a path must reconcile every doc that
+depends on that meaning, and an agent definition is such a doc.
+
+**Corollary, worth as much as the lesson:** the reviewer caught this only because its
+definition tells it to *report* `ISOLATION UNBOUND` rather than merely branch on it. A guard
+that silently takes the safe path when it fails teaches nobody. Make the guard say which branch
+it took.

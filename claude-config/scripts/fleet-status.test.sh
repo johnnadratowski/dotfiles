@@ -87,6 +87,12 @@ lane chas;   live chas    # no marker at all
 lane delta                # lane on disk, nothing occupying it
 lane echo_;  dead echo_
 
+# NOT A LANE: the harness's throwaway isolation-worktree checkout, which now shares this
+# directory with the real lanes. Made LIVE deliberately — an unfiltered enumerator would render
+# it as a running agent, which is the loudest possible wrong answer, and a dead one would be
+# indistinguishable from correctly-filtered.
+lane agent-deadbeefcafe0001; live agent-deadbeefcafe0001; busy_now agent-deadbeefcafe0001
+
 has "a freshly-touched marker reads busy"                       " busy "    "$(row alpha)"
 has "an old marker reads quiet, NOT busy (fleet_busy would say busy for 30m)" \
                                                                 " quiet " "$(row bravo)"
@@ -97,7 +103,12 @@ eq  "down rows show no context or uptime" "- -" \
     "$(row delta | awk '{print $4, $5}')"
 
 # ── the header tally ─────────────────────────────────────────────────────────────────────
+# 3/5, not 4/6: the live `agent-deadbeefcafe0001` above is a harness worktree, not a lane, and
+# must not inflate either half of this count. Filter it out and this exact assertion reddens —
+# which is the point of making that fixture live rather than merely present.
 has "header counts live lanes"       "3/5 lanes up"      "$(run | head -1)"
+hasnt "a harness isolation worktree is not rendered as an agent" \
+                                     "agent-deadbeefcafe0001" "$(run)"
 has "header counts busy lanes"       "1 busy"            "$(run | head -1)"
 hasnt "a stale busy marker does NOT wear a question mark" "needs you" "$(run | head -1)"
 

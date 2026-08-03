@@ -29,12 +29,14 @@ check() { # check <label> <expected-exit> <actual-exit>
 }
 
 # Runs the guard from a parent whose command line carries --agent-name.
-as_teammate() { # as_teammate <name> <cwd>
-  local name="$1" dir="$2"
+# The lanes dir is a parameter so a row can stub it to its FAILURE value — a directory that
+# does not exist — which is the only way to exercise the guard's silent-off path.
+as_teammate() { # as_teammate <name> <cwd> [lanes-dir]
+  local name="$1" dir="$2" lanes="${3:-$LANES}"
   cat > "$TMP/fake-claude.sh" <<EOF
 #!/bin/bash
 cd "$dir" || exit 99
-WORKFLOW_LANES_DIR="$LANES" "$GUARD" </dev/null 2>"$TMP/err.txt"
+WORKFLOW_LANES_DIR="$lanes" "$GUARD" </dev/null 2>"$TMP/err.txt"
 EOF
   chmod +x "$TMP/fake-claude.sh"
   /bin/bash "$TMP/fake-claude.sh" --agent-name "$name"
@@ -91,6 +93,34 @@ if grep -q 'EnterWorktree' "$TMP/err.txt" && grep -q "$LANES/lgt-alpha" "$TMP/er
 else
   fail=$((fail+1)); echo "  FAIL block message is missing the remedy or the lane path"
   sed 's/^/       /' "$TMP/err.txt"
+fi
+
+# 6 — A LANES DIR THAT DOES NOT EXIST TURNS THE GUARD OFF FOR THE WHOLE FLEET, so it has to
+# say so. This is the failure the guard is least able to notice about itself: every lane looks
+# unprovisioned, row 4's deliberate fail-open fires for every agent, and the result is
+# indistinguishable from a protected fleet. It is not hypothetical — the derived fallback went
+# stale when the lanes moved, and on any machine without ~/.claude/fleet.env this fired for
+# every agent, silently.
+#
+# Stubbing the INPUT to its failure value, not mutating the guard: an input that fails open is
+# invisible to happy-path reasoning, and every other row here supplies a lanes dir that exists.
+as_teammate lgt-alpha "$TMP/elsewhere" "$TMP/no-such-lanes-dir" >/dev/null 2>&1
+check "a non-existent lanes dir still fails OPEN" 0 "$?"
+if grep -q 'INERT' "$TMP/err.txt" && grep -q 'UNGUARDED' "$TMP/err.txt"; then
+  pass=$((pass+1)); echo "  ok   …but says so, naming the dir and the consequence"
+else
+  fail=$((fail+1)); echo "  FAIL a non-existent lanes dir disabled the guard SILENTLY"
+  sed 's/^/       /' "$TMP/err.txt"
+fi
+
+# Paired positive, so row 6 cannot pass by the guard shouting on every invocation: the ordinary
+# unknown-agent fail-open (row 4) must stay quiet, because there the fleet is fine and only this
+# one name is unrecognised.
+as_teammate feature-404 "$TMP/elsewhere" >/dev/null 2>&1
+if grep -q 'INERT' "$TMP/err.txt"; then
+  fail=$((fail+1)); echo "  FAIL an unknown agent name wrongly reports the whole guard inert"
+else
+  pass=$((pass+1)); echo "  ok   …and stays quiet when only the NAME is unknown"
 fi
 
 echo

@@ -62,8 +62,10 @@ role doc from it.
 > flags. A stalled teammate is also invisible: the prompt sits in its own pane, `status` cannot
 > see it, and step 3 cannot tell it from a slow boot.
 >
-> **The gate has exactly one carve-out: the MAIN CLONE's own `.claude/worktrees/`**, and that is
-> where lanes now live (moved 2026-08-03 from a sibling `<clone>-worktrees/` directory).
+> **The carve-out we rely on is the MAIN CLONE's own `.claude/worktrees/`**, and that is
+> where lanes now live (moved 2026-08-03 from a sibling `<clone>-worktrees/` directory). It is
+> *a* carve-out demonstrated by the test below — not proven to be the only one; do not reason
+> from "the sole exception".
 > Teammates entering there are not prompted in any mode. Verified end to end: four teammates
 > spawned from a lead in **`auto`**, all four confirmed by process cwd inside ~10s, zero prompts.
 >

@@ -130,6 +130,26 @@ ok    "the LEAD's process survived"           "alive $lead"
 ok    "…while the teammate was actually killed (the sweep did run)" "! alive $mate"
 
 echo
+echo "cmd_down — a harness worktree in the lanes dir is NOT a target"
+
+# THE LANES DIR IS SHARED WITH THE HARNESS, which drops an `agent-<hex>` checkout there for
+# every isolation:"worktree" subagent — a live reviewer's tree, mid-review. `down` sweeping it
+# would kill an agent that occupies no lane and is nobody's to stop, and `status` would print it
+# as a lane with a port block parsed off its hex (one really did resolve to lane 0 and claim
+# team-lead's 8080/3000).
+#
+# The witness is a REAL process, and the assertion is that it SURVIVES — same shape as every
+# other refusal in this file, because a filter that silently does nothing looks identical to one
+# that works until you leave something alive for it to wrongly kill.
+mklane agent-deadbeefcafe0001
+harness="$(spawn)"; occupy agent-deadbeefcafe0001 "$harness"; idle agent-deadbeefcafe0001
+
+out="$(lib 'cmd_down --force')"
+ok    "the harness worktree's process SURVIVED --force"  "alive $harness"
+hasnt "…and it is never even named in the report"        "$out" "agent-deadbeefcafe0001"
+vacate agent-deadbeefcafe0001
+
+echo
 echo "cmd_down — BUSY is skipped, and --force is the only override"
 
 mklane feature-2
@@ -488,18 +508,24 @@ lanes_from() {  # <cwd>
     env HOME="$PHOME" TEAM_BOOT_LIB=1 bash -c '. "'"$SCRIPT"'"; printf "%s" "$LANES_DIR"' )
 }
 
-eq "derives <parent>/<basename>-worktrees from the main clone" "$SCRATCH/myproj-worktrees" \
+# THE DERIVATION MUST NAME WHERE LANES ACTUALLY LIVE. This assertion used to pin the sibling
+# <parent>/<basename>-worktrees and kept passing after the lanes moved into the main clone's
+# .claude/worktrees/ — a test that could not fail for the real defect. The cost was not
+# cosmetic: lane-guard.sh reads a non-existent lanes dir as "I cannot say where this agent
+# belongs" and exits 0, so a stale derivation turned the guard silently OFF for every agent on
+# any machine without ~/.claude/fleet.env.
+eq "derives <main-clone>/.claude/worktrees" "$SCRATCH/myproj/.claude/worktrees" \
    "$(lanes_from "$SCRATCH/myproj")"
 
 # The pointer is what lets `boot` run from $HOME, which is how it is actually invoked — the
 # hardcoded path used to cover that up. Written on a successful resolve, read when there is no
 # repo to derive from.
-mkdir -p "$SCRATCH/myproj-worktrees"
+mkdir -p "$SCRATCH/myproj/.claude/worktrees"
 ( unset GIT_DIR GIT_WORK_TREE WORKFLOW_LANES_DIR; cd "$SCRATCH/myproj" && \
   env HOME="$PHOME" bash "$SCRIPT" status ) >/dev/null 2>&1
-eq "…and caches it machine-locally, outside dotfiles" "$SCRATCH/myproj-worktrees" \
+eq "…and caches it machine-locally, outside dotfiles" "$SCRATCH/myproj/.claude/worktrees" \
    "$(cat "$PHOME/.claude/fleet-lanes-dir" 2>/dev/null)"
-eq "the cache answers when there is no repo to derive from" "$SCRATCH/myproj-worktrees" \
+eq "the cache answers when there is no repo to derive from" "$SCRATCH/myproj/.claude/worktrees" \
    "$(lanes_from "$TMP")"
 
 # THE FAILURE THAT MATTERS: an empty LANES_DIR globs "$LANES_DIR"/*/ as /*/ — every top-level
