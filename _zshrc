@@ -106,10 +106,14 @@ if [[ "$TMUX" = "" && "$SSH_CLIENT" == "" && "$SSH_TTY" == "" ]]; then
 	fi
 fi
 
-# t [name] — jump to a tmux session by name, creating it if absent. From outside tmux it
+# tm [name] — jump to a tmux session by name, creating it if absent. From outside tmux it
 # attaches; from inside it switches the current client, which is the case a bare
 # `tmux attach` refuses. No argument lists what exists.
-t() {
+#
+# NOT `t`: scripts/aliases.sh already owns that for `tree -L 1`, and `ta` is built on it.
+# zsh alias-expands the name in a function definition, so `t() {` parsed as
+# `tree -L 1 () {` and killed the rest of the file.
+tm() {
 	if [[ -z "$1" ]]; then
 		tmux list-sessions -F '#{session_name}: #{session_windows} windows#{?session_attached, (attached),}' 2>/dev/null ||
 			echo "no tmux server running"
