@@ -579,8 +579,24 @@ echo "cmd_stop_engines — stops OUR review engines, and nothing else"
 # SURVIVE, the in-scope one must die. A filter that silently does nothing looks identical to one
 # that works until you leave something alive for it to wrongly kill.
 mklane feature-9
+# THE FIXTURE MUST NOT BE MISTAKEN FOR A REAL ENGINE, and the first version was.
+#
+# It masqueraded as `monocle serve -C <dir>` so cmd_stop_engines' own pgrep would find it —
+# which also made it indistinguishable from a live lane engine to anything else looking, and
+# one leaked past the trap and sat on the process table pretending to be one.
+#
+# Worse, MUTATION-TESTING THIS FUNCTION IS UNSAFE BY CONSTRUCTION. The mutation that proves the
+# blast-radius filter works is "delete the filter" — and the mutant then kills every
+# `monocle serve` on the machine. Run live, it took out all four real lane engines and a
+# teammate's review died with them. A destructive function's guard cannot be mutation-tested by
+# disabling the guard; the mutant does exactly the damage the guard exists to prevent.
+#
+# So the fixture is named for the SUITE, and cmd_stop_engines is driven with an overridden
+# matcher: the test proves the SCOPE LOGIC on processes only this suite owns, and no run of it —
+# mutated or not — can match anything real.
+FAKE_TAG="team-boot-test-engine-$$"
 fake_engine() {  # fake_engine <dir> -> pid
-  bash -c 'exec -a "monocle serve -C '"$1"'" sleep 300' >/dev/null 2>&1 </dev/null &
+  bash -c 'exec -a "'"$FAKE_TAG"' serve -C '"$1"'" sleep 300' >/dev/null 2>&1 </dev/null &
   local p=$!; SPAWNED="$SPAWNED $p"; printf '%s' "$p"
 }
 IN_SCOPE="$(fake_engine "$LANES/feature-9")"
@@ -588,7 +604,7 @@ OUT_HOME="$(fake_engine "$FHOME")"
 OUT_OTHER="$(fake_engine "$TMP/some-other-product")"
 sleep 0.3
 
-out="$(lib 'cmd_stop_engines' 2>&1)"
+out="$(lib "MONOCLE_ENGINE_MATCH='$FAKE_TAG serve' cmd_stop_engines" 2>&1)"
 ok    "the lane's engine was stopped"          "! alive $IN_SCOPE"
 ok    "…the engine at \$HOME SURVIVED"          "alive $OUT_HOME"
 ok    "…and another product's engine SURVIVED"  "alive $OUT_OTHER"
@@ -599,7 +615,7 @@ mklane feature-8
 KEEP="$(fake_engine "$LANES/feature-8")"
 DROP="$(fake_engine "$LANES/feature-9")"
 sleep 0.3
-lib 'cmd_stop_engines feature-9' >/dev/null 2>&1
+lib "MONOCLE_ENGINE_MATCH='$FAKE_TAG serve' cmd_stop_engines feature-9" >/dev/null 2>&1
 ok "a named lane stops only its own engine"    "! alive $DROP"
 ok "…leaving the unnamed lane's running"       "alive $KEEP"
 

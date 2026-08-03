@@ -9,9 +9,10 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **Then `set_repo({path: <your lane>})`.** Monocle binds to the MCP client's roots, which are
   the LEAD's; entering your worktree does not rebind it. Unbound it answers about the lead's
   tree — a staged review is invisible and `get_feedback` says "No feedback pending" for a
-  verdict that was submitted. Wrong answer, not an error. **The `set_repo` echo is the only
-  bind confirmation** — `review_status` shows no repo prefix with no review loaded. The fleet
-  runs strict, so a refusal means you skipped it.
+  verdict that was submitted. Wrong answer, not an error. The echo confirms ROUTING, not
+  reachability: an engine can be dead behind a correct binding, and `review_status` answers
+  "No feedback pending." with no engine at all. **The first write — `set_review_name` — is the
+  liveness probe.** The fleet runs strict, so a refusal means you skipped the bind.
 - **Spawn placement:** lane agent → its own window; reviewer/tester/subagent → current window,
   under its spawner. `run_in_background: false` = in-process, blocks the turn, no pane.
 - **A background agent goes idle, not away.** It stays addressable until stopped.

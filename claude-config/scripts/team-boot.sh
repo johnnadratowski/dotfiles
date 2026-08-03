@@ -444,10 +444,13 @@ tree: a review you stage is invisible, and \`get_feedback\` returns "No feedback
 verdict that was actually submitted. That is a WRONG ANSWER, not an error, and it has already
 cost this fleet an afternoon.
 
-**Verify from the echo, do not assume.** \`set_repo\` returns the root it bound to —
-*"Monocle is now bound to <root>"*. Check that root is YOUR lane, not the lead's. **That echo is
-the only bind confirmation there is:** \`review_status\` does NOT carry a repo prefix when no
-review is loaded — it returns a bare "No feedback pending.", identical bound or unbound.
+**The echo confirms ROUTING, not REACHABILITY, and nothing read-only confirms both.**
+\`set_repo\` returns *"Monocle is now bound to <root>"* — check that root is YOUR lane. But an
+engine can be dead behind a correct binding, and **\`review_status\` answers "No feedback
+pending." with no engine at all**, so neither call distinguishes bound-and-live from
+unbound-and-dead. **The first WRITE is the liveness probe:** \`set_review_name\` is the first
+call that touches the engine, and it fails loudly with *"monocle is not running"*. If it does,
+stop and report — do not work around it.
 This fleet runs with \`MONOCLE_REQUIRE_SET_REPO=1\`, so every review tool refuses until you have
 bound — a refusal means you skipped this step, not that Monocle is broken.
 
@@ -604,7 +607,11 @@ cmd_down() {
 cmd_stop_engines() {
   local want="$*" rc=0 pid dir name
   echo "== stopping review engines under $LANES_DIR =="
-  for pid in $(pgrep -f 'monocle serve' 2>/dev/null); do
+  # The matcher is overridable ONLY so the test suite can point it at processes it owns. It is
+  # never set in normal use. See the fixture note in team-boot.test.sh: the mutation that proves
+  # the scope filter works is "delete the filter", and a mutant matching real `monocle serve`
+  # kills every engine on the machine — which it did, once.
+  for pid in $(pgrep -f "${MONOCLE_ENGINE_MATCH:-monocle serve}" 2>/dev/null); do
     # `-C <dir>` identifies an ENGINE. serve-mcp carries no -C, so it is skipped by construction.
     dir="$(ps -o command= -p "$pid" 2>/dev/null | sed -n 's/.*-C \([^ ]*\).*/\1/p')"
     [ -n "$dir" ] || continue
