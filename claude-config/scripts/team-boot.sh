@@ -427,6 +427,19 @@ decision to \`.claude/needs-input\` (gitignored) at the same moment you ask, and
 you have the answer. The agent panel puts a ❓ on your row when that file exists — the harness
 itself has no waiting-for-input state, so this is the only signal there is.
 
+ALWAYS LEAD THAT LINE — and any question you put to a human anywhere — with WHO IS ASKING
+and WHAT IT IS ABOUT, in this shape:
+
+    $name · <ISSUE-ID>: <the decision, in one line>
+    $name: <the decision>            # when no issue applies
+
+The reader sees your question somewhere that does NOT name you: a prompt in a pane they
+tabbed to, a notification, a relayed summary. Five agents ask questions and an unattributed
+one is a question they cannot answer, because they cannot tell whose branch or whose issue it
+is about. Put the ticket second so it is greppable and clickable. This applies to
+\`.claude/needs-input\`, to any AskUserQuestion header, and to the first line of any message
+you send asking for a decision.
+
 Report with SendMessage to \`team-lead\`: your lane, your branch, and either the issue you
 are resuming or "no work in flight" — then stand by. **Your plain output is not visible to
 the lead** — a report you merely print is a report nobody receives, which is exactly how

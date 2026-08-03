@@ -9,7 +9,10 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **Spawn placement:** lane agent → its own window; reviewer/tester/subagent → current window,
   under its spawner. `run_in_background: false` = in-process, blocks the turn, no pane.
 - **A background agent goes idle, not away.** It stays addressable until stopped.
-- **Blocked on a person?** `echo "<the decision>" > .claude/needs-input`; `rm` when answered.
-  Nothing in the harness reports "waiting" — this is the only signal.
+- **Blocked on a person?** `echo "<you> · <ISSUE>: <the decision>" > .claude/needs-input`; `rm`
+  when answered. Nothing in the harness reports "waiting" — this is the only signal.
+- **Every question to a human starts with who is asking and what it is about** — the same
+  `<you> · <ISSUE>:` prefix, in needs-input, in an AskUserQuestion header, and in the first
+  line of any message. They see it somewhere that does not name you.
 
 Detail: `~/.claude/agent-roles/reference/fleet.md`.
