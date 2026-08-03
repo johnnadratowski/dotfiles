@@ -247,9 +247,40 @@ echo; echo "window_name_from_names"
 # These fixtures are `x-N`, which parses as a lane number exactly as `feature-N` does, so they
 # get labels too; that is the intended behaviour and not fixture-specific.
 eq "one agent -> its lane label"          "vii"         "$(lib 'window_name_from_names x-1')"
+# A LONE NON-LANE AGENT CARRIES ITS TYPE. The tab bar's job is to show which of the things in
+# it is not like the others, so lanes — the steady state — stay unmarked and a transient agent
+# says what it is. Note `planner` is tagged `(plan)` while fleet_resolve_role collapses it into
+# `review`: the tag reads the NAME precisely because that collapse is wrong here, and
+# "plan being written" vs "diff being audited" is the most useful thing a glance can carry.
+eq "a lone reviewer carries (rev)"        "x-pr (rev)"     "$(lib 'window_name_from_names x-pr')"
+eq "a lone tester carries (test)"         "x-test-1 (test)" "$(lib 'window_name_from_names x-test-1')"
+eq "a planner is (plan), not (rev)"       "planner (plan)" "$(lib 'window_name_from_names planner')"
+eq "a lane is NOT tagged"                 "vii"            "$(lib 'window_name_from_names x-1')"
+eq "…nor is the lead"                     "ess"            "$(lib 'window_name_from_names team-lead')"
+# The tag is for a window with ONE resident. A shared window is still named by role, so the
+# multi-agent branch must not start emitting parenthesised noise.
 eq "two features -> the plural role"      "features"    "$(lib 'window_name_from_names x-1 x-2')"
 eq "review + test -> sorted, hyphenated"  "review-test" "$(lib 'window_name_from_names x-pr x-test-1')"
 eq "no agents -> empty (window untouched)" ""           "$(lib 'window_name_from_names')"
+
+# THE NAME MUST NOT MOVE WHEN A SUBAGENT STACKS UNDER ITS SPAWNER. This is the property the
+# task-role filter exists for, and it was only half-implemented: dropping `review` from the
+# role set stopped the tab reading `review-team-lead`, but the one-resident branch then printed
+# the ROLE, so the lead's tab still flipped `ess` -> `team-lead` the moment a review round
+# started and back when it ended. A tab you learned to look for that moves is the bug; naming
+# it after a different string is not a fix. Same agent, same tab, subagents or not.
+eq "lead alone"                            "ess" "$(lib 'window_name_from_names team-lead')"
+eq "…lead hosting one reviewer: UNCHANGED" "ess" "$(lib 'window_name_from_names team-lead x-pr')"
+eq "…lead hosting two: still unchanged"    "ess" "$(lib 'window_name_from_names team-lead x-pr x-test-1')"
+eq "a lane hosting its own reviewer"       "vii" "$(lib 'window_name_from_names x-1 x-pr')"
+# …but a window of ONLY task agents still names itself after them: there is nothing else to
+# call it, and this is the branch that must NOT resolve to a single agent's label.
+eq "reviewers only -> the plural role"     "reviews" "$(lib 'window_name_from_names rev-a rev-b')"
+# Fixture note: `rev-a`/`rev-b` are the names the lead actually spawns, and they matter here —
+# `x-rev-2` was the first attempt and resolves to `feature`, not `review` (no arm of
+# fleet_resolve_role matches it), so the row asserted the plural-role branch while exercising
+# the single-resident one and read `ott`. A fixture whose name does not classify the way the
+# row assumes tests a different branch than the one it is named for.
 
 echo; echo "name-windows"
 before="$(t list-windows -t main -F '#{window_name}' | tr '\n' ',')"

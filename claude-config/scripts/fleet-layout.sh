@@ -115,6 +115,43 @@ _role_of() {
   fleet_resolve_role "$1"
 }
 
+# _type_tag <agent-name> — " (rev)" / " (test)" / " (plan)" for a NON-LANE agent, empty for a
+# lane. Includes the leading space, so callers concatenate without deciding anything.
+#
+# WHY LANES ARE UNMARKED. A tab bar is read at a glance, and its job is to tell you which of
+# the things in it is not like the others. Lanes are the steady state — five of them, always
+# there — so tagging them spends width on the case you already know and leaves the transient
+# agent looking the same as everything else. `woo` and `rev-a (rev)` side by side says what
+# `woo (feature)` and `rev-a (rev)` does not.
+#
+# DERIVED FROM THE NAME, NOT FROM _role_of. `fleet_resolve_role` deliberately collapses
+# planner into `review` — they share a role doc and a spawn contract — but the tab bar is
+# exactly where that collapse is wrong: "is a plan being written or a diff being audited" is
+# the single most useful thing a glance can tell you about a transient agent. Reading the name
+# keeps the tag honest without touching role resolution, which is load-bearing for role-context
+# injection and must not be split for a cosmetic reason.
+_type_tag() {
+  case "$1" in
+    team-lead|feature-[0-9]*)                       printf '' ;;
+    planner|plan|plan-*|*-planner|*-plan)           printf ' (plan)' ;;
+    test|tester|test-*|tester-*|*-test|*-test-*)    printf ' (test)' ;;
+    review|reviewer|rev|rev-*|*-rev|*-review*|pr|pr-*|*-pr|*-pr-*) printf ' (rev)' ;;
+    *)
+      # An unrecognised name falls through to its RESOLVED role, including a per-agent
+      # `.role` override. One consequence worth stating rather than discovering: anything
+      # resolving to `feature` is left unmarked, and `fleet_resolve_role`'s default IS
+      # `feature` — so a stray name nobody's pattern matched reads as a lane on the tab bar.
+      # Deliberate. The alternative is a second classification rule living here that disagrees
+      # with the canonical one, and a tab bar is not worth forking agent identity over.
+      case "$(_role_of "$1")" in
+        feature|team-lead) printf '' ;;
+        review)            printf ' (rev)' ;;
+        test)              printf ' (test)' ;;
+        *)                 printf ' (%s)' "$(_role_of "$1")" ;;
+      esac ;;
+  esac
+}
+
 _plural() {
   case "$1" in
     feature) printf 'features' ;; review) printf 'reviews' ;;
@@ -260,7 +297,8 @@ window_name_from_names() {
   # (`feature-2`) — a tab bar is read at a glance and a one-syllable name is what survives
   # that. The id is unchanged everywhere it is load-bearing; this is display only, and
   # fleet_lane_display_name returns the id unchanged for anything that is not a lane.
-  [ "$#" -eq 1 ] && { printf '%s' "$(fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1")"; return; }
+  [ "$#" -eq 1 ] && { printf '%s%s' \
+      "$(fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1")" "$(_type_tag "$1")"; return; }
   local n roles count durable
   roles="$(for n in "$@"; do _role_of "$n"; done | sort -u)"
 
@@ -283,7 +321,22 @@ window_name_from_names() {
 
   count="$(printf '%s\n' "$roles" | grep -c .)"
   if [ "$count" -eq 1 ]; then
-    if [ "$residents" -le 1 ]; then printf '%s' "$roles"; else _plural "$roles"; fi
+    if [ "$residents" -le 1 ]; then
+      # ONE RESIDENT: name the window for THAT AGENT, exactly as the single-agent branch above
+      # would have. Printing the ROLE here instead made the lead's tab read `ess` while it was
+      # alone and `team-lead` the moment a reviewer stacked under it — the same tab moving
+      # under you that the comment above says this filter exists to prevent, just one step
+      # later. Resolving the surviving name closes that: `ess` either way.
+      local sole=""
+      for n in "$@"; do
+        case "$(_role_of "$n")" in review|test) [ -n "$durable" ] && continue ;; esac
+        sole="$n"; break
+      done
+      if [ -n "$sole" ]; then
+        printf '%s%s' "$(fleet_lane_display_name "$sole" 2>/dev/null || printf '%s' "$sole")" \
+                      "$(_type_tag "$sole")"
+      else printf '%s' "$roles"; fi
+    else _plural "$roles"; fi
   else printf '%s' "$roles" | tr '\n' '-' | sed 's/-$//'
   fi
 }

@@ -328,6 +328,14 @@ fleet_lane_display_name() {
   case "$agent" in
     team-lead) n=0 ;;
     *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])
+      # TRAILING DIGITS ARE NOT ENOUGH. `test-1`, `x-test-1`, `pr-2` all have the shape, and
+      # labelling them handed a TESTER lane 1's name — so a transient agent's tmux tab read
+      # `vii`, colliding with the real lane 1's tab and pointing the eye at the wrong pane.
+      # Only a durable role occupies a lane; task-scoped agents keep their own names.
+      case "$(fleet_resolve_role "$agent")" in
+        team-lead|feature) ;;
+        *) printf '%s' "$agent"; return 0 ;;
+      esac
       n="$(printf '%s' "$agent" | sed -n 's/.*-\([0-9][0-9]*\)$/\1/p')" ;;
     *) printf '%s' "$agent"; return 0 ;;
   esac
