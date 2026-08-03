@@ -54,41 +54,32 @@ role doc from it.
 > reorder, or "improve" the prompt. Until that call lands, `lane-guard` refuses the teammate's
 > every write, which is a blocked tool call rather than silent corruption of lane 0.
 
-> ### ⚠️ PUT THE LEAD IN bypassPermissions BEFORE SPAWNING, or every teammate stalls.
+> ### The lane path is what keeps this promptless. Do not "tidy" it.
 >
-> `EnterWorktree` into a lane is a **permission-root relocation outside `.claude/worktrees/`**,
-> and it is each teammate's FIRST action. **No permission rule can pre-approve it** — the
-> worktrees doc is explicit that an `EnterWorktree` rule and "don't ask again" both fail, and
-> only `bypassPermissions` mode skips it. So without the step below, `/staff` stalls: N panes
-> each sitting on `Do you want to proceed?`, in the teammates' own panes, where `status` cannot
-> see them. Step 3 polls for a pid, and a teammate parked at a prompt is indistinguishable from
-> a slow one.
+> `EnterWorktree` is each teammate's first action, and **no permission rule pre-approves it** —
+> an `EnterWorktree` rule and "don't ask again" both fail; only `bypassPermissions` skips the
+> prompt, and teammates inherit the lead's **current** mode at spawn time rather than its launch
+> flags. A stalled teammate is also invisible: the prompt sits in its own pane, `status` cannot
+> see it, and step 3 cannot tell it from a slow boot.
 >
-> **The fix is a keystroke, not a config change: teammates inherit the lead's CURRENT permission
-> mode at spawn time, not its launch flags.** Measured — every teammate spawned while the lead
-> sat in `auto` got `--permission-mode auto`; one spawned while the lead was in bypass got
-> `--dangerously-skip-permissions` and entered its worktree silently, with no prompt and no
-> click.
+> **The gate has exactly one carve-out: the MAIN CLONE's own `.claude/worktrees/`**, and that is
+> where lanes now live (moved 2026-08-03 from a sibling `<clone>-worktrees/` directory).
+> Teammates entering there are not prompted in any mode. Verified end to end: four teammates
+> spawned from a lead in **`auto`**, all four confirmed by process cwd inside ~10s, zero prompts.
 >
-> So the staffing sequence is:
+> An earlier note here recorded the carve-out as tested-and-rejected. That test entered
+> `<lane>/.claude/worktrees/<name>` — a **lane's** `.claude/`, not the main clone's — and the
+> rejection was real for that path only. The main-clone form was the untested variant, and it
+> works.
 >
-> 1. **Ask the user to shift+tab the lead into `bypassPermissions`.** It is four presses from
->    `auto` (the cycle is `default → acceptEdits → plan → bypassPermissions → auto`, and `auto`
->    is last). This requires the lead to have been launched with
->    `--allow-dangerously-skip-permissions`, which `team-boot.sh` does.
-> 2. Spawn (step 2 below). Teammates come up in bypass and enter their lanes silently.
-> 3. **Tell the user to shift+tab the lead back to `auto`**, and each teammate down to `auto`
->    too. **Leaving bypass is always allowed; only entering is gated**, so a teammate can always
->    step down but could never have stepped up.
+> **So: no bypass step, and nothing to ask the user for.** Two rules survive from when there was:
 >
-> **The lead must never answer a teammate's prompt on its behalf**, and must not keystroke into
-> a teammate's pane — auto mode's classifier blocks exactly that, treating it as Claude altering
-> its own oversight. If a teammate does stall, surface it and wait.
->
-> **Why not relocate lanes under `.claude/worktrees/` instead?** Tested and rejected: a probe
-> entering `<lane>/.claude/worktrees/<name>` prompted anyway, so the carve-out does not resolve
-> against a worktree's own `.claude/`. The main-clone variant is untested and moot given the
-> above.
+> - **Never keystroke into a teammate's pane**, and never answer a teammate's prompt for it —
+>   auto mode's classifier blocks exactly that, reading it as Claude altering its own oversight.
+>   A stalled teammate gets surfaced, not driven.
+> - **If a teammate ever does stall on `EnterWorktree`, the lane path is wrong** — check it
+>   against `WORKFLOW_LANES_DIR` (`~/.claude/fleet.env`) before reaching for bypass. Bypass
+>   would paper over a misconfigured fleet, and the whole fleet inherits it.
 
 ## Step 3 — Verify each one actually landed (the reason this exists)
 
