@@ -30,7 +30,24 @@ Next step: <what happens next>
   never emit one to look thorough. It is the same glyph `fleet-status` uses for a lane blocked
   on a human, deliberately: the panel and the conversation must not look like two signals.
 
-### YOU own `needs-input`, not the agents
+### YOU own the whole panel — `status` AND `needs-input`
+
+`fleet-status` used to build each lane's line by scraping that agent's own last `📌` out of
+its transcript. Self-maintaining, and wrong in the way that matters: a `📌` is the last thing
+an agent **said**, so a lane parked for three hours advertised whatever it was mid-thought
+about, and a lane whose last turn was a one-liner advertised the turn before that. Removed
+2026-08-04 at the user's instruction — *"the pins don't make sense in there anymore"*.
+
+**So the panel is now entirely yours, and it is only worth anything if it is exactly current:**
+
+- **`<lane>/.claude/status`** — one line, **60 characters max**, what that lane is doing NOW.
+  **Rewrite it the moment an agent reports in**, not when the work finishes.
+- **Shorthand, not prose.** `FEAT-6 done+uncommitted; MON-10 plan blocked on 2 asks` is a
+  complete status. Over 60 is clipped with `…` at read, so a verbose line loses its own tail.
+- **`📌` still leads your CHAT updates.** It was removed from the panel only — a glyph on every
+  single row is decoration, and the one glyph the panel spends is `⚠️`, meaning *you*.
+
+
 
 Every agent now reports through the lead, so an agent writing its own
 `<lane>/.claude/needs-input` produces a flag nobody clears — it goes quiet by standing order,
@@ -42,9 +59,12 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
 - **Emit a `⚠️` ⇒ write it to that lane's `.claude/needs-input`**, in the same turn.
 - **User answers ⇒ delete the file**, in the same turn. Not when the work resumes — when the
   answer arrives.
-- **One ask per LINE**, and **no `<label> (<name>) · <ISSUE>:` prefix** — the panel row above
-  already shows all three, so repeating them is noise the reader steps over to reach the
-  question. Phrase it for someone who has not read the conversation.
+- **One ask per LINE, 60 characters max** — same cap and same reason as `status`. The asks
+  were free text and the user's verdict was that they had become *useless*: a paragraph per
+  item is not a to-do list.
+- **No `<label> (<name>) · <ISSUE>:` prefix** — the panel row above already shows all three, so
+  repeating them is noise the reader steps over to reach the question. Phrase it for someone
+  who has not read the conversation.
 - A lane blocked on **you** is not blocked on a human — no flag. The flag means the *user*.
 
 **Fleet-level asks** — merge this PR, decide who owns X, approve these issues — go in
@@ -52,10 +72,10 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
 the per-lane reader walks *up*, so that name in the main clone gets picked up as the lead lane's
 own asks.
 
-`fleet-status` renders lane asks nested under that lane's `📌`, and the fleet list under its own
-heading after all lanes. **Together they are the user's live to-do list** — that is the artifact,
-not a status decoration, so it is only useful if it is exactly current. Stale entries are worse
-than none: they were what made the user stop trusting the old signal.
+`fleet-status` renders lane asks nested under that lane's status line, and the fleet list under
+its own heading after all lanes. **Together they are the user's live to-do list** — that is the
+artifact, not a status decoration, so it is only useful if it is exactly current. Stale entries
+are worse than none: they were what made the user stop trusting the old signal.
 
 **Teammates no longer write their own.** Tell any lane that does to stop and report the ask to
 you instead.

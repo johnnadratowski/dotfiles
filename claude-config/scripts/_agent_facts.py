@@ -21,8 +21,17 @@ import os
 import re
 import time
 
-MARK = "\U0001F4CC"        # the summary sentinel the Concise output style leads with
 TAIL = 512 * 1024          # bytes of transcript to scan; a whole read blows the time budget
+
+# One shorthand line, hard cap. Enforced HERE rather than in the renderer so every surface —
+# terminal, JSON, a future one — agrees on what the record says, and so an over-long entry is
+# visibly clipped in the place it is authored rather than looking fine until something wraps.
+LINE_MAX = 60
+
+
+def clip(s, n=LINE_MAX):
+    s = re.sub(r"\s+", " ", s or "").strip()
+    return s if len(s) <= n else s[:n - 1].rstrip() + "…"
 
 
 def as_int(x):
@@ -107,6 +116,26 @@ def todo_pairs_for(cwd):
     return pairs
 
 
+def status_line(cwd):
+    """What this lane is doing right now — ONE shorthand line, written by the LEAD.
+
+    This replaced scraping the agent's own last 📌 summary out of its transcript. That was
+    self-maintaining and it was wrong in the way that matters: a summary is the agent's
+    last *utterance*, so a lane that spoke three hours ago and has been parked ever since
+    still advertised whatever it was mid-thought about, and a lane whose last turn was a
+    trivial reply advertised the turn before that. The panel is a coordination surface, so
+    it has to say what is TRUE NOW, which only the coordinator knows.
+
+    Prose is not wanted here. Sixty characters of shorthand that a reader can scan down a
+    column beats a sentence that pushes the next lane off the screen.
+    """
+    for ln in _walk_up(cwd, ".claude", "status").splitlines():
+        ln = ln.strip()
+        if ln and not ln.startswith("#"):
+            return clip(ln)
+    return ""
+
+
 def needs_input(cwd):
     """Does this agent want the human? THE HARNESS CANNOT TELL US.
 
@@ -144,7 +173,7 @@ def needs_input_items(cwd):
         if not ln:
             continue
         parts = [p.strip(" ;") for p in _ASK_ENUM.split(ln)] if _ASK_ENUM.search(ln) else [ln]
-        items.extend(p for p in parts if p)
+        items.extend(clip(p) for p in parts if p)
     return items
 
 
@@ -174,60 +203,6 @@ def _tail(path, nbytes=TAIL):
             return fh.read().decode("utf-8", "replace")
     except OSError:
         return ""
-
-
-def summary_for(cwd, path=None):
-    """The agent's most recent 📌 summary, from its own transcript.
-
-    Only 📌-led lines qualify and the LAST one wins, so a trivial reply leaves the previous
-    summary standing rather than blanking the row.
-
-    Widening reads, not one big one. A single 512KB tail is the right size almost always,
-    but one turn that dumped a large tool result can push the last summary out of it — a
-    lead reading a 7MB transcript saw its own row blank for exactly that reason. So the
-    window grows only when the small read came up empty; the common case still reads 512KB.
-    Each step re-reads from the tail rather than stepping backwards through fixed chunks,
-    so no record is ever split across the boundary and lost.
-    """
-    path = path or transcript_for(cwd)
-    if not path:
-        return ""
-    for n in (TAIL, 4 * TAIL, 16 * TAIL):
-        found = _scan_summary(_tail(path, n))
-        if found:
-            return found
-        try:
-            if os.path.getsize(path) <= n:   # already read the whole file; widening is futile
-                break
-        except OSError:
-            break
-    return ""
-
-
-def _scan_summary(chunk):
-    last = ""
-    for line in chunk.splitlines():
-        if MARK not in line:               # cheap reject before the JSON parse
-            continue
-        try:
-            o = json.loads(line)
-        except Exception:
-            continue
-        if o.get("type") != "assistant":
-            continue
-        content = (o.get("message") or {}).get("content")
-        if not isinstance(content, list):
-            continue
-        for c in content:
-            if c.get("type") != "text":
-                continue
-            for ln in (c.get("text") or "").splitlines():
-                ln = ln.strip()
-                if ln.startswith(MARK):
-                    last = ln[len(MARK):].strip()
-    last = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", last)   # markdown is noise at this width
-    last = re.sub(r"\*\*|\*|`|~~|__", "", last)
-    return re.sub(r"\s+", " ", last).strip()
 
 
 def window_for(model):

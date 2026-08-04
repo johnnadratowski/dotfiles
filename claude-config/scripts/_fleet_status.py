@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    MARK, context_for, fmt_secs, needs_input, needs_input_items, summary_for, todo_for,
+    clip, context_for, fmt_secs, needs_input, needs_input_items, status_line, todo_for,
     todo_pairs_for,
 )
 
@@ -58,7 +58,7 @@ def general_asks():
             body = f.read().strip()
     except OSError:
         return []
-    return [ln.strip() for ln in body.splitlines() if ln.strip() and not ln.startswith("#")]
+    return [clip(ln) for ln in body.splitlines() if ln.strip() and not ln.startswith("#")]
 
 # Emoji occupy two terminal cells while len() counts them as one, so a column padded with
 # %-*s containing ❓ lands one cell right of its neighbours and the whole table skews. These
@@ -145,7 +145,7 @@ def rows():
         if kind == "subagent":
             yield {"name": name, "path": path, "state": state, "uptime": fmt_uptime(up),
                    "kind": kind, "label": label, "tokens": None, "context_pct": None,
-                   "issue": "", "needs_input": "", "summary": ""}
+                   "issue": "", "needs_input": "", "status": ""}
             continue
 
         used, win = context_for(path, tpath or None)
@@ -171,7 +171,9 @@ def rows():
             # One element per ask. "needs_input" stays a string for JSON consumers; the panel
             # renders these, because a lane routinely owes the human more than one answer.
             "asks": needs_input_items(path),
-            "summary": summary_for(path, tpath or None),
+            # Lead-written, not scraped. See status_line() for why the transcript could not
+            # be the source: it reports the last thing an agent SAID, not what is true now.
+            "status": status_line(path),
         }
 
 
@@ -193,10 +195,10 @@ def main():
     live = sum(1 for r in lanes if r["state"] != "down")
     busy = sum(1 for r in data if r["state"] == "busy")
 
-    # ❓ MEANS "THIS AGENT ASKED YOU SOMETHING", AND NOTHING ELSE. It used to also mean
-    # `quiet` — turn open, no tool activity — which is a guess about an agent, not a request
-    # from one. Two lanes wore a question mark for hours with nothing to answer, which is how
-    # an attention marker stops being worth looking at.
+    # ⚠ MEANS "A HUMAN OWES AN ANSWER HERE", AND NOTHING ELSE. It used to also mean `quiet` —
+    # turn open, no tool activity — which is a guess about an agent, not a request from one.
+    # Two lanes wore the marker for hours with nothing to answer, which is how an attention
+    # marker stops being worth looking at.
     ask = [r for r in data if r["needs_input"]]
     general = general_asks()
     n_ask = sum(len(r.get("asks") or []) for r in data) + len(general)
@@ -219,8 +221,8 @@ def main():
     wl = max((len(r.get("label") or "") for r in data), default=0)
 
     def wrap(text, indent):
-        """One line, hard-truncated. The second line owns the full width, so a summary is
-        readable here in a way it never was when it had to share a row with six columns."""
+        """One line, hard-truncated. A backstop only — every entry is already clipped to 60
+        at read, so this fires only on a genuinely narrow pane."""
         room = cols - indent - 1
         if room < 12:
             return ""
@@ -254,13 +256,14 @@ def main():
                               else (r["issue"] or "—"))
         sys.stdout.write(line.rstrip() + "\n")
 
-        # SECOND LINE: what it is actually doing. The 📌 summary comes FIRST and always — it is
-        # the "what is this lane" line, and a reader scanning the panel wants that anchor before
-        # anything hanging off it. The ⚠ ask nests UNDER it: an ask without its context reads as
-        # an interruption rather than a next step. (This order is the user's; the reverse was
-        # tried and put the question above the thing it was about.)
-        if r["summary"]:
-            out = wrap(MARK + " " + r["summary"], 6)
+        # SECOND LINE: what this lane is doing, now. It leads and it is unmarked — a glyph in
+        # front of every single row is decoration, not signal, and the only glyph the panel
+        # should spend is the one meaning "you". Indentation already says it belongs to the row
+        # above. The ⚠ asks nest UNDER it: an ask without its context reads as an interruption
+        # rather than a next step. (This order is the user's; the reverse was tried and put the
+        # question above the thing it was about.)
+        if r["status"]:
+            out = wrap(r["status"], 6)
             if out:
                 sys.stdout.write(out + "\n")
         # One ⚠ per ask. The lane's label, name and ticket are already on the row above, so the

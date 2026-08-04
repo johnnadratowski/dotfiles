@@ -11,9 +11,8 @@
 #     window (under which a finished agent reads busy for half an hour)
 #   - a lane with no live registration reads `down`, and shows no stale context/uptime
 #   - a dead pid does not count as live
-#   - the last 📌 wins, and is still found when a big tool result pushes it past the first
-#     512KB tail (the lead's own row was blank for exactly this reason)
-#   - .claude/needs-input outranks the summary for the leftover width
+#   - the status line is the LEAD-WRITTEN .claude/status, never the agent's own transcript
+#   - status and asks are hard-capped at 60 chars, so one verbose entry cannot own the pane
 #   - current-work yields the id only, never the resume prose that follows it
 #   - emoji-width padding keeps the columns aligned
 
@@ -38,7 +37,7 @@ trap cleanup EXIT INT TERM
 
 LANES="$T/lanes"
 mkdir -p "$FAKEHOME/.claude/running-agents" "$FAKEHOME/.claude/agent-busy" \
-         "$FAKEHOME/.claude/projects" "$LANES"
+         "$FAKEHOME/.claude/agents" "$FAKEHOME/.claude/projects" "$LANES"
 
 # A provably dead pid: a subshell already reaped.
 ( : ) & DEADPID=$!; wait "$DEADPID" 2>/dev/null
@@ -51,7 +50,9 @@ transcript(){
   cp "$src" "$FAKEHOME/.claude/projects/$munged/session.jsonl"
 }
 
-# assistant_line <pin-text> — one transcript record carrying a 📌 summary.
+# assistant_line <text> — one transcript record. The text is carried as a 📌 summary because
+# that is what the panel USED to render; these tests now assert it is NOT rendered. The record
+# also carries the token usage that context% is still legitimately derived from.
 assistant_line(){
   python3 -c '
 import json,sys
@@ -62,6 +63,7 @@ print(json.dumps({"type":"assistant","message":{"model":"claude-opus-5","content
 }
 
 lane(){ mkdir -p "$LANES/$1/.claude"; }
+status(){ printf '%s\n' "$2" > "$LANES/$1/.claude/status"; }
 live(){ printf 'cwd:%s' "$LANES/$1" > "$FAKEHOME/.claude/running-agents/$1.$$"; }
 dead(){ printf 'cwd:%s' "$LANES/$1" > "$FAKEHOME/.claude/running-agents/$1.$DEADPID"; }
 busy_now(){ : > "$FAKEHOME/.claude/agent-busy/$1"; }
@@ -118,37 +120,59 @@ printf 'FEAT-42\thttps://example.invalid/FEAT-42\n# a comment\nresume prose that
 has "current-work yields the tracker id"           "FEAT-42" "$(row alpha)"
 hasnt "current-work does not leak the resume prose" "resume prose" "$(row alpha)"
 
-assistant_line "first summary"  >  "$T/t.jsonl"
-assistant_line "LAST summary"   >> "$T/t.jsonl"
+assistant_line "TRANSCRIPT PIN" > "$T/t.jsonl"
 transcript alpha "$T/t.jsonl"
-has "the LAST 📌 wins"        "LAST summary"  "$(row alpha)"
-hasnt "an earlier 📌 is not shown" "first summary" "$(row alpha)"
 has "context% is derived from the transcript usage" " 2% " "$(row alpha)"
 
-# A big tool result between the summary and EOF: the 512KB tail misses it, the widening
-# read finds it. This is the lead's own blank-row bug.
-{ assistant_line "BURIED summary"
-  python3 -c 'import json;print(json.dumps({"type":"user","message":{"content":"x"*900000}}))'
-} > "$T/big.jsonl"
-transcript bravo "$T/big.jsonl"
-has "a 📌 pushed past the first 512KB tail is still found" "BURIED summary" "$(row bravo)"
+# ── the status line is the LEAD's, not the agent's ───────────────────────────────────────
+# The panel used to scrape the agent's own last 📌 out of its transcript. That reports the
+# last thing the agent SAID, which for a parked lane is whatever it was mid-thought about
+# hours ago. This assertion is the whole point of the rework: a live transcript pin sits on
+# disk for alpha and must NOT appear.
+status alpha "PR #124 staged, parked"
+has  "the lead-written status is shown"              "PR #124 staged, parked" "$(row alpha)"
+hasnt "the agent's own transcript pin is NOT shown"  "TRANSCRIPT PIN"         "$(row alpha)"
+hasnt "and no pin glyph is rendered at all"          "📌"                      "$(run)"
+# Counted, not string-compared against "": an empty second line is also what a BROKEN row()
+# produces, so the negative has to be stated as "alpha grew a line and chas did not".
+eq   "a lane with a status owns two lines"        "2" "$(row alpha | wc -l | tr -d ' ')"
+eq   "a lane with no status file owns just one"   "1" "$(row chas  | wc -l | tr -d ' ')"
 
-# ── needs-input outranks the summary ─────────────────────────────────────────────────────
+# ── the 60-char cap ──────────────────────────────────────────────────────────────────────
+# Uncapped, one verbose entry owns the pane and the column stops being scannable — which is
+# what happened to the free-text asks. The cap is enforced at READ so JSON sees it too.
+status bravo "$(python3 -c 'print("x"*95)')"
+has "an over-long status is clipped"          "…" "$(row bravo)"
+eq  "…to exactly 60 cells"  "60" \
+    "$(row bravo | sed -n '2p' | python3 -c 'import sys;print(len(sys.stdin.readline().strip()))')"
+
+# ── needs-input renders under the status ─────────────────────────────────────────────────
 printf 'park FEAT-6 or rerun once #111 lands?\n' > "$LANES/alpha/.claude/needs-input"
 has "needs-input is shown"                   "park FEAT-6"   "$(row alpha)"
-has "the summary is still shown alongside the question" "LAST summary" "$(row alpha)"
-has "only an explicit needs-input counts as needing you" "❓ 1 needs you" "$(run | head -1)"
+has "the status is still shown alongside the ask" "PR #124 staged, parked" "$(row alpha)"
+has "only an explicit needs-input counts as needing you" "⚠️ 1 needs you" "$(run | head -1)"
+
+printf '%s\n' "$(python3 -c 'print("q"*95)')" > "$LANES/chas/.claude/needs-input"
+eq "an over-long ask is clipped to 60 too" "60" \
+   "$(row chas | sed -n '2p' | python3 -c '
+import sys
+# the ⚠ + VS16 + space lead-in is 3 cells the cap does not count
+print(len(sys.stdin.readline().strip()) - 3)')"
+rm -f "$LANES/chas/.claude/needs-input"
 
 # ── alignment ────────────────────────────────────────────────────────────────────────────
-# ❓ is two cells wide where len() counts one; if that is not accounted for, the rows whose
-# icon is ❓ skew one column against the rest.
+# ⚠️ is two cells wide where len() counts two codepoints as two; if neither the width nor the
+# zero-width variation selector is accounted for, the rows whose icon is ⚠️ skew against the rest.
 widths="$(run | python3 -c '
 import sys, re
 # NOT the geometric shapes (U+25CB/CF/D4 — ○ ● ◔): terminals render those single-width,
 # and inventing a wide range for them made this probe disagree with a correctly aligned
 # table. Only true wide/emoji ranges belong here.
-W=[(0x1F300,0x1F64F),(0x2753,0x2755),(0x1F900,0x1F9FF)]
-def w(s): return sum(2 if any(a<=ord(c)<=b for a,b in W) else 1 for c in s)
+W=[(0x1F300,0x1F64F),(0x2753,0x2755),(0x1F900,0x1F9FF),(0x2600,0x27BF)]
+Z=[(0xFE00,0xFE0F)]
+def w(s):
+    return sum(0 if any(a<=ord(c)<=b for a,b in Z)
+               else 2 if any(a<=ord(c)<=b for a,b in W) else 1 for c in s)
 # agent lines only: two leading spaces, an icon, the name, then a state word.
 rows=[l for l in sys.stdin if re.match(r"^  \S+ +\S+ +(busy|idle|quiet|down) ", l)]
 print(len({w(re.split(r" (busy|idle|quiet|down) ", l)[0]) for l in rows}) if rows else 0)')"
@@ -163,8 +187,8 @@ has "a live agent with no lane is listed as a subagent" "rev-a"        "$(run)"
 has "and it is indented under the lanes"                "└"           "$(run)"
 has "the header counts subagents separately"            "1 subagent"  "$(run | head -1)"
 sub="$(run | grep -F 'rev-a')"
-hasnt "a subagent does NOT borrow its spawner's issue"   "FEAT-42"     "$sub"
-hasnt "a subagent does NOT borrow its spawner's summary" "LAST summary" "$sub"
+hasnt "a subagent does NOT borrow its spawner's issue"  "FEAT-42"                "$sub"
+hasnt "a subagent does NOT borrow its spawner's status" "PR #124 staged, parked" "$sub"
 rm -f "$FAKEHOME/.claude/running-agents/rev-a.$$" "$FAKEHOME/.claude/agents/rev-a.cwd"
 
 # ── json ─────────────────────────────────────────────────────────────────────────────────
