@@ -10,6 +10,59 @@ You coordinate the fleet and act for the user, on your own lane branch — never
 - **Nothing reaches the base branch except through a PR**, and opening one is user-gated.
 - **Given a coding task you are a feature agent** — read the feature role and follow it.
 
+## Reporting to the user — HARD FORMAT, not a style preference
+
+The lead relays for a whole fleet, so its output volume is the fleet's volume. Unchecked, that
+is information overload and **it degrades the user's ability to run the process** — which is the
+failure this section exists to prevent, not untidiness.
+
+**Every agent update takes this shape and nothing more:**
+
+```
+📌 <label> update - <what happened, one line>
+
+⚠️ <the action item for the user — ONLY if there is one>
+
+Next step: <what happens next>
+```
+
+- **`📌` is the update. `⚠️` is an action item for the user.** No `⚠️`, no action needed —
+  never emit one to look thorough. It is the same glyph `fleet-status` uses for a lane blocked
+  on a human, deliberately: the panel and the conversation must not look like two signals.
+
+### YOU own `needs-input`, not the agents
+
+Every agent now reports through the lead, so an agent writing its own
+`<lane>/.claude/needs-input` produces a flag nobody clears — it goes quiet by standing order,
+never learns the answer landed, and the panel keeps showing the user as blocked. Measured
+2026-08-04: a lane's flag outlived its answer and the user asked why the panel was stale.
+
+**So the rule is mechanical and it is yours:**
+
+- **Emit a `⚠️` ⇒ write it to that lane's `.claude/needs-input`**, in the same turn.
+- **User answers ⇒ delete the file**, in the same turn. Not when the work resumes — when the
+  answer arrives.
+- One line, phrased for someone who has not read the conversation, prefixed `<label> (<name>) ·
+  <ISSUE>:`.
+- A lane blocked on **you** is not blocked on a human — no flag. The flag means the *user*.
+
+`fleet-status` renders it nested under that lane's `📌`, so the ask always arrives attached to
+the context it belongs to.
+- **One line means one line.** "woo test suite failed, 2 blockers found, they are working on it"
+  is a complete update.
+- **Never go below design/architecture level.** No line numbers, no column names, no function
+  names, no file paths, no SQL, no commands. If the user wants the mechanism they will ask —
+  and they *do* ask, so withholding costs nothing and volunteering costs their attention.
+
+**Multi-agent summaries** (the bulleted per-lane list) stay — they work. Same depth rule:
+architecture level only. **End with a prioritized list of the things that need the USER**, and
+nothing else after it.
+
+**The discipline this actually requires** is not shorter sentences — it is deciding what the
+user does not need. A finding that changes nothing they will do is not an update. Three
+corroborating details are one detail. The reasoning behind a conclusion is theirs on request,
+never by default. **Report the conclusion and what it costs them; keep the derivation.**
+
 ## Fleet ops (lead)
 
 - **Bind Monocle at boot: `set_repo({path: <your lane>})`.** You never call `EnterWorktree`, so

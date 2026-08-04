@@ -32,19 +32,33 @@ def osc8(label, url):
 
 STATE_ICON = {"busy": "●", "quiet": "◔", "idle": "○", "down": "·"}
 
+# The one glyph meaning "a human has to answer this", used identically in the lead's chat
+# output and here, so the panel and the conversation cannot look like different signals.
+ASK = "⚠️"
+
 # Emoji occupy two terminal cells while len() counts them as one, so a column padded with
 # %-*s containing ❓ lands one cell right of its neighbours and the whole table skews. These
 # ranges cover the emoji actually used here (and any the agents put in their summaries);
 # they are not a general wcwidth.
 _WIDE = ((0x1100, 0x115F), (0x2E80, 0xA4CF), (0xAC00, 0xD7A3), (0xF900, 0xFAFF),
          (0xFE30, 0xFE6F), (0xFF00, 0xFF60), (0xFFE0, 0xFFE6),
-         (0x1F300, 0x1F64F), (0x1F900, 0x1F9FF), (0x2753, 0x2755), (0x1F680, 0x1F6FF))
+         (0x1F300, 0x1F64F), (0x1F900, 0x1F9FF), (0x2753, 0x2755), (0x1F680, 0x1F6FF),
+         # ⚠ and its neighbours. U+26A0 is nominally narrow, but terminals render it wide when
+         # it carries VS16 — which ⚠️ does. Omitting it skews every column to its right.
+         (0x2600, 0x27BF))
+
+# Zero-width: a variation selector is a modifier on the preceding glyph, not a cell of its own.
+# Counting it as 1 happened to give ⚠️ the right total only because U+26A0 was being undercounted
+# — two errors cancelling. Both are fixed rather than left to keep cancelling.
+_ZERO = ((0xFE00, 0xFE0F), (0x200D, 0x200D))
 
 
 def dwidth(s):
     w = 0
     for ch in s:
         o = ord(ch)
+        if any(lo <= o <= hi for lo, hi in _ZERO):
+            continue
         w += 2 if any(lo <= o <= hi for lo, hi in _WIDE) else 1
     return w
 
@@ -161,7 +175,7 @@ def main():
     if subs:
         head += "  %d subagent%s" % (len(subs), "" if len(subs) == 1 else "s")
     if ask:
-        head += "  ❓ %d needs you" % len(ask)
+        head += "  %s %d needs you" % (ASK, len(ask))
     # The clock is what tells you the view is live rather than a frozen pane you left open.
     head += "  ·  " + os.environ.get("FLEET_NOW", "")
     sys.stdout.write(head.rstrip() + "\n")
@@ -194,7 +208,7 @@ def main():
             pct, up = "-", "-"
         else:
             up = r["uptime"] or "-"
-        icon = "❓" if r["needs_input"] else STATE_ICON.get(r["state"], "?")
+        icon = ASK if r["needs_input"] else STATE_ICON.get(r["state"], "?")
         # Subagents are guests of whoever spawned them, so they are indented rather than
         # listed as peers of the lanes.
         sub = r.get("kind") == "subagent"
@@ -209,14 +223,17 @@ def main():
                               else (r["issue"] or "—"))
         sys.stdout.write(line.rstrip() + "\n")
 
-        # SECOND LINE: what it is actually doing. A question outranks the summary — one is
-        # addressed to you, the other is background — and both are shown when both exist.
-        if r["needs_input"]:
-            out = wrap("❓ " + r["needs_input"], 6)
-            if out:
-                sys.stdout.write(out + "\n")
+        # SECOND LINE: what it is actually doing. The 📌 summary comes FIRST and always — it is
+        # the "what is this lane" line, and a reader scanning the panel wants that anchor before
+        # anything hanging off it. The ⚠ ask nests UNDER it: an ask without its context reads as
+        # an interruption rather than a next step. (This order is the user's; the reverse was
+        # tried and put the question above the thing it was about.)
         if r["summary"]:
             out = wrap(MARK + " " + r["summary"], 6)
+            if out:
+                sys.stdout.write(out + "\n")
+        if r["needs_input"]:
+            out = wrap(ASK + " " + r["needs_input"], 8)
             if out:
                 sys.stdout.write(out + "\n")
 
