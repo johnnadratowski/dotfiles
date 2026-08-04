@@ -74,6 +74,12 @@ Call the `set_base_ref` tool with `{ref: "<merge-base-sha>"}`. Monocle now rende
 PR changed as a diff, with grouping / annotations / the gutter. (It auto-reverts to working-tree
 mode when the reviewer submits; `set_base_ref({reset: true})` reverts now.)
 
+> **Name the review (step 4) BEFORE this if you are doing both in one pass.** Monocle holds exactly
+> ONE review per repo, and `set_review_name` with a new name silently replaces the open one —
+> which is known to drop artifacts sent beforehand. Whether it also clears the base ref is
+> unverified, so do not find out on a live review: the safe order is
+> `set_repo → set_review_name → set_base_ref → annotations → groups`.
+
 ### 4. Name the review
 
 `set_review_name({name: "PR #<number> — <title>"})` — once, at the start. (Re-running with the same
@@ -122,11 +128,28 @@ combined set with `replace: true`; don't clear the PR-comment annotations away):
 - Re-send the combined set with `add_annotations({entries: [...both...], replace: true})`, read the
   response, and fix any refs that don't resolve.
 
-### 7. Group the changed files
+### 7. Group the changed files — ONE COMMAND, and it applies the grouping itself
 
-`set_file_groups({entries, replace: true})` — order the changed files **entry-point → dependency**
-(e.g. UI → API → data) with `group` / `group_order` / `sort_index` so the reviewer reads the PR as
-a story. Bump higher-risk files with `criticality`.
+```bash
+monocle-review.sh groups <merge-base-sha>     # the SAME ref you passed to set_base_ref
+```
+
+It classifies the PR's files deterministically into the canonical bottom-up order
+(**infra → contracts → subgraph → db → types → shared → api → sdk → ui → docs → tests**,
+call-hierarchy-sorted within each), **applies** the grouping, and prints the count it grouped.
+Being script-derived, every agent groups the same PR identically.
+
+> **Do NOT call `set_file_groups` by hand here.** This step used to say to, and that made grouping
+> an unverified second step nothing checked — measured 2026-08-04, one lane had never called it on
+> any review and nothing ever objected, because an ungrouped review reads as a Monocle limitation
+> rather than a missed step. If the command prints a count, grouping is applied. If it prints
+> `0 changed files`, your base ref is wrong — fix that rather than reaching for the manual call.
+
+Hand-built entries remain correct only for the **workstream** level (a PR spanning several issues,
+nesting `workstream → category`), which is not script-derivable. A single-purpose PR needs only
+the one level this command produces. If you do layer custom labels or orders on top, say so in
+your step-8 summary — otherwise a review that renders oddly cannot be told apart from the general
+case.
 
 ### 8. Report + wait for the verdict
 
