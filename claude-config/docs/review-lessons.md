@@ -695,3 +695,179 @@ E2E, and the production UI build; three Docker base images changed with no `dock
 precisely the case where the usual gates go blind. Related in kind: a file *count* cannot see
 wrong file *contents*; a test that cannot run reports as "skipped" while the pass count holds
 steady. The common shape is a check whose failure mode is silence.
+
+## An APPROVED plan still carries unverified claims — measure at implementation, don't transcribe
+
+A human green light attests that the **approach** is sound. It does not convert the plan's
+factual assertions into measured ones, and nothing downstream re-checks them.
+
+goals-onchain DX-6: the approved plan asserted that dropping `...defaultExclude` from a vitest
+config "would silently re-admit `node_modules`", citing a probe that resolved 81 files. Implemented
+faithfully, that claim landed in a **guard's code comment** and, worse, was generalised into a
+repo-wide rule in `docs/test-best-practices.md`. A reviewer measured it against the real config:
+**37 files either way, zero `node_modules`** — the include glob (`server/**/*.integration.test.ts`)
+cannot reach `node_modules` at all. The 81-file figure came from the probe's much broader glob.
+
+**Why it was missable:** the number was real, sourced, and written down by a process that had
+already been reviewed. Everything about it looked verified. The defect was that the probe's inputs
+differed from the real config's — **a probe's result transfers only if the probe used the real
+subject's inputs.**
+
+**The check:** at implementation, re-measure any plan claim you are about to encode into a
+durable artifact — a comment, a doc rule, a test's rationale. Plans are discarded; the artifacts
+outlive the ticket and get cited by people who never read the plan. Ask "did anyone run this
+against the thing I am actually changing?"
+
+**Corollary on scope:** the damage scales with where the claim lands. A wrong sentence in a plan
+dies with the plan. The same sentence promoted to a best-practices doc becomes a rule others
+follow.
+
+## The HEDGE is what gets dropped when a hedged claim is restated
+
+When a carefully-qualified claim is restated somewhere new, the qualifier is what falls off. This
+is a structural property of restatement, not a lapse of attention — so "be careful" is not a fix.
+
+goals-onchain DX-6 ran this **four times in one ticket**, each time with the sign flipped or the
+proxy swapped: docs called a live API a "sandbox"; the correction asserted a "production host"
+(equally unsupported); a later edit asserted "testnet-scoped credentials" as fact in four places
+while the *same diff* said "nothing in the repo establishes their scope, so don't assert it"; and
+a section heading said "non-prod only" — inferring safety from an environment's NAME, in a ticket
+whose entire thesis is that you cannot infer it from a HOSTNAME. That last one was a **safety
+defect**: the environment named `sandbox` holds mainnet credentials, so the heading invited an
+operator to run a money-moving smoke test against real funds.
+
+**Why it is missable:** re-reading finds what you are looking for, and by then you are looking for
+the *new* claim. Every catch here came from grepping the **old wording**, never from re-reading
+for correctness.
+
+**The checks, in order of reliability:**
+1. **Prefer a claim that needs no hedge.** The durable fix was to state only the *chain*
+   (`base_sepolia`, which is established) and stop mentioning credential scope. A claim with no
+   qualifier cannot lose one.
+2. **After any correction, grep the exact phrase you removed and expect zero hits.** Mechanical,
+   and it has a failure mode — unlike "be careful".
+3. **Extend the grep to code examples, headings, and summaries**, not just prose. A later round of
+   the same ticket left the corrected prose intact while the `❌` code fence eight lines below it
+   still asserted the retracted claim. Examples and headings are read *more* than the paragraph
+   they illustrate.
+4. **Watch for proxy-swapping.** The same error survives a correction by changing which proxy it
+   infers from — hostname → environment name → variable default. Fix the *inference*, not the token.
+
+## Editing under an in-flight review makes the reviewer look stale — and the wrong diagnosis is worse than the churn
+
+An author who keeps fixing while a review round is open turns every finding into "you reported X
+but it says Y". The reviewer read a state that was **true when it read it**; the author moved the
+target. This is invisible from the author's side, where it presents as the reviewer being stale.
+
+goals-onchain DX-6: the author edited files at least five times mid-round, then diagnosed the
+mismatch as the reviewer auditing a stale `isolation: worktree` snapshot — a confident, plausible
+mechanism ("a fresh `git worktree add` materializes only tracked committed files, and the work is
+uncommitted"). It was propagated to the team lead and onward to three lanes before the reviewer
+falsified it in one move: the pin contained a **third** string that neither party had quoted, and
+`hookTimeout` — which the reviewer had quoted verbatim — appeared **zero** times at the pin. It
+could only have read the live lane.
+
+**Why the wrong diagnosis was the bigger error.** The churn costs a round. A false mechanism that
+sounds right gets adopted fleet-wide, sends other lanes chasing a non-existent problem, and leaves
+the real cause — authors editing under reviewers — running. It also came with an instruction that
+could not be followed at all: `git -C <lane> diff` is **refused by an isolation-worktree agent's
+sandbox**, so the reviewer was being told to comply with something impossible.
+
+**The checks:**
+1. **Freeze the tree for the round, or commit and hand the reviewer a SHA.** The fix is
+   author-side. A review of a moving target is not a review.
+2. **Before asserting a mechanism for why a peer is wrong, find the observation that would falsify
+   it.** Here: does the string the reviewer quoted exist at their pin? One `git show` settles it.
+   A mechanism that explains the symptom is not evidence that it occurred.
+3. **A peer being wrong about one finding is not licence to discount the rest.** In the same round
+   the "stale" reviewer was right about both remaining blockers, including a misattribution
+   (a claim ascribed to an envalid `desc` that actually lived in a plain comment, while the `desc`
+   carried a *different* formulation — so a search for one string missed the operator-facing one).
+4. **File mtimes are evidence.** `diff -u` stamps them; they establish read-order against edit-order
+   when memory and assertion conflict.
+
+## One expression gating two independent obligations has 2ⁿ states — you will test the diagonal
+
+**What happened.** A container build needed to skip developer-machine git wiring, so a repo's
+`prepare` script became:
+
+    [ -e .git ] && [ -f helper.sh ] || exit 0; husky && helper.sh
+
+Two conditions ANDed to gate **two independent obligations**: installing commit hooks, and
+registering a merge driver. The author tested "both present" and "neither present", and wrote in
+the commit body that both directions were verified. Those are the two **diagonal** cells — and
+they are exactly the states in which a conjunction behaves identically to no guard at all. The
+off-diagonal state (`.git` present, helper absent) short-circuits the entire chain: **no commit
+hooks installed, silently, exit 0.** No commitlint, no pre-push. Before the guard, husky would
+have installed and the helper would have failed loudly; the change traded a loud failure for a
+silent one, which is the shape of nearly every guard regression.
+
+**The checks:**
+1. **Count the states before writing the expression: n inputs, 2ⁿ rows.** Say what should happen
+   in each row, then test each. If the table feels like overkill for the change, that is evidence
+   the guard is gating the wrong thing — not evidence the table is unnecessary.
+2. **Gate each action by its OWN precondition.** Two obligations want two statements
+   (`husky; if [ -f helper ]; then helper; fi`), not one conjunction. The `&&` is what created the
+   bug: it let one action's precondition suppress an unrelated action.
+3. **Read the tool before wrapping it — the guard may be unnecessary AND harmful.** husky 9.1.7
+   already returns `.git can't be found` and exits 0 when there is no git dir. The `.git` conjunct
+   protected nothing and was itself the entire defect. A guard added "for safety" around something
+   already safe is pure downside.
+4. **A tool that reports failure on stdout with exit 0 can never short-circuit an `&&`.** husky
+   returns *every* failure as a string and always exits 0, so `husky && next` could not detect a
+   failed hook install before or after the guard. An `&&` chain asserts a dependency the runtime
+   may not actually enforce — check the exit contract before relying on the operator.
+
+## Files agreeing with each other says nothing about the runtime executing them
+
+**What happened.** A repo pinned one toolchain version across a dozen files — `.nvmrc`,
+Dockerfile `ARG`s, CI workflows, every workspace's `engines` — and added a guard asserting they
+all agreed. They did. Meanwhile the shell actually running the gates resolved `node` to a version
+**below** the declared floor, because non-interactive shells never load direnv. Every gate
+reported green from a runtime nobody had chosen, and no file-consistency check could see it: the
+guard's entire subject was files, and the defect was in the process.
+
+**The checks:**
+1. **If a toolchain's version matters enough to pin, assert the RUNNING one too.** A consistency
+   guard over files is blind to the interpreter executing it. Without this, a whole green sweep
+   can be produced by the wrong major and nothing in the repo notices.
+2. **Assert against the RANGE, not the exact pin.** A later patch on the same major is a
+   legitimate machine and must not fail; anything below the floor must. Writing the assertion
+   forces you to answer which artifact is authoritative for which question — the range governs
+   "may this runtime run our code", the exact pin governs "what do we build with" — and that is
+   worth stating explicitly rather than leaving implied by two files that happen to agree.
+3. **A declared `engines` field is not this check.** pnpm prints `[WARN] Unsupported engine` for a
+   workspace's own declared range and exits 0; the one existing signal is a line in an install log
+   nobody reads.
+4. **Ship the remedy in the same change as the assertion.** A true-positive red with no reachable
+   fix is routed around, and the route around it (`--no-verify`, `|| true`, deleting the test)
+   discards every other gate travelling with it. Wire the fix into the paths that will hit the
+   red — the hook, the runner, the agent instructions — and confirm you wired the path that
+   actually invokes the failing gate, not an adjacent one that merely mentions it.
+5. **Make the failure carry its own remedy.** `expected false to be true` tells whoever hit it
+   nothing. Assert a string, so the message names the fix.
+
+## A git hook cannot be tested from the worktree that changes it
+
+**What happened.** A commit added Node-version resolution to `.husky/pre-push`. To verify it, the
+author ran `git push --dry-run` from the lane, saw the command succeed, and reported the hook
+fixed. It was not. `core.hooksPath` was an **absolute path into the main checkout**
+(`/…/<repo>/.husky/_`), and husky's shim resolves the real hook as
+`s=$(dirname "$(dirname "$0")")/$n` — so **every worktree's hook is the MAIN checkout's hook
+file**, executed with the lane merely as cwd. A lane's own `.husky/*` never runs. The dry-run had
+exercised the main checkout's unmodified hook against the lane's code, and the "success" was read
+off a background wrapper whose real exit was 1.
+
+**The checks:**
+1. **Before verifying a hook, ask which file will actually execute.** `git config --get
+   core.hooksPath` plus the hook-runner's resolution logic answers it in two commands. An absolute
+   hooksPath means worktrees share one hook, and a per-worktree edit is inert.
+2. **A hook change does not take effect for anyone until the tree it is read from advances.**
+   That is a rollout dependency the branch cannot satisfy, so it belongs in the PR body as a
+   sequencing note, not in the commit as a claim of "fixed".
+3. **Verify it by invoking the hook the way the runner does** — reproduce the runner's own
+   environment (`export PATH="node_modules/.bin:$PATH"; sh -e .husky/<hook>`) against the file you
+   edited. That tests your change; pushing tests whatever file the runner picks.
+4. **This is a general shape, not a husky quirk.** Any config pointing at a shared absolute path —
+   hooks, lint config, a toolchain manifest — means the file you edited is not necessarily the
+   file that runs. Check the resolution before trusting the experiment.
