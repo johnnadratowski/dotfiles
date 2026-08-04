@@ -159,6 +159,28 @@ only sends **context** (issue + plan).
    if the file set changed; re-run step 6 to re-annotate the new code) → re-wait until
    approved. (Only skip the wait if the user explicitly asked for fire-and-forget.)
 
+9. **When the wait times out: LEAVE the review staged and go quiet. Standing order.**
+   A `get_feedback(wait=true)` dies after a fixed span of MCP silence, and a human review
+   routinely takes longer — so the wait normally aborts **before** the verdict rather than
+   after it. **A timed-out wait is not a verdict and not a rejection.** Nothing has been
+   decided and nothing needs repair.
+
+   Then: **no re-arming, no polling, no re-sending, no re-staging, and no self-directed
+   parallel work to fill the gap.** Keep `.claude/needs-input` up — it is the only signal
+   that a lane is waiting on a person, and starting other work never clears it. The user
+   says when to check.
+
+   **When told to check, check in this order:** `review_status`, then `get_feedback`
+   (non-blocking). *"No feedback pending"* from an engine that echoes **your** repo and
+   **your** review name means the human has not submitted — not that anything is wrong.
+   The bare form, with no identity prefix, is the dangerous one: that is what a wrong
+   binding or a dead engine also returns.
+
+   > The underlying fix is a per-server `timeout` (ms) on the `monocle` MCP entry, which
+   > scopes the long-silence allowance to the one server where long silence is *expected*
+   > rather than a hang. Where that is set, the wait survives a normal review and this
+   > step is the fallback rather than the common case.
+
 ## Contract for the gates (two independent axes — human review + agent review)
 
 **Both** review gates — the `/todo` **plan** gate and the **implementation/diff** gate —
