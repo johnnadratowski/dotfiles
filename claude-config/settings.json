@@ -26,7 +26,9 @@
       "Bash(gh pr checkout:*)",
       "Bash(gh pr list:*)",
       "Bash(gh pr status:*)",
-      "EnterWorktree"
+      "EnterWorktree",
+      "Bash(open:*)",
+      "Bash(xdg-open:*)"
     ],
     "deny": [],
     "ask": [],
