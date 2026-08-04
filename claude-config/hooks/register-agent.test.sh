@@ -328,6 +328,45 @@ ok "hop 2: no keystroke, gave up" '! grep -q "/rename" "$KLOG" && hlog "$H" | gr
 ok "registry stays on the boot name (cosmetic label only)" '[ "$(reg_ls "$H")" = "feature-1.$$ " ]'
 rm -f "$KLOG"; rm -rf "$H" "$R"
 
+echo "== 10b. Agent-tool teammate: versioned argv0, no session file -> still gets named =="
+# A teammate spawned by the lead execs the VERSIONED binary, so argv[0] is
+# .../claude/versions/<ver> — no "claude" basename — and it gets NO
+# ~/.claude/sessions/<pid>.json. Both facts made the settle verb fail closed, so every
+# teammate ran nameless in the web UI while its tmux window was correctly labelled.
+TEAMMATE_PS="/Users/x/.local/share/claude/versions/2.1.220 --agent-id feature-1@sess --agent-name feature-1"
+H="$(newhome)"; R="$(newrepo)"; seed_boot "$H" "$R"   # deliberately NO session_json
+KLOG="$(mktemp)"
+settle_tmux "$H" "$R" TMUX_STUB_LOG="$KLOG" PS_CMD="$TEAMMATE_PS"
+ok "versioned argv0 is not rejected as 'not a live claude'" '! hlog "$H" | grep -q "is not a live claude"'
+ok "missing session file is not a fail-close for a teammate" '! hlog "$H" | grep -q "session file unreadable"'
+ok "teammate is recognised from its own argv" 'hlog "$H" | grep -q "Agent-tool teammate"'
+ok "teammate -> /rename typed" 'grep -q -- "-l /rename feature-1" "$KLOG"'
+# The source string is "resume" here (settle_tmux's default), which for a CLI session
+# would SUPPRESS the keystroke. A teammate is always a fresh session — there is no
+# --continue for one — so it must not depend on that string being populated.
+ok "teammate keystroke does not depend on session source" 'grep -q -- "-l /rename feature-1" "$KLOG"'
+ok "registry untouched (still boot name)" '[ "$(reg_ls "$H")" = "feature-1.$$ " ]'
+rm -f "$KLOG"; rm -rf "$H" "$R"
+
+# Fail-closed must survive the widening: argv that does NOT name THIS agent is not proof
+# of identity. Without this, any process with a --agent-name could drive the verb.
+H="$(newhome)"; R="$(newrepo)"; seed_boot "$H" "$R"; SNAP="$(reg_snapshot "$H")"
+KLOG="$(mktemp)"
+settle_tmux "$H" "$R" TMUX_STUB_LOG="$KLOG" \
+  PS_CMD="/Users/x/.local/share/claude/versions/2.1.220 --agent-name someone-else"
+ok "argv name mismatching the boot name -> fail-closed" 'hlog "$H" | grep -q "session file unreadable"'
+ok "…and no keystroke" '! grep -q "/rename" "$KLOG"'
+ok "…and zero mutation" '[ "$(reg_snapshot "$H")" = "$SNAP" ]'
+rm -f "$KLOG"; rm -rf "$H" "$R"
+
+H="$(newhome)"; R="$(newrepo)"; seed_boot "$H" "$R"; SNAP="$(reg_snapshot "$H")"
+KLOG="$(mktemp)"
+settle_tmux "$H" "$R" TMUX_STUB_LOG="$KLOG" \
+  PS_CMD="/Users/x/.local/share/claude/versions/2.1.220 --agent-id feature-1@sess"
+ok "no session file and no --agent-name -> fail-closed" 'hlog "$H" | grep -q "session file unreadable"'
+ok "…and zero mutation" '[ "$(reg_snapshot "$H")" = "$SNAP" ]'
+rm -f "$KLOG"; rm -rf "$H" "$R"
+
 echo "== 11. settled == boot -> no-op =="
 H="$(newhome)"; R="$(newrepo)"
 seed_boot "$H" "$R"; session_json "$H" "feature-1"

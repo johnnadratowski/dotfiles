@@ -236,6 +236,16 @@ _normalize_name() { # stdin: raw candidate -> stdout: normalized name
   printf '%s' "$n"
 }
 
+# A teammate's identity is not on disk anywhere at settle time — it is in its own argv,
+# put there by the Agent tool. Read it from there so the settle verb can recognise a
+# legitimate agent that has no session file. Sanitized through the same filter as every
+# other name source, so a hostile/odd argv cannot inject a path or a delimiter.
+_argv_agent_name() { # $1: pid -> stdout: sanitized --agent-name value ('' if absent)
+  [ -n "${1:-}" ] || { printf ''; return 0; }
+  ps -p "$1" -o command= 2>/dev/null \
+    | sed -nE 's/.*--agent-name[= ]+([^ ]+).*/\1/p' | _sanitize
+}
+
 # --- Settle re-check (DX-jn-cc-006) ---
 # Scheduled by sessionstart (schedule_settle below). By the time this fires the
 # session's REAL name has had time to land; if a user-set name won the boot
@@ -250,8 +260,14 @@ if [ "$source" = "settle-recheck" ]; then
   # killed-and-relaunched session would otherwise act for a dead pid — and the
   # token-match prune below would DELETE the successor session's fresh registry
   # entry. Any doubt → exit with ZERO mutation.
+  # Two launch forms are legitimate and BOTH must match, or the verb fail-closes on a
+  # live agent. A CLI session's argv[0] is the `claude` shim; a teammate spawned through
+  # the Agent tool execs the VERSIONED binary directly, so its argv[0] is
+  # ~/.local/share/claude/versions/<version> and the basename is a version number with
+  # no "claude" in it. Matching only the shim silently skipped every teammate — which is
+  # why teammate sessions had no name in the web UI while their tmux windows were fine.
   if [ -z "$spid" ] || ! kill -0 "$spid" 2>/dev/null \
-     || ! ps -p "$spid" -o command= 2>/dev/null | grep -qE '(^|/)claude( |$)'; then
+     || ! ps -p "$spid" -o command= 2>/dev/null | grep -qE '(^|/)claude( |$)|/claude/versions/'; then
     log "settle: pid '${spid:-}' is not a live claude — fail-closed, no mutation"
     exit 0
   fi
@@ -259,9 +275,22 @@ if [ "$source" = "settle-recheck" ]; then
     log "settle: boot name '$boot_name' empty/unsanitized — fail-closed, no mutation"
     exit 0
   fi
+  # An Agent-tool teammate has NO ~/.claude/sessions/<pid>.json — that file is written
+  # for CLI-launched sessions only. Its identity lives in argv instead (`--agent-name`),
+  # so there is no user-set-name race to wait out: nothing can have won a name it was
+  # never offered. Treat it as never-settled and fall through to the keystroke fallback,
+  # which is the only thing that sets the session label the web UI reads.
+  # Still fail-closed on a genuinely unreadable file: the argv name must MATCH the boot
+  # name this job was scheduled with, or we do nothing.
+  is_teammate=0
   if [ ! -r "$sess_file" ] || ! command -v jq >/dev/null 2>&1; then
-    log "settle: session file unreadable ($sess_file) — fail-closed, no mutation"
-    exit 0
+    if [ -n "$(_argv_agent_name "$spid")" ] && [ "$(_argv_agent_name "$spid")" = "$boot_name" ]; then
+      is_teammate=1
+      log "settle: no session file; argv --agent-name matches boot name '$boot_name' (Agent-tool teammate)"
+    else
+      log "settle: session file unreadable ($sess_file) — fail-closed, no mutation"
+      exit 0
+    fi
   fi
 
   # Transient check on the plain-sanitized name (mirroring the boot-side guard),
@@ -270,7 +299,8 @@ if [ "$source" = "settle-recheck" ]; then
   # (patterns match the raw string, e.g. "s|^feature/||"), so normalizing a
   # pre-sanitized form makes the transform miss and boot/settle resolve one
   # session to two identities, oscillating on every restart.
-  settled_json="$(jq -r '.name // empty' "$sess_file" 2>/dev/null)"
+  settled_json=""
+  [ "$is_teammate" = "1" ] || settled_json="$(jq -r '.name // empty' "$sess_file" 2>/dev/null)"
   settled_raw="$(printf '%s' "$settled_json" | _sanitize)"
   settled="$settled_raw"
   if [ -n "$settled_raw" ] && ! _is_transient_name "$settled_raw"; then
@@ -332,7 +362,11 @@ if [ "$source" = "settle-recheck" ]; then
     # still holds the OLD name. It reads as settled, the `elif` above never fires, and
     # nothing renames the genuinely-unnamed new session. Run `fleet-clear.sh` in the
     # pane to fix a cleared agent's name; it reads the registry, which is accurate.
-    if [ "$src_kind" = "startup" ] || [ "$src_kind" = "clear" ]; then
+    # A teammate is included unconditionally: it is always a fresh session (there is no
+    # `--continue` for one — the lead re-creates it through the Agent tool), so the
+    # resume-clobber risk that excludes `resume` cannot apply, and we must not depend on
+    # the session-source string being populated for a spawn path that has no session file.
+    if [ "$src_kind" = "startup" ] || [ "$src_kind" = "clear" ] || [ "$is_teammate" = "1" ]; then
       # There used to be a WORKFLOW_AGENT_SKIP_RENAME opt-out here, a launch-time guard
       # against the startup modal eating the keystroke. It was redundant — `claude --name`
       # settles the name so this fallback is never reached — and actively harmful, because
