@@ -84,16 +84,22 @@ only sends **context** (issue + plan).
    raw artifact** — Monocle renders artifacts raw, losing grouping/annotations/the gutter;
    `set_base_ref` is the right tool.
 5. **Group the changed files (diff context only) — ALWAYS.** Organize the changed files
-   so the reviewer reads them as a story, via the MCP `set_file_groups` tool
-   (`replace=true`; reviewer presses `f` to cycle to the grouped view). Monocle supports
-   **N nesting levels**; we use up to two, the top one optional:
-   - **Category level (always).** Run `monocle-review.sh groups` (or
-     **`monocle-review.sh groups <base>`** for a committed / base-ref review — the same
-     `<ref>` you passed to `set_base_ref`) — it classifies the
-     diff **deterministically** into the canonical bottom-up order **infra → contracts
-     → subgraph → db → types → shared → api → sdk → ui → docs → tests** (substrate → surface),
-     call-hierarchy-sorted within each. This is the categorization we've always used;
-     being script-derived, every agent (author OR a peer) groups identically.
+   so the reviewer reads them as a story (reviewer presses `f` to cycle to the grouped
+   view). Monocle supports **N nesting levels**; we use up to two, the top one optional:
+   - **Category level (always) — ONE COMMAND, and it applies the grouping itself.** Run
+     **`monocle-review.sh groups`** (or **`monocle-review.sh groups <base>`** for a
+     committed / base-ref review — the same `<ref>` you passed to `set_base_ref`). It
+     classifies the diff **deterministically** into the canonical bottom-up order
+     **infra → contracts → subgraph → db → types → shared → api → sdk → ui → docs → tests**
+     (substrate → surface), call-hierarchy-sorted within each, and **applies it** — then
+     prints the file count it grouped. Being script-derived, every agent (author OR a peer)
+     groups identically.
+     > **You do NOT call `set_file_groups` by hand for this level.** The script used to only
+     > print JSON for you to relay into the MCP tool, which made grouping a second step
+     > nothing verified — and it was silently skipped for weeks (one lane had never called it
+     > on any review). An ungrouped review reads as a Monocle limitation rather than a missed
+     > step, which is why nobody noticed. If the command prints a count, grouping is applied;
+     > if it prints `0 changed files`, your base ref is wrong.
    - **Workstream level (top — ONLY when the diff spans >1 issue).** With multiple issues
      under review, wrap each file's category under its **issue id** as the top level
      (`workstream → category`), ordered by issue. The **author supplies** this split —

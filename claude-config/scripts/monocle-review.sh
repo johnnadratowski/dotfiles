@@ -20,11 +20,12 @@
 #   monocle-review.sh list <context> <ID>       # print the artifacts that WOULD be sent (no send)
 #   monocle-review.sh send <context> <ID>       # send the context's artifacts (stable ids)
 #   monocle-review.sh groups [<base>]           # classify the review diff into the canonical
-#                                               #   bottom-up review layers; print set_file_groups
-#                                               #   entries as JSON for mcp__monocle__set_file_groups.
+#                                               #   bottom-up review layers AND APPLY the grouping
+#                                               #   (monocle review group-files --replace).
 #                                               #   <base> (optional) = the ref given to set_base_ref
 #                                               #   for an ALREADY-COMMITTED review; default HEAD
 #                                               #   (working-tree). Diffs <base> vs the working tree.
+#   monocle-review.sh groups --print-only [<b>] # classify but DON'T apply — emit the JSON only.
 #
 #   <context> ∈ keys of .claude/monocle-artifacts.json "contexts" (plan | todo | diff)
 #   <ID>      = the TODO id (e.g. DX-jn-8-017); resolves docs/todos/<ID>.md (or completed/)
@@ -32,8 +33,15 @@
 #
 # Why `groups` lives in the script (not each agent's head): the classification is
 # deterministic and identical for EVERY agent, so a peer agent's diff-review send
-# groups the files exactly the same as the author's would. The agent pipes this
-# JSON into the MCP `set_file_groups` tool (the script can't call the MCP itself).
+# groups the files exactly the same as the author's would.
+#
+# It APPLIES the grouping rather than printing it for the agent to relay. This used to
+# print JSON for `mcp__monocle__set_file_groups`, justified by "the script can't call the
+# MCP itself" — true, but `monocle review group-files` is a CLI subcommand and always was.
+# The relay made grouping an unverified second step, and nothing ever failed when it was
+# skipped: measured 2026-08-04, one lane had never called set_file_groups on any review.
+# An ungrouped review looks like a Monocle limitation, not a missed step, so it went
+# unreported for weeks.
 # Canonical bottom-up order (group_order) runs substrate first, surface last: infra, then
 # the project's own layers (schema/data, shared types, service, client, ui), then docs and
 # tests. The concrete layer names are the consuming project's, not this script's.
@@ -160,6 +168,17 @@ case "$cmd" in
     # to the default working-tree behavior.)
     # The file list rides an env var (NOT stdin) because the python program comes in via
     # the heredoc — piping data into `python3 - <<'PY'` would be overridden by the heredoc.
+    # APPLIES the grouping by default. It used to only PRINT JSON for the agent to pipe into
+    # the MCP `set_file_groups` tool, on the premise that "the script can't call the MCP
+    # itself" — true, and irrelevant: `monocle review group-files` is a CLI subcommand and
+    # was available the whole time. That split made grouping an unverified second step, and
+    # a step nothing checks is a step that gets skipped: measured 2026-08-04, one lane had
+    # never called set_file_groups on any review and nothing ever objected. The reviewer just
+    # sees an ungrouped review, which reads as "Monocle doesn't group" rather than "the agent
+    # forgot". Applying it here deletes the seam.
+    # --print-only restores the old behaviour for anyone who wants the raw JSON.
+    apply=1
+    if [ "${1:-}" = "--print-only" ]; then apply=0; shift; fi
     base="${1:-HEAD}"
     files="$(
       {
@@ -167,7 +186,12 @@ case "$cmd" in
         git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null || true
       } | sort -u
     )"
-    FILES="$files" ROOT="$ROOT" python3 - <<'PY'
+    # Output goes to a temp file, NOT `entries="$( ... <<'PY' ... )"`. macOS ships bash 3.2,
+    # whose parser mishandles a heredoc inside command substitution — `bash -n` accepts it and
+    # it dies at RUNTIME with "unexpected EOF while looking for matching )". Verified here.
+    mr_json="$(mktemp -t monocle-groups)"
+    trap 'rm -f "$mr_json"' EXIT
+    FILES="$files" ROOT="$ROOT" python3 - > "$mr_json" <<'PY'
 import os, json, re
 # Review layers = the project's directory→group classification. SPLIT out of this
 # (project-agnostic) engine into the repo's .claude/project/review-layers.json — loaded
@@ -281,6 +305,17 @@ for (o, g, c), paths in sorted(buckets.items()):
         entries.append({"path": p, "group": g, "group_order": o, "sort_index": i, "category": c})
 print(json.dumps(entries, indent=2))
 PY
+    if [ "$apply" -eq 0 ]; then cat "$mr_json"; exit 0; fi
+    mr_available || { echo "monocle: not running — nothing grouped" >&2; exit 2; }
+    n="$(python3 -c 'import sys,json; print(len(json.load(open(sys.argv[1]))))' "$mr_json")"
+    if [ "$n" -eq 0 ]; then
+      # Say so out loud. A silent no-op here is indistinguishable from success, and the whole
+      # reason this subcommand changed is that an invisible skip looked like a working feature.
+      echo "monocle: 0 changed files vs '$base' — nothing to group (is the base ref right?)" >&2
+      exit 0
+    fi
+    "$MONOCLE" review group-files --file="$mr_json" --replace >/dev/null
+    echo "monocle: grouped $n file(s) vs '$base' (reviewer presses 'f' for the grouped view)"
     ;;
   *)
     _die "usage: monocle-review.sh {available|list|send|groups} [<context> <ID>]"
