@@ -649,3 +649,49 @@ depends on that meaning, and an agent definition is such a doc.
 definition tells it to *report* `ISOLATION UNBOUND` rather than merely branch on it. A guard
 that silently takes the safe path when it fails teaches nobody. Make the guard say which branch
 it took.
+
+---
+
+## A sweep scoped by file-KIND misses the file that selects the thing being swept
+
+2026-08-04, the Node 24 pin. The sweep enumerated *kinds* of file — `.nvmrc`, `package.json`
+engines, `Dockerfile*`, `.github/workflows/**`, docs — and every kind on that list was handled
+correctly. It still missed five files, four of them the ones that actually govern the
+interactive dev shell: `.envrc` carrying `use node 25`, which direnv resolves by `semver_search`
+to the highest installed `v25.*` — the exact version being deleted. A `.envrc` is not a "Node
+version file" by kind. It is a **toolchain selector**, and the sweep had no category for that.
+
+**The check that finds them:** grep the **outgoing literal**, not the incoming file list. `25`
+near "node" finds all five in one pass, including the ones you had no category for. An
+enumeration can only cover what you already thought of; a search over the value you are removing
+covers what you did not.
+
+**The stronger fix, when it exists: delete the copy rather than syncing it.** Bare `use node`
+reads `.nvmrc`; `nvm use` with no argument searches upward for it. A directive that *derives*
+from the pin cannot drift from it. Prefer that to a second literal you promise to maintain —
+the promise is what failed here, four times over.
+
+---
+
+## Verification must be able to fail for the risk THE CHANGE introduces
+
+Same commit, and the more expensive lesson. Six gates were run and reported as evidence: format,
+lint, three typecheckers, one codegen drift check. All green. **All six are static analysis, and
+all six would pass identically on Node 18** — Prettier, ESLint and `tsc` never execute
+application code, and the codegen module touches no native addon, no driver, no HTTP stack.
+
+The change was a Node **major version** change. The only defect class it can introduce is a
+runtime regression. So the evidence offered had zero power against the risk taken, while looking
+like a thorough green.
+
+**The check, before citing any gate as evidence:** name the defect class the change can
+introduce, then ask *which of these gates executes the code that would exhibit it?* If the answer
+is none, the green is decoration. Here the load-bearing gates were the ones skipped — the unit
+suite (first thing to execute server code under the new runtime), the built-graph import smoke,
+E2E, and the production UI build; three Docker base images changed with no `docker build` at all.
+
+**Generalises past toolchains:** a config-only diff is not automatically low-risk. It is low-risk
+*for the classes your gates can see*, and a change to the substrate everything runs on is
+precisely the case where the usual gates go blind. Related in kind: a file *count* cannot see
+wrong file *contents*; a test that cannot run reports as "skipped" while the pass count holds
+steady. The common shape is a check whose failure mode is silence.
