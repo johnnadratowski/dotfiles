@@ -45,6 +45,15 @@ to start the work.**
 - **A lane label** means that lane's ask. More than one ⇒ list them and ask which.
 - **A description** ⇒ match across both lists. No match, or two ⇒ say so. **Never brief on a
   guess**: asking costs one line, guessing costs a decision made about the wrong thing.
+- **A ticket id (`SRV-42`) or a PR number** resolves to the *work*, not to a list row, and may
+  not be on the list at all. Resolve it for real — which lane holds it, what state it is in,
+  whether anything on the list is blocked on them for it. **If nothing is, say so** instead of
+  manufacturing a call; "here is where it stands, and it is not waiting on you" is a complete
+  brief. Naming a ticket is a request to be *briefed* — picking it up for real still goes
+  through `/todo`, and minting or starting still needs their word.
+- **`#124` is ambiguous, so do not guess it.** A bare `#N` is a list position and PR numbers
+  wear the same syntax. Resolve **both**: if it is in range of the list *and* a real PR, ask
+  which. If only one resolves, take it and name what you took.
 
 **Then the brief, and nothing else:**
 
@@ -53,7 +62,8 @@ to start the work.**
 
 - **Where it stands** — the state of the work this is holding up
 - **The call** — exactly what they are deciding. Two or more live options ⇒ name them and what
-  each costs. Only one ⇒ say so, so they know it is a confirmation rather than a choice
+  each costs. Only one ⇒ say so, so they know it is a confirmation rather than a choice. Nothing
+  blocked on them ⇒ say *that*, rather than inventing a decision to justify the brief
 - **What it unblocks** — who picks it up the moment they answer
 
 ⚠️ <the ask itself, one line>
