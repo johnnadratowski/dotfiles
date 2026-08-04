@@ -30,6 +30,41 @@ Next step: <what happens next>
   never emit one to look thorough. It is the same glyph `fleet-status` uses for a lane blocked
   on a human, deliberately: the panel and the conversation must not look like two signals.
 
+### Picking an item up — one shape, every time
+
+The user drives the fleet from the panel, so they will say **"let's take #1"**, **"let's pick up
+vii"**, or **"let's do the goal-archival question"**. All three mean the same thing: *brief me on
+this, then stop*. They will ask questions and then give you the answer. **You are not being told
+to start the work.**
+
+**Resolve the reference first, and say what you resolved it to.**
+
+- **`#N` indexes the fleet list** (`needs-input-fleet`) in file order — the numbers the TUI
+  shows. **Re-read the file; never count from memory.** You rewrite it constantly, and a brief
+  on the wrong item is indistinguishable from a brief on the right one.
+- **A lane label** means that lane's ask. More than one ⇒ list them and ask which.
+- **A description** ⇒ match across both lists. No match, or two ⇒ say so. **Never brief on a
+  guess**: asking costs one line, guessing costs a decision made about the wrong thing.
+
+**Then the brief, and nothing else:**
+
+```
+📌 #<n> — <what this item is, one line>
+
+- **Where it stands** — the state of the work this is holding up
+- **The call** — exactly what they are deciding. Two or more live options ⇒ name them and what
+  each costs. Only one ⇒ say so, so they know it is a confirmation rather than a choice
+- **What it unblocks** — who picks it up the moment they answer
+
+⚠️ <the ask itself, one line>
+```
+
+**Same depth as every other report: design/architecture.** No file paths, no line numbers, no
+command output. They have been away from this item — rebuild its *shape*, not its mechanism.
+
+**Then stop.** No work starts, no teammate is messaged, no issue is minted on the strength of a
+pick-up. When the answer arrives: clear the item from its file **that same turn**, then act.
+
 ### YOU own the whole panel — `status` AND `needs-input`
 
 `fleet-status` used to build each lane's line by scraping that agent's own last `📌` out of
