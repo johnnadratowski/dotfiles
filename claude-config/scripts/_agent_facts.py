@@ -120,6 +120,34 @@ def needs_input(cwd):
     return body.splitlines()[0].strip() if body else ""
 
 
+# `<label> (<name>) · <TICKET>:` — the row above already shows all three, so repeating them
+# inside the ask is noise the reader has to skip past to reach the actual question.
+_ASK_PREFIX = re.compile(r"^\s*\S+\s*\([^)]*\)\s*·\s*[A-Z]{2,5}-\d+\s*:\s*")
+# A legacy single-line ask numbering its parts "(1) … (2) …". Split so each gets its own marker.
+_ASK_ENUM = re.compile(r"\s*\(\d+\)\s*")
+
+
+def needs_input_items(cwd):
+    """The asks blocking this agent on a HUMAN, one per element, ready to render.
+
+    Returns a list rather than a string because an agent routinely has more than one, and the
+    previous reader took `splitlines()[0]` — so a second question was silently invisible. A
+    truncated ask looks exactly like a complete one, which is the worst shape for a signal whose
+    whole job is to say what the human still owes.
+    """
+    body = _walk_up(cwd, ".claude", "needs-input").strip()
+    if not body:
+        return []
+    items = []
+    for ln in body.splitlines():
+        ln = _ASK_PREFIX.sub("", ln.strip())
+        if not ln:
+            continue
+        parts = [p.strip(" ;") for p in _ASK_ENUM.split(ln)] if _ASK_ENUM.search(ln) else [ln]
+        items.extend(p for p in parts if p)
+    return items
+
+
 def transcript_for(cwd):
     """Newest transcript file for a working directory, or "".
 

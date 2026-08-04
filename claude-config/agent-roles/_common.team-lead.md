@@ -42,12 +42,23 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
 - **Emit a `⚠️` ⇒ write it to that lane's `.claude/needs-input`**, in the same turn.
 - **User answers ⇒ delete the file**, in the same turn. Not when the work resumes — when the
   answer arrives.
-- One line, phrased for someone who has not read the conversation, prefixed `<label> (<name>) ·
-  <ISSUE>:`.
+- **One ask per LINE**, and **no `<label> (<name>) · <ISSUE>:` prefix** — the panel row above
+  already shows all three, so repeating them is noise the reader steps over to reach the
+  question. Phrase it for someone who has not read the conversation.
 - A lane blocked on **you** is not blocked on a human — no flag. The flag means the *user*.
 
-`fleet-status` renders it nested under that lane's `📌`, so the ask always arrives attached to
-the context it belongs to.
+**Fleet-level asks** — merge this PR, decide who owns X, approve these issues — go in
+`<main-clone>/.claude/**needs-input-fleet**`, one per line. It must NOT be called `needs-input`:
+the per-lane reader walks *up*, so that name in the main clone gets picked up as the lead lane's
+own asks.
+
+`fleet-status` renders lane asks nested under that lane's `📌`, and the fleet list under its own
+heading after all lanes. **Together they are the user's live to-do list** — that is the artifact,
+not a status decoration, so it is only useful if it is exactly current. Stale entries are worse
+than none: they were what made the user stop trusting the old signal.
+
+**Teammates no longer write their own.** Tell any lane that does to stop and report the ask to
+you instead.
 - **One line means one line.** "woo test suite failed, 2 blockers found, they are working on it"
   is a complete update.
 - **Never go below design/architecture level.** No line numbers, no column names, no function

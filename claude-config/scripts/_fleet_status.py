@@ -15,7 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    MARK, context_for, fmt_secs, needs_input, summary_for, todo_for, todo_pairs_for,
+    MARK, context_for, fmt_secs, needs_input, needs_input_items, summary_for, todo_for,
+    todo_pairs_for,
 )
 
 
@@ -35,6 +36,29 @@ STATE_ICON = {"busy": "●", "quiet": "◔", "idle": "○", "down": "·"}
 # The one glyph meaning "a human has to answer this", used identically in the lead's chat
 # output and here, so the panel and the conversation cannot look like different signals.
 ASK = "⚠️"
+
+
+def general_asks():
+    """Asks that belong to the FLEET rather than to any one lane.
+
+    Lives beside the lanes dir (`<main-clone>/.claude/needs-input`) rather than inside a lane,
+    because a lane's file renders under that lane — and an item like "merge PR #124" or "decide
+    who owns X" is not any lane's to hold. Written and cleared by the LEAD, same as the per-lane
+    files: the agents no longer maintain their own.
+    """
+    lanes = os.environ.get("FLEET_LANES", "")
+    if not lanes:
+        return []
+    # NOT `needs-input`: the per-lane reader walks UP from a lane, so a file with that name in
+    # the main clone's .claude/ is found by the lead's own lane and rendered as its asks. The
+    # distinct name is what keeps the fleet list out of any lane.
+    path = os.path.join(os.path.dirname(lanes.rstrip("/")), "needs-input-fleet")
+    try:
+        with open(path) as f:
+            body = f.read().strip()
+    except OSError:
+        return []
+    return [ln.strip() for ln in body.splitlines() if ln.strip() and not ln.startswith("#")]
 
 # Emoji occupy two terminal cells while len() counts them as one, so a column padded with
 # %-*s containing ❓ lands one cell right of its neighbours and the whole table skews. These
@@ -144,6 +168,9 @@ def rows():
             # ids, the terminal wants them clickable, and one field cannot be both.
             "issue_links": todo_pairs_for(path),
             "needs_input": needs_input(path),
+            # One element per ask. "needs_input" stays a string for JSON consumers; the panel
+            # renders these, because a lane routinely owes the human more than one answer.
+            "asks": needs_input_items(path),
             "summary": summary_for(path, tpath or None),
         }
 
@@ -171,11 +198,15 @@ def main():
     # from one. Two lanes wore a question mark for hours with nothing to answer, which is how
     # an attention marker stops being worth looking at.
     ask = [r for r in data if r["needs_input"]]
+    general = general_asks()
+    n_ask = sum(len(r.get("asks") or []) for r in data) + len(general)
     head = "FLEET  %d/%d lanes up  %d busy" % (live, len(lanes), busy)
     if subs:
         head += "  %d subagent%s" % (len(subs), "" if len(subs) == 1 else "s")
-    if ask:
-        head += "  %s %d needs you" % (ASK, len(ask))
+    if n_ask:
+        # Count ASKS, not lanes. One lane owing three answers is three things to do, and the
+        # header is the number the user plans their next few minutes around.
+        head += "  %s %d needs you" % (ASK, n_ask)
     # The clock is what tells you the view is live rather than a frozen pane you left open.
     head += "  ·  " + os.environ.get("FLEET_NOW", "")
     sys.stdout.write(head.rstrip() + "\n")
@@ -232,8 +263,19 @@ def main():
             out = wrap(MARK + " " + r["summary"], 6)
             if out:
                 sys.stdout.write(out + "\n")
-        if r["needs_input"]:
-            out = wrap(ASK + " " + r["needs_input"], 8)
+        # One ⚠ per ask. The lane's label, name and ticket are already on the row above, so the
+        # ask carries the question and nothing else.
+        for ask in (r.get("asks") or []):
+            out = wrap(ASK + " " + ask, 8)
+            if out:
+                sys.stdout.write(out + "\n")
+
+    # Fleet-level asks last, under their own heading — they are real work for the user but
+    # belong to no lane, and hanging them off an arbitrary agent would misattribute them.
+    if general:
+        sys.stdout.write("\n  NEEDS YOU  (not lane-specific)\n")
+        for ask in general:
+            out = wrap(ASK + " " + ask, 6)
             if out:
                 sys.stdout.write(out + "\n")
 
