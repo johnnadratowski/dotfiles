@@ -207,8 +207,23 @@ class Ask(ListItem):
 
 class FleetTUI(App):
     CSS = """
-    Screen { background: $surface; }
+    Screen { background: $surface; layers: base overlay; }
     #head { padding: 0 1; height: 1; color: $text-muted; }
+
+    /* A PANEL, NOT A TOAST. As a notification each `?` stacked another copy — press it three
+       times, get three legends — because notifications queue by design and only expire on a
+       timer. A legend is reference material you hold open while you read the screen behind
+       it, so it toggles. */
+    #legend {
+        layer: overlay;
+        display: none;
+        margin: 2 6;
+        padding: 1 2;
+        height: auto;
+        border: heavy $accent;
+        background: $panel;
+    }
+    #legend.-show { display: block; }
 
     /* THE FOCUSED PANEL HAS TO BE UNMISTAKABLE. Both panels carrying the same quiet border
        left the reader guessing which one `x` was about to act on — and `x` deletes. So the
@@ -274,6 +289,7 @@ class FleetTUI(App):
         with Vertical():
             yield ListView(id="lanes")
             yield ListView(id="fleet")
+        yield Static(self.legend_markup(), id="legend")
         yield Footer()
 
     def on_mount(self):
@@ -412,9 +428,10 @@ class FleetTUI(App):
         else:
             self.notify("already gone", severity="warning")
 
-    def action_legend(self):
-        """EVERY glyph on screen, on demand. A marker whose meaning you have to ask about is
-        not doing its job, and the lane-state shapes were exactly that."""
+    @staticmethod
+    def legend_markup():
+        """EVERY glyph on screen. A marker whose meaning you have to ask about is not doing
+        its job, and the lane-state shapes were exactly that."""
         kinds = "\n".join("  %s  %s" % (ASK_KINDS[k], d) for k, d in (
             ("review", "a diff / PR to read and green-light"),
             ("plan", "a plan awaiting its gate"),
@@ -424,14 +441,17 @@ class FleetTUI(App):
             ("todo", "a general action item"),
         ))
         states = "\n".join("  %s  %s" % (i, d) for i, d in (
-            (LANE_ASK, "this lane owes YOU an answer (replaces its state icon)"),
-            ("●", "busy — tool calls landing now"),
-            ("◔", "quiet — turn open, nothing happening"),
-            ("○", "idle — between turns"),
-            ("·", "down — lane exists, nothing running in it"),
+            (f"[b yellow]{LANE_ASK}[/]", "this lane owes YOU an answer — replaces its state"),
+            ("[green]●[/]", "busy — tool calls landing now"),
+            ("[yellow]◔[/]", "quiet — turn open, nothing happening"),
+            ("[dim]○[/]", "idle — between turns"),
+            ("[red]·[/]", "down — lane exists, nothing running in it"),
         ))
-        self.notify("LANE\n%s\n\nACTION ITEMS\n%s" % (states, kinds),
-                    title="legend", timeout=20)
+        return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[dim]? or esc to close[/]"
+                % (states, kinds))
+
+    def action_legend(self):
+        self.query_one("#legend").toggle_class("-show")
 
     # ── layout ───────────────────────────────────────────────────────────────────────────
     def _apply_split(self):
@@ -469,7 +489,12 @@ class FleetTUI(App):
             self.full = target
 
     def action_unfullscreen(self):
-        if self.full:
+        """Escape closes ONE thing, and the legend is the innermost. Closing both at once
+        would make escape unusable for either."""
+        legend = self.query_one("#legend")
+        if legend.has_class("-show"):
+            legend.remove_class("-show")
+        elif self.full:
             self.action_fullscreen()
 
     def action_undo(self):

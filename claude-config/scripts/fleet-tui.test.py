@@ -153,6 +153,25 @@ async def main():
         await pilot.pause()
         ok("f again restores both", app.query_one("#fleet").display is True)
 
+        # ── the legend TOGGLES; as a toast each press stacked another copy ────────────────
+        legend = app.query_one("#legend")
+        ok("the legend starts hidden", not legend.has_class("-show"))
+        await pilot.press("question_mark")
+        await pilot.pause()
+        ok("? opens it", legend.has_class("-show"))
+        ok("…and it names every glyph on screen",
+           all(g in str(legend.content) for g in
+               ("🔍", "📋", "💬", "🏷️", "🚀", "✅", "●", "◔", "○")), str(legend.content))
+        await pilot.press("question_mark")
+        await pilot.pause()
+        ok("? again closes it — pressing twice does not leave two",
+           not legend.has_class("-show"))
+        await pilot.press("question_mark")
+        await pilot.press("escape")
+        await pilot.pause()
+        ok("escape closes it too", not legend.has_class("-show"))
+        ok("…without also leaving fullscreen", app.query_one("#fleet").display is True)
+
         # ── x clears from the FILE, u puts it back ────────────────────────────────────────
         lanes.focus()
         lanes.index = 0
