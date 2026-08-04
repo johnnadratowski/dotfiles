@@ -15,8 +15,20 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    MARK, context_for, fmt_secs, needs_input, summary_for, todo_for,
+    MARK, context_for, fmt_secs, needs_input, summary_for, todo_for, todo_pairs_for,
 )
+
+
+def osc8(label, url):
+    """Render `label` as a terminal hyperlink to `url` (plain label when there is no URL).
+
+    ST (ESC \\) terminates, never BEL: width-strippers treat ST as zero-width but count the
+    bytes of a BEL-terminated URL, which truncates the line mid-escape and leaves the raw URL
+    on screen. Safe here only because the ▸ field is appended AFTER every pad() and is never
+    itself wrapped -- put a link inside a padded column and the column math breaks, since
+    len() counts the escape bytes that the terminal does not draw.
+    """
+    return "\033]8;;%s\033\\%s\033]8;;\033\\" % (url, label) if url else label
 
 STATE_ICON = {"busy": "●", "quiet": "◔", "idle": "○", "down": "·"}
 
@@ -114,6 +126,9 @@ def rows():
             # number: you cannot tell which lied.
             "context_pct": round(100 * used / (win * 0.8)) if used and win else None,
             "issue": todo_for(path),
+            # Kept alongside "issue" rather than replacing it: JSON consumers want the bare
+            # ids, the terminal wants them clickable, and one field cannot be both.
+            "issue_links": todo_pairs_for(path),
             "needs_input": needs_input(path),
             "summary": summary_for(path, tpath or None),
         }
@@ -189,7 +204,9 @@ def main():
             pad(r["state"], 7) + " " + pad(pct, 5, right=True) + " " + \
             pad(up, 7, right=True)
         if not sub:
-            line += "  ▸ " + (r["issue"] or "—")
+            links = r.get("issue_links") or []
+            line += "  ▸ " + (" ".join(osc8(i, u) for i, u in links) if links
+                              else (r["issue"] or "—"))
         sys.stdout.write(line.rstrip() + "\n")
 
         # SECOND LINE: what it is actually doing. A question outranks the summary — one is

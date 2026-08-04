@@ -79,6 +79,34 @@ def todo_for(cwd):
     return " ".join(ids)
 
 
+def todo_pairs_for(cwd):
+    """(id, url) per in-progress tracker line -- todo_for plus the URL it discards.
+
+    Same file and the SAME stop rules as todo_for, deliberately: two surfaces reading one
+    mirror by different rules is how they end up disagreeing about what a lane is working on.
+
+    The URL is validated, not just taken. Field 2 is a URL *by convention* — `/todo` writes
+    `<ID>\\t<url>` — but the same file is where agents leave themselves resume prose, and a
+    line whose second field is a note would otherwise become a hyperlink to that note. A
+    caller that cannot tell a real link from a broken one shows a broken one, so the scheme
+    check happens here, once, rather than in each surface.
+    """
+    pairs = []
+    for ln in _walk_up(cwd, ".claude", "current-work").splitlines():
+        ln = ln.strip()
+        if not ln or ln.startswith("#"):
+            continue
+        parts = ln.split("\t")
+        first = parts[0].strip()
+        if not (first and " " not in first and len(first) <= 24):
+            break
+        url = parts[1].strip() if len(parts) > 1 else ""
+        if not url.startswith(("http://", "https://")):
+            url = ""
+        pairs.append((first, url))
+    return pairs
+
+
 def needs_input(cwd):
     """Does this agent want the human? THE HARNESS CANNOT TELL US.
 
