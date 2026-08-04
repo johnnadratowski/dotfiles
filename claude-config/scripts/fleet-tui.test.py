@@ -58,20 +58,26 @@ async def main():
     with open(fleet_path, "w") as f:
         f.write("ship: merge #124\n")
 
-    calls = {"n": 0}
+    # The fields the tests mutate between refreshes, to drive the rebuild-or-not decision.
+    volatile = {
+        "uptime": "3h",
+        "pct": 60,
+        # A TAG-SHAPED bracket, not just any bracket. `[2 GREEN]` reads as a hazard and is
+        # not one — rich only treats `[` as markup when a tag name follows, so escape()
+        # leaves it alone and so does the parser. `[b]` is the real case: unescaped it turns
+        # the rest of the status bold and vanishes itself.
+        "status": "DX-6 done [b]2 GREEN[/b], uncommitted",
+    }
 
     def fake_snapshot():
-        calls["n"] += 1
         return {
             "lanes": [{
-                "name": "feature-1", "path": lane, "state": "idle", "uptime": "3h",
-                "kind": "lane", "label": "vii", "context_pct": 60, "issue": "DX-6",
+                "name": "feature-1", "path": lane, "state": "idle",
+                "uptime": volatile["uptime"],
+                "kind": "lane", "label": "vii", "context_pct": volatile["pct"],
+                "issue": "DX-6",
                 "issue_links": [("DX-6", "https://example.invalid/DX-6")],
-                # A TAG-SHAPED bracket, not just any bracket. `[2 GREEN]` reads as a hazard
-                # and is not one — rich only treats `[` as markup when a tag name follows, so
-                # escape() leaves it alone and so does the parser. `[b]` is the real case:
-                # unescaped it turns the rest of the status bold and vanishes itself.
-                "status": "DX-6 done [b]2 GREEN[/b], uncommitted",
+                "status": volatile["status"],
                 "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
             }],
             "subs": [],
@@ -105,6 +111,47 @@ async def main():
         await pilot.pause()
         ok("an unchanged refresh does not rebuild (the cursor survives)",
            lanes.children[0] is before)
+
+        # THE BLINK. uptime and ctx% move on every single tick; folding them into the redraw
+        # signature rebuilt both lists every five seconds. The row must still update.
+        volatile["uptime"] = "9h99m"
+        volatile["pct"] = 71
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a changed uptime does NOT rebuild the list", lanes.children[0] is before)
+        ok("…but the row shows the new value", "9h99m" in screen_text(app))
+        ok("…and the new context%", "71%" in screen_text(app))
+
+        # A real change must still rebuild.
+        volatile["status"] = "now something else entirely"
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a changed status DOES rebuild", lanes.children[0] is not before)
+        ok("…and shows the new status", "now something else entirely" in screen_text(app))
+
+        # ── layout controls ──────────────────────────────────────────────────────────────
+        lanes.focus()
+        await pilot.pause()
+        ok("the two panels start at an even split",
+           str(app.query_one("#lanes").styles.height) ==
+           str(app.query_one("#fleet").styles.height))
+        await pilot.press("plus")
+        await pilot.pause()
+        ok("+ grows the focused panel", app.split == 6)
+        await pilot.press("minus")
+        await pilot.press("minus")
+        await pilot.pause()
+        ok("- shrinks it", app.split == 4)
+
+        await pilot.press("f")
+        await pilot.pause()
+        ok("f hides the other panel", app.query_one("#fleet").display is False)
+        ok("…and keeps the focused one", app.query_one("#lanes").display is True)
+        await pilot.press("f")
+        await pilot.pause()
+        ok("f again restores both", app.query_one("#fleet").display is True)
 
         # ── x clears from the FILE, u puts it back ────────────────────────────────────────
         lanes.focus()

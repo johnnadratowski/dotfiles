@@ -72,6 +72,7 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
   | `review:` | 🔍 | a diff, PR or bundle to read and green-light |
   | `plan:` | 📋 | a plan awaiting its gate, before any code exists |
   | `product:` | 💬 | a product / business / scoping call only they can make |
+  | `triage:` | 🏷️ | a tracker question — is this an issue, whose, what priority |
   | `ship:` | 🚀 | a merge, deploy or publish gate |
   | *(none)* or `todo:` | ✅ | a general action item |
 

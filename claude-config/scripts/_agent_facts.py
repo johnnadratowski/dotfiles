@@ -166,6 +166,7 @@ ASK_KINDS = {
     "review":  "🔍",   # a diff, a PR, a bundle — something to read and green-light
     "plan":    "📋",   # a plan awaiting its gate, before any code exists
     "product": "💬",   # a product / business / scoping call only the user can make
+    "triage":  "🏷️",   # a tracker question — is this an issue, whose is it, what priority
     "ship":    "🚀",   # a merge, deploy or publish gate
     "todo":    "✅",   # explicit general action — same as untyped, spelled out
 }

@@ -163,14 +163,15 @@ rm -f "$LANES/chas/.claude/needs-input"
 # ── typed asks ───────────────────────────────────────────────────────────────────────────
 # Nine identical markers tell you only that there are nine. The kind is what lets the reader
 # batch — reviews in one sitting, product calls in another — so it has to survive to the row.
-printf 'review: the DX-6 diff\nproduct: fold MON-10 in?\nship: merge #124\nsomething else\n' \
+printf 'review: the DX-6 diff\nproduct: fold MON-10 in?\nship: merge #124\ntriage: whose is this?\nsomething else\n' \
   > "$LANES/chas/.claude/needs-input"
 has "a review: ask carries the review glyph"    "🔍 the DX-6 diff"      "$(row chas)"
 has "a product: ask carries the product glyph"  "💬 fold MON-10 in?"    "$(row chas)"
 has "a ship: ask carries the ship glyph"        "🚀 merge #124"         "$(row chas)"
+has "a triage: ask carries the triage glyph"    "🏷️ whose is this?"     "$(row chas)"
 has "an untyped ask is a general action item"   "✅ something else"     "$(row chas)"
 hasnt "the kind token itself is consumed, not printed" "review:"        "$(row chas)"
-has "the umbrella glyph still counts them all"  "⚠️ 5 needs you"        "$(run | head -1)"
+has "the umbrella glyph still counts them all"  "⚠️ 6 needs you"        "$(run | head -1)"
 has  "a lane owing answers wears the umbrella"          "⚠️ chas" "$(row chas | head -1)"
 hasnt "…not the kind of its first ask"                  "🔍 chas" "$(row chas | head -1)"
 rm -f "$LANES/chas/.claude/needs-input"

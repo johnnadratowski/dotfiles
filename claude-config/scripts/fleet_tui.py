@@ -45,6 +45,13 @@ STATUS_SH = os.path.join(HERE, "fleet-status.sh")
 STATE_ICON = {"busy": "●", "quiet": "◔", "idle": "○", "down": "·"}
 STATE_STYLE = {"busy": "green", "quiet": "yellow", "idle": "dim", "down": "red"}
 
+# The lane-row umbrella, in TEXT presentation (U+26A0 with no variation selector) rather than
+# the emoji ⚠️ the table and the chat use. Same meaning, and the divergence is deliberate: with
+# VS16 the terminal picks an emoji font, which on this machine drew an unrecognisable grey box
+# beside exactly the three lanes that owed an answer — a marker nobody can read is worse than
+# no marker. The text form takes the surrounding style, so it is coloured rather than drawn.
+LANE_ASK = "⚠"
+
 
 def _ask_lines(path):
     """Raw ask lines from a needs-input file — RAW, deliberately.
@@ -140,19 +147,18 @@ class Lane(ListItem):
         super().__init__()
         self.row = row
 
-    def compose(self):
+    def head_markup(self):
         r = self.row
         state = r.get("state", "?")
-        icon = ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
-        icolor = "yellow" if r.get("raw_asks") else STATE_STYLE.get(state, "white")
+        icon = LANE_ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
+        icolor = "b yellow" if r.get("raw_asks") else STATE_STYLE.get(state, "white")
         pct = r.get("context_pct")
         pcs = "—" if pct is None or state == "down" else "%d%%" % pct
         pcolor = "red" if (pct or 0) >= 90 else "yellow" if (pct or 0) >= 80 else "dim"
         up = "—" if state == "down" else (r.get("uptime") or "—")
         ids = " ".join(i for i, _ in (r.get("issue_links") or [])) or (r.get("issue") or "—")
-
-        head = (
-            f"[{icolor}]{icon}[/]  "
+        return (
+            f"[{icolor}]{icon}[/] "
             f"[b]{escape(r.get('label') or ''):<4}[/]"
             f"[dim]{escape(r['name']):<11}[/]"
             f"[{STATE_STYLE.get(state, 'white')}]{state:<7}[/]"
@@ -160,13 +166,29 @@ class Lane(ListItem):
             f"[dim]{up:>6}[/]   "
             f"[cyan]{escape(ids)}[/]"
         )
-        yield Static(head, classes="lane-head")
-        status = r.get("status") or ""
+
+    def compose(self):
+        yield Static(self.head_markup(), classes="lane-head")
+        status = self.row.get("status") or ""
         yield Static(f"[i]{escape(status)}[/]" if status else "[dim i]— no status —[/]",
                      classes="lane-status")
-        for raw in r.get("raw_asks") or []:
+        for raw in self.row.get("raw_asks") or []:
             icon, text = ask_kind(raw)
             yield Static(f"{icon} {escape(clip(text))}", classes="lane-ask")
+
+    def refresh_volatile(self, row):
+        """Update ONLY the fields that change every tick, in place.
+
+        Uptime and context% move on every refresh, so folding them into the redraw signature
+        made the signature differ every five seconds — which rebuilt both lists, every time,
+        and is exactly the periodic blink the user saw. They live on the head line alone, so
+        updating that one Static costs nothing and disturbs nothing.
+        """
+        self.row = row
+        try:
+            self.query_one(".lane-head", Static).update(self.head_markup())
+        except Exception:
+            pass
 
 
 class Ask(ListItem):
@@ -187,15 +209,33 @@ class FleetTUI(App):
     CSS = """
     Screen { background: $surface; }
     #head { padding: 0 1; height: 1; color: $text-muted; }
-    #lanes, #fleet { border: round $primary; padding: 0 1; }
+
+    /* THE FOCUSED PANEL HAS TO BE UNMISTAKABLE. Both panels carrying the same quiet border
+       left the reader guessing which one `x` was about to act on — and `x` deletes. So the
+       unfocused panel is dimmed to a plain grey hairline and the focused one takes a heavy
+       accent border and a coloured title. */
+    #lanes, #fleet { border: round $panel-darken-2; padding: 0 1; }
+    #lanes:focus-within, #fleet:focus-within {
+        border: heavy $accent;
+        border-title-color: $accent;
+        border-title-style: bold;
+    }
     #lanes { height: 1fr; }
-    #fleet { height: auto; max-height: 40%; }
+    #fleet { height: 1fr; }
+
     ListView { background: transparent; }
     ListItem { padding: 0 0 1 0; background: transparent; }
-    ListItem.--highlight { background: $boost; }
-    ListView:focus > ListItem.--highlight { background: $accent 30%; }
-    .lane-status { padding-left: 5; color: $text; }
-    .lane-ask { padding-left: 5; }
+    /* A selected row in an UNfocused panel stays legible but recessive... */
+    ListItem.--highlight { background: $panel; }
+    /* ...and the live cursor gets a solid block plus a bar down its left edge, which reads
+       from across the room in a way a subtle tint does not. */
+    ListView:focus > ListItem.--highlight {
+        background: $accent 40%;
+        border-left: thick $accent;
+        padding-left: 1;
+    }
+    .lane-status { padding-left: 4; color: $text; }
+    .lane-ask { padding-left: 4; }
     """
 
     BINDINGS = [
@@ -204,18 +244,30 @@ class FleetTUI(App):
         Binding("enter", "open_ticket", "open ticket"),
         Binding("x", "clear_ask", "clear ask"),
         Binding("u", "undo", "undo"),
+        Binding("f", "fullscreen", "fullscreen"),
         Binding("question_mark", "legend", "legend"),
+        Binding("plus", "grow", "grow panel"),
+        Binding("equals_sign", "grow", "", show=False),
+        Binding("minus", "shrink", "shrink panel"),
+        Binding("underscore", "shrink", "", show=False),
+        Binding("escape", "unfullscreen", "", show=False),
         Binding("tab", "focus_next", "switch panel", show=False),
         Binding("j", "cursor_down", "", show=False),
         Binding("k", "cursor_up", "", show=False),
     ]
 
+    # 1..9 — how many parts of the split the LANES panel takes; the fleet panel takes the
+    # rest. Starts even, which is what the user asked for.
+    SPLIT_MIN, SPLIT_MAX, SPLIT_TOTAL = 1, 9, 10
+
     def __init__(self, interval=5.0):
         super().__init__()
         self.interval = interval
         self.data = {"lanes": [], "subs": [], "fleet": [], "error": ""}
-        self.sig = None            # last rendered snapshot, to skip no-op redraws
+        self.sig = None            # last STRUCTURAL snapshot, to skip no-op rebuilds
         self.undo = None           # (path, raw) of the last cleared ask
+        self.split = 5             # even
+        self.full = None           # id of the panel currently fullscreened, or None
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
@@ -227,6 +279,7 @@ class FleetTUI(App):
     def on_mount(self):
         self.query_one("#lanes").border_title = "FLEET"
         self.query_one("#fleet").border_title = "NEEDS YOU"
+        self._apply_split()
         self.reload()
         self.set_interval(self.interval, self.reload)
 
@@ -245,26 +298,43 @@ class FleetTUI(App):
         if not get_current_worker().is_cancelled:
             self.call_from_thread(self.apply, data)
 
-    def apply(self, data):
-        """Redraw only on a real change.
+    @staticmethod
+    def structure_sig(data):
+        """What a rebuild is actually FOR — everything except the per-tick counters.
 
-        A ListView rebuilt every five seconds throws away the cursor and any scroll position,
-        which makes the view unusable exactly when you are reading it. Comparing a signature
-        first means an idle fleet costs nothing and never moves under you.
+        Deliberately excludes `uptime` and `context_pct`. They change on every single refresh,
+        so including them made the signature differ every time and rebuilt both lists every
+        five seconds: the periodic blink, and a cursor that could not be kept anywhere.
         """
-        sig = json.dumps(data, sort_keys=True, default=str)
+        rows = [[r.get("name"), r.get("kind"), r.get("label"), r.get("state"),
+                 r.get("status"), r.get("raw_asks"), r.get("issue_links")]
+                for r in data["lanes"] + data["subs"]]
+        return json.dumps([rows, data["fleet"]], sort_keys=True, default=str)
+
+    def apply(self, data):
+        """Rebuild only on a STRUCTURAL change; otherwise update the moving numbers in place.
+
+        A ListView rebuilt on a timer throws away the cursor and repaints the screen, which
+        makes the view unusable exactly while you are reading it.
+        """
+        sig = self.structure_sig(data)
         self.data = data
         self.update_head()
+
+        rows = data["lanes"] + data["subs"]
+        lanes = self.query_one("#lanes", ListView)
         if sig == self.sig:
+            for item, r in zip(lanes.children, rows):
+                if isinstance(item, Lane):
+                    item.refresh_volatile(r)
             return
         self.sig = sig
 
-        lanes = self.query_one("#lanes", ListView)
         keep = lanes.index
         lanes.clear()
-        for r in data["lanes"] + data["subs"]:
+        for r in rows:
             lanes.append(Lane(r))
-        if keep is not None and 0 <= keep < len(lanes):
+        if keep is not None and 0 <= keep < len(rows):
             lanes.index = keep
 
         fleet = self.query_one("#fleet", ListView)
@@ -272,7 +342,7 @@ class FleetTUI(App):
         fleet.clear()
         for i, raw in enumerate(data["fleet"], 1):
             fleet.append(Ask(i, raw, data.get("fleet_path", "")))
-        if keepf is not None and 0 <= keepf < len(fleet):
+        if keepf is not None and 0 <= keepf < len(data["fleet"]):
             fleet.index = keepf
 
     def update_head(self):
@@ -343,15 +413,64 @@ class FleetTUI(App):
             self.notify("already gone", severity="warning")
 
     def action_legend(self):
-        """On demand, not on screen. A permanent legend costs four lines of the view forever
-        to answer a question the reader has once."""
-        self.notify("\n".join("%s  %s" % (ASK_KINDS[k], d) for k, d in (
-            ("review", "a diff / PR to read"),
+        """EVERY glyph on screen, on demand. A marker whose meaning you have to ask about is
+        not doing its job, and the lane-state shapes were exactly that."""
+        kinds = "\n".join("  %s  %s" % (ASK_KINDS[k], d) for k, d in (
+            ("review", "a diff / PR to read and green-light"),
             ("plan", "a plan awaiting its gate"),
             ("product", "a product or scoping call"),
-            ("ship", "a merge / deploy gate"),
+            ("triage", "a tracker question — is this an issue, whose, what priority"),
+            ("ship", "a merge / deploy / publish gate"),
             ("todo", "a general action item"),
-        )), title="ask kinds", timeout=12)
+        ))
+        states = "\n".join("  %s  %s" % (i, d) for i, d in (
+            (LANE_ASK, "this lane owes YOU an answer (replaces its state icon)"),
+            ("●", "busy — tool calls landing now"),
+            ("◔", "quiet — turn open, nothing happening"),
+            ("○", "idle — between turns"),
+            ("·", "down — lane exists, nothing running in it"),
+        ))
+        self.notify("LANE\n%s\n\nACTION ITEMS\n%s" % (states, kinds),
+                    title="legend", timeout=20)
+
+    # ── layout ───────────────────────────────────────────────────────────────────────────
+    def _apply_split(self):
+        self.query_one("#lanes").styles.height = "%dfr" % self.split
+        self.query_one("#fleet").styles.height = "%dfr" % (self.SPLIT_TOTAL - self.split)
+
+    def action_grow(self):
+        """Grow the FOCUSED panel — the same key does opposite things in the two panels,
+        which is right: the reader is asking for more of what they are looking at."""
+        d = 1 if self._focused_list().id == "lanes" else -1
+        self.split = max(self.SPLIT_MIN, min(self.SPLIT_MAX, self.split + d))
+        self._apply_split()
+
+    def action_shrink(self):
+        d = -1 if self._focused_list().id == "lanes" else 1
+        self.split = max(self.SPLIT_MIN, min(self.SPLIT_MAX, self.split + d))
+        self._apply_split()
+
+    def action_fullscreen(self):
+        """Toggle: hide the other panel outright.
+
+        Hiding rather than Screen.maximize() — maximize moves the widget into a different
+        container, which drops focus and the cursor with it. Display-toggling leaves the
+        widget exactly where it is, so `f` twice is a genuine round trip.
+        """
+        target = self._focused_list().id
+        if self.full:
+            for wid in ("#lanes", "#fleet"):
+                self.query_one(wid).display = True
+            self.full = None
+            self._apply_split()
+        else:
+            other = "#fleet" if target == "lanes" else "#lanes"
+            self.query_one(other).display = False
+            self.full = target
+
+    def action_unfullscreen(self):
+        if self.full:
+            self.action_fullscreen()
 
     def action_undo(self):
         if not self.undo:
