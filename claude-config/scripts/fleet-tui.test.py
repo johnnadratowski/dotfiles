@@ -58,6 +58,9 @@ async def main():
     with open(fleet_path, "w") as f:
         f.write("ship: merge #124\n")
 
+    # The ids that must become links live in ORDINARY TEXT — a status and an ask — not in the
+    # ticket column. That is where most of them are, and where the table renderer never linked.
+
     # The fields the tests mutate between refreshes, to drive the rebuild-or-not decision.
     volatile = {
         "uptime": "3h",
@@ -66,7 +69,7 @@ async def main():
         # not one — rich only treats `[` as markup when a tag name follows, so escape()
         # leaves it alone and so does the parser. `[b]` is the real case: unescaped it turns
         # the rest of the status bold and vanishes itself.
-        "status": "DX-6 done [b]2 GREEN[/b], uncommitted",
+        "status": "SRV-11 done [b]2 GREEN[/b], uncommitted",
     }
 
     def fake_snapshot():
@@ -83,6 +86,8 @@ async def main():
             "subs": [],
             "fleet": fleet_tui._ask_lines(fleet_path),
             "fleet_path": fleet_path,
+            "ctx": {"linear_base": "https://linear.app/acme",
+                    "repo": "https://github.com/acme/goals"},
             "error": "",
         }
 
@@ -94,14 +99,30 @@ async def main():
         await pilot.pause()
         text = screen_text(app)
 
-        ok("the lane's status is rendered", "DX-6 done" in text, text)
+        ok("the lane's status is rendered", "uncommitted" in text, text)
         ok("…with tag-shaped brackets escaped, so markup cannot eat them",
            r"\[b]2 GREEN\[/b]" in text, text)
-        ok("a review: ask carries the review glyph", "🔍 the DX-6 diff" in text, text)
+        # The id inside it is a link by now, so match around it rather than through it.
+        ok("a review: ask carries the review glyph", "🔍 the [link=" in text, text)
+        ok("…and the words after the linked id survive", "[/link] diff" in text, text)
         ok("an untyped ask is a general action item", "✅ something untyped" in text, text)
         ok("the kind token is consumed, not printed", "review:" not in text, text)
-        ok("a fleet ask carries its own glyph", "🚀 merge #124" in text, text)
         ok("the header counts every ask", "3 needs you" in text, text)
+
+        # ── linking, everywhere an id appears ────────────────────────────────────────────
+        ok("the ticket column links to the URL the tracker gave",
+           "[link='https://example.invalid/DX-6']DX-6[/link]" in text, text)
+        ok("a ticket id inside an ASK is linked too",
+           "[link='https://linear.app/acme/issue/DX-6']DX-6[/link]" in text, text)
+        ok("a ticket id inside a STATUS is linked too",
+           text.count("[link='https://linear.app/acme/issue/SRV-11']SRV-11[/link]") == 1, text)
+        ok("a PR number in a fleet ask is linked",
+           "[link='https://github.com/acme/goals/pull/124']#124[/link]" in text, text)
+
+        # No base learned ⇒ NOTHING is linked. A hyperlink assembled from a guessed workspace
+        # looks authoritative and 404s, which is worse than the plain id it replaced.
+        ok("with no learned base, an id stays plain text",
+           fleet_tui.linkify("SRV-11 and #124", {}) == "SRV-11 and #124")
 
         # ── an unchanged snapshot must not rebuild the lists ──────────────────────────────
         lanes = app.query_one("#lanes", ListView)

@@ -24,6 +24,7 @@ neither ever creates a file.
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -89,6 +90,44 @@ def _drop_line(path, raw):
     return False
 
 
+_TICKET = re.compile(r"\b([A-Z]{2,5}-\d+)\b")
+_PR = re.compile(r"#(\d+)\b")
+
+
+def linkify(text, ctx):
+    """Make every ticket id and PR number in a string clickable, wherever it appears.
+
+    The table renderer only ever linked the ▸ column, so an id mentioned in a status or an ask
+    was dead text — and those are where most of them are. Textual emits OSC-8 for `[link=…]`,
+    so this is the same mechanism the table used, applied to the whole line.
+
+    Call this AFTER escape(): escaping turns `[` into `\\[`, and the markup inserted here has
+    to survive that. Neither an id nor a `#123` contains a bracket, so the order is safe.
+
+    A base URL is only ever LEARNED, never assembled from a guess about the workspace — a
+    hyperlink that 404s is worse than plain text, because it looks authoritative.
+    """
+    base, repo = ctx.get("linear_base"), ctx.get("repo")
+    if base:
+        text = _TICKET.sub(
+            lambda m: "[link='%s/issue/%s']%s[/link]" % (base, m.group(1), m.group(1)), text)
+    if repo:
+        text = _PR.sub(
+            lambda m: "[link='%s/pull/%s']#%s[/link]" % (repo, m.group(1), m.group(1)), text)
+    return text
+
+
+def _repo_url(path):
+    """The origin remote as a browsable https URL, or "" — never a guess."""
+    try:
+        out = subprocess.run(["git", "-C", path, "remote", "get-url", "origin"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    m = re.match(r"(?:git@([^:]+):|https?://(?:[^@/]*@)?([^/]+)/)(.+?)(?:\.git)?$", out)
+    return "https://%s/%s" % (m.group(1) or m.group(2), m.group(3)) if m else ""
+
+
 def _restore_line(path, raw):
     try:
         with open(path) as f:
@@ -131,11 +170,26 @@ def snapshot():
     for r in lanes:
         r["ask_path"] = os.path.join(r["path"], ".claude", "needs-input")
         r["raw_asks"] = _ask_lines(r["ask_path"])
+
+    # The tracker's base URL is LEARNED from a real link the tracker itself produced, so ids
+    # that have no recorded URL of their own still resolve — and if the fleet has no tracked
+    # work at all, nothing is linked rather than linked to a guess.
+    linear_base = ""
+    for r in lanes:
+        for _id, url in r.get("issue_links") or []:
+            if "/issue/" in url:
+                linear_base = url.split("/issue/")[0]
+                break
+        if linear_base:
+            break
+
     return {
         "lanes": lanes,
         "subs": subs,
         "fleet": _ask_lines(fleet_path) if fleet_path else [],
         "fleet_path": fleet_path,
+        "ctx": {"linear_base": linear_base,
+                "repo": _repo_url(lanes[0]["path"]) if lanes else ""},
         "error": "",
     }
 
@@ -143,9 +197,10 @@ def snapshot():
 class Lane(ListItem):
     """One lane: the identity row, its status, then its asks. Selectable as a unit."""
 
-    def __init__(self, row):
+    def __init__(self, row, ctx=None):
         super().__init__()
         self.row = row
+        self.ctx = ctx or {}
 
     def head_markup(self):
         r = self.row
@@ -156,7 +211,11 @@ class Lane(ListItem):
         pcs = "—" if pct is None or state == "down" else "%d%%" % pct
         pcolor = "red" if (pct or 0) >= 90 else "yellow" if (pct or 0) >= 80 else "dim"
         up = "—" if state == "down" else (r.get("uptime") or "—")
-        ids = " ".join(i for i, _ in (r.get("issue_links") or [])) or (r.get("issue") or "—")
+        # The recorded URL wins over the learned base — it is what the tracker actually
+        # returned, slug and all. linkify() is the fallback for ids that have none.
+        links = r.get("issue_links") or []
+        ids = " ".join("[link='%s']%s[/link]" % (u, i) if u else linkify(i, self.ctx)
+                       for i, u in links) or linkify(escape(r.get("issue") or "—"), self.ctx)
         return (
             f"[{icolor}]{icon}[/] "
             f"[b]{escape(r.get('label') or ''):<4}[/]"
@@ -164,17 +223,18 @@ class Lane(ListItem):
             f"[{STATE_STYLE.get(state, 'white')}]{state:<7}[/]"
             f"[{pcolor}]{pcs:>5}[/]  "
             f"[dim]{up:>6}[/]   "
-            f"[cyan]{escape(ids)}[/]"
+            f"[cyan]{ids}[/]"
         )
 
     def compose(self):
         yield Static(self.head_markup(), classes="lane-head")
         status = self.row.get("status") or ""
-        yield Static(f"[i]{escape(status)}[/]" if status else "[dim i]— no status —[/]",
-                     classes="lane-status")
+        yield Static(f"[i]{linkify(escape(status), self.ctx)}[/]" if status
+                     else "[dim i]— no status —[/]", classes="lane-status")
         for raw in self.row.get("raw_asks") or []:
             icon, text = ask_kind(raw)
-            yield Static(f"{icon} {escape(clip(text))}", classes="lane-ask")
+            yield Static(f"{icon} {linkify(escape(clip(text)), self.ctx)}",
+                         classes="lane-ask")
 
     def refresh_volatile(self, row):
         """Update ONLY the fields that change every tick, in place.
@@ -194,15 +254,17 @@ class Lane(ListItem):
 class Ask(ListItem):
     """One fleet-level to-do. Belongs to no lane, so it lives in its own panel."""
 
-    def __init__(self, n, raw, path):
+    def __init__(self, n, raw, path, ctx=None):
         super().__init__()
         self.n = n
         self.raw = raw
         self.path = path
+        self.ctx = ctx or {}
 
     def compose(self):
         icon, text = ask_kind(self.raw)
-        yield Static(f"[dim]{self.n:>2}[/]  {icon} {escape(clip(text))}")
+        yield Static("[dim]%2d[/]  %s %s" % (self.n, icon,
+                                             linkify(escape(clip(text)), self.ctx)))
 
 
 class FleetTUI(App):
@@ -346,10 +408,11 @@ class FleetTUI(App):
             return
         self.sig = sig
 
+        ctx = data.get("ctx") or {}
         keep = lanes.index
         lanes.clear()
         for r in rows:
-            lanes.append(Lane(r))
+            lanes.append(Lane(r, ctx))
         if keep is not None and 0 <= keep < len(rows):
             lanes.index = keep
 
@@ -357,7 +420,7 @@ class FleetTUI(App):
         keepf = fleet.index
         fleet.clear()
         for i, raw in enumerate(data["fleet"], 1):
-            fleet.append(Ask(i, raw, data.get("fleet_path", "")))
+            fleet.append(Ask(i, raw, data.get("fleet_path", ""), ctx))
         if keepf is not None and 0 <= keepf < len(data["fleet"]):
             fleet.index = keepf
 
