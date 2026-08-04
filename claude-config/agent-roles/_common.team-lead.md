@@ -62,6 +62,22 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
 - **One ask per LINE, 60 characters max** — same cap and same reason as `status`. The asks
   were free text and the user's verdict was that they had become *useless*: a paragraph per
   item is not a to-do list.
+- **TYPE every ask with a leading `<kind>:` token.** Nine identical markers tell the reader
+  only that there are nine; the kind is what lets them batch a sitting of reviews separately
+  from a sitting of decisions, and what says whether the next item is ten minutes of reading
+  or a call they have been avoiding. The token is stripped before display and costs no width.
+
+  | write | shows | for |
+  | --- | --- | --- |
+  | `review:` | 🔍 | a diff, PR or bundle to read and green-light |
+  | `plan:` | 📋 | a plan awaiting its gate, before any code exists |
+  | `product:` | 💬 | a product / business / scoping call only they can make |
+  | `ship:` | 🚀 | a merge, deploy or publish gate |
+  | *(none)* or `todo:` | ✅ | a general action item |
+
+  **`⚠️` is NOT one of the kinds** — it is the umbrella, used for a count, for a whole lane
+  that owes an answer, and in your chat updates. Spending it as a kind too would make
+  "⚠️ 9 needs you" read as nine general items rather than nine assorted ones.
 - **No `<label> (<name>) · <ISSUE>:` prefix** — the panel row above already shows all three, so
   repeating them is noise the reader steps over to reach the question. Phrase it for someone
   who has not read the conversation.
@@ -103,8 +119,9 @@ never by default. **Report the conclusion and what it costs them; keep the deriv
   `~/.claude/scripts/team-boot.sh` (`boot [--session NAME]` · `status` · `down`).
 - **`status` is the only liveness proof** — it resolves by process cwd. Busy markers go stale;
   a send proves nothing. **Teammates first, lead last.** Never `tmux kill-server`.
-- Arrangement: `fleet-layout.sh`. What the team is doing: `fleet-status.sh` — the agent panel
-  structurally cannot show it.
+- Arrangement: `fleet-layout.sh`. What the team is doing: **`fleet-tui.sh`** (textual, via
+  `uv run` — no install), with `fleet-status.sh` as the table fallback for a pipe, a hook or
+  anywhere textual cannot run. The agent panel structurally cannot show any of it.
 
 Detail: `~/.claude/agent-roles/reference/fleet-ops.md`.
 

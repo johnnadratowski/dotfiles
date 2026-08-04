@@ -15,8 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    clip, context_for, fmt_secs, needs_input, needs_input_items, status_line, todo_for,
-    todo_pairs_for,
+    ASK, ask_kind, clip, context_for, fmt_secs, needs_input, needs_input_items, status_line,
+    todo_for, todo_pairs_for,
 )
 
 
@@ -32,10 +32,6 @@ def osc8(label, url):
     return "\033]8;;%s\033\\%s\033]8;;\033\\" % (url, label) if url else label
 
 STATE_ICON = {"busy": "●", "quiet": "◔", "idle": "○", "down": "·"}
-
-# The one glyph meaning "a human has to answer this", used identically in the lead's chat
-# output and here, so the panel and the conversation cannot look like different signals.
-ASK = "⚠️"
 
 
 def general_asks():
@@ -58,7 +54,13 @@ def general_asks():
             body = f.read().strip()
     except OSError:
         return []
-    return [clip(ln) for ln in body.splitlines() if ln.strip() and not ln.startswith("#")]
+    out = []
+    for ln in body.splitlines():
+        if not ln.strip() or ln.lstrip().startswith("#"):
+            continue
+        icon, text = ask_kind(ln)
+        out.append((icon, clip(text)))
+    return out
 
 # Emoji occupy two terminal cells while len() counts them as one, so a column padded with
 # %-*s containing ❓ lands one cell right of its neighbours and the whole table skews. These
@@ -266,10 +268,10 @@ def main():
             out = wrap(r["status"], 6)
             if out:
                 sys.stdout.write(out + "\n")
-        # One ⚠ per ask. The lane's label, name and ticket are already on the row above, so the
-        # ask carries the question and nothing else.
-        for ask in (r.get("asks") or []):
-            out = wrap(ASK + " " + ask, 8)
+        # One typed glyph per ask. The lane's label, name and ticket are already on the row
+        # above, so the ask carries its kind and the question, and nothing else.
+        for icon, text in (r.get("asks") or []):
+            out = wrap(icon + " " + text, 8)
             if out:
                 sys.stdout.write(out + "\n")
 
@@ -277,8 +279,8 @@ def main():
     # belong to no lane, and hanging them off an arbitrary agent would misattribute them.
     if general:
         sys.stdout.write("\n  NEEDS YOU  (not lane-specific)\n")
-        for ask in general:
-            out = wrap(ASK + " " + ask, 6)
+        for icon, text in general:
+            out = wrap(icon + " " + text, 6)
             if out:
                 sys.stdout.write(out + "\n")
 

@@ -155,9 +155,41 @@ _ASK_PREFIX = re.compile(r"^\s*\S+\s*\([^)]*\)\s*·\s*[A-Z]{2,5}-\d+\s*:\s*")
 # A legacy single-line ask numbering its parts "(1) … (2) …". Split so each gets its own marker.
 _ASK_ENUM = re.compile(r"\s*\(\d+\)\s*")
 
+# WHAT KIND OF ATTENTION THIS WANTS, as a glyph. A list of nine identical markers tells the
+# reader only that there are nine; the kind is what lets them batch — reviews in one sitting,
+# product calls in another — and what tells them at a glance whether the next item is ten
+# minutes of reading or a decision they have been putting off.
+#
+# An ask is typed by a leading `<kind>:` token, which is stripped before display. An untyped
+# ask is a general action item; that is the honest default, not a fallback to apologise for.
+ASK_KINDS = {
+    "review":  "🔍",   # a diff, a PR, a bundle — something to read and green-light
+    "plan":    "📋",   # a plan awaiting its gate, before any code exists
+    "product": "💬",   # a product / business / scoping call only the user can make
+    "ship":    "🚀",   # a merge, deploy or publish gate
+    "todo":    "✅",   # explicit general action — same as untyped, spelled out
+}
+ASK_GENERAL = "✅"
+# The UMBRELLA, and deliberately NOT one of the kinds above: it means "a human owes something
+# here" wherever a count or a whole lane is being marked — the header, a lane's row icon, and
+# the lead's chat updates. Double-booking it as a kind too would make "⚠️ 9 needs you" read as
+# nine general items rather than nine items of assorted kinds.
+ASK = "⚠️"
+
+_ASK_KIND = re.compile(r"^([a-z]+)\s*:\s*")
+
+
+def ask_kind(line):
+    """(icon, text) for one ask line, with any `<kind>:` token consumed."""
+    line = (line or "").strip()
+    m = _ASK_KIND.match(line)
+    if m and m.group(1) in ASK_KINDS:
+        return ASK_KINDS[m.group(1)], line[m.end():].strip()
+    return ASK_GENERAL, line
+
 
 def needs_input_items(cwd):
-    """The asks blocking this agent on a HUMAN, one per element, ready to render.
+    """The asks blocking this agent on a HUMAN as (icon, text), one pair per element.
 
     Returns a list rather than a string because an agent routinely has more than one, and the
     previous reader took `splitlines()[0]` — so a second question was silently invisible. A
@@ -170,10 +202,15 @@ def needs_input_items(cwd):
     items = []
     for ln in body.splitlines():
         ln = _ASK_PREFIX.sub("", ln.strip())
-        if not ln:
+        if not ln or ln.startswith("#"):
             continue
         parts = [p.strip(" ;") for p in _ASK_ENUM.split(ln)] if _ASK_ENUM.search(ln) else [ln]
-        items.extend(clip(p) for p in parts if p)
+        for p in parts:
+            if not p:
+                continue
+            icon, text = ask_kind(p)
+            # Clipped AFTER the kind token is consumed, so typing an ask costs it no width.
+            items.append((icon, clip(text)))
     return items
 
 
