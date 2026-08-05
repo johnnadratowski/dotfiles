@@ -16,12 +16,13 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **Spawn placement:** lane agent → its own window; reviewer/tester/subagent → current window,
   under its spawner. `run_in_background: false` = in-process, blocks the turn, no pane.
 - **A background agent goes idle, not away.** It stays addressable until stopped.
-- **Blocked on a person?** `echo "<you> · <ISSUE>: <the decision>" > .claude/needs-input`; `rm`
-  when answered. Nothing in the harness reports "waiting" — this is the only signal.
+- **Blocked on a person? Tell the LEAD** — one `SendMessage` naming the decision, the moment
+  you block. Never write `.claude/needs-input` yourself; the lead owns it (2026-08-04). You
+  cannot clear a flag you raise: the go-quiet order means you never learn the answer landed.
 - **Every question to a human names you first.** Your AskUserQuestion renders in the **lead's**
   window, not yours, so `question` opens with `<label> (<name>) · <ISSUE>:` — **every** question
   in a multi-question prompt, since each is a separate card. `header` stays **descriptive**
-  (~12 chars: what the question is about); your name is already in the text. Same prefix in
-  needs-input and in any message asking for a decision.
+  (~12 chars: what the question is about); your name is already in the text. Same prefix on
+  any message asking for a decision.
 
 Detail: `~/.claude/agent-roles/reference/fleet.md`.

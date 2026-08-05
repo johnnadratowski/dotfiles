@@ -290,6 +290,20 @@ EOF
 
 # ---------------------------------------------------------------------------- naming
 
+# The tab label for ONE agent. Every lane gets its short display name (`ott`) — except the
+# LEAD, whose tab is `team-lead`.
+#
+# That exception is the user's call, made three times: the lead's tab is the one they navigate
+# to by name rather than recognise by position, and `ess` is a lane label, not a job title. The
+# short names still win everywhere they are read at a glance — the four lane tabs, the panel's
+# NAME column — because there the value is one syllable per row.
+_window_label() {
+  case "$(_role_of "$1")" in
+    team-lead|coordinator) printf 'team-lead'; return ;;
+  esac
+  fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1"
+}
+
 # The window label for a set of resident agent names. Pure — this is the whole naming rule.
 window_name_from_names() {
   [ "$#" -eq 0 ] && { printf ''; return; }
@@ -297,8 +311,7 @@ window_name_from_names() {
   # (`feature-2`) — a tab bar is read at a glance and a one-syllable name is what survives
   # that. The id is unchanged everywhere it is load-bearing; this is display only, and
   # fleet_lane_display_name returns the id unchanged for anything that is not a lane.
-  [ "$#" -eq 1 ] && { printf '%s%s' \
-      "$(fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1")" "$(_type_tag "$1")"; return; }
+  [ "$#" -eq 1 ] && { printf '%s%s' "$(_window_label "$1")" "$(_type_tag "$1")"; return; }
   local n roles count durable
   roles="$(for n in "$@"; do _role_of "$n"; done | sort -u)"
 
@@ -333,8 +346,7 @@ window_name_from_names() {
         sole="$n"; break
       done
       if [ -n "$sole" ]; then
-        printf '%s%s' "$(fleet_lane_display_name "$sole" 2>/dev/null || printf '%s' "$sole")" \
-                      "$(_type_tag "$sole")"
+        printf '%s%s' "$(_window_label "$sole")" "$(_type_tag "$sole")"
       else printf '%s' "$roles"; fi
     else _plural "$roles"; fi
   else printf '%s' "$roles" | tr '\n' '-' | sed 's/-$//'

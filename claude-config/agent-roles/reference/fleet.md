@@ -68,15 +68,17 @@ pane-dwelling team member instead. Two consequences before you change it:
 ## Saying you need the human
 
 Nothing in the harness reports "waiting for input" — its status field only ever says `running`
-or `completed`. So the signal is one you write, and the fleet console reads:
+or `completed`. So the signal is one somebody writes and the fleet console reads. **As of
+2026-08-04 that somebody is the LEAD, not you.**
 
-```bash
-printf '%s\n' "<one line: what you need decided>" > .claude/needs-input   # asking
-rm -f .claude/needs-input                                                  # answered
-```
+**Send the lead one message naming the decision, the moment you stop and wait.** Do not write
+`.claude/needs-input`; the lead owns every one of those files and keeps the panel current.
 
-Write it the moment you stop and wait on a person, and remove it the moment you have the
-answer — a stale marker is worse than none, because it trains the reader to ignore the
-indicator. One line, phrased as the decision to be made ("commit on my lane, or hand you the
-diff?"), never a status ("waiting"): the row already says you are waiting, and the width is
-better spent on what you are waiting FOR.
+**The reason is that you cannot clear a flag you raise.** The standing order on a timed-out
+human gate is to go quiet, so the lane never learns its answer landed and the marker outlives
+the question. A stale marker is worse than none: it trains the reader to ignore the one
+indicator there is, including the time it is real.
+
+Phrase it as the decision to be made ("commit on my lane, or hand you the diff?"), never as a
+status ("waiting") — the row already says you are waiting, and the width is better spent on
+what you are waiting FOR.
