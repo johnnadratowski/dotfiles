@@ -193,7 +193,28 @@ unbound plan review looks entirely healthy. **The `set_repo` echo is the check**
 repo identity when no review is loaded, so it cannot tell a bound agent from an unbound one.
 `MONOCLE_REQUIRE_SET_REPO=1` refusing an unbound call is the backstop.
 
-## Step 5 — Report
+## Step 5 — Run the mechanical check. It catches what steps 1.5–4 let through.
+
+```bash
+~/.claude/scripts/team-boot.sh verify
+```
+
+Every line in it is something a lead has silently skipped, and **each one fails in a way that
+looks like something else** — which is why they survived as manual steps:
+
+- **The lead unregistered.** No agent resident in its window ⇒ `_window_rank` scores it
+  `300+idx` and its tab sorts **last**. That read as a layout bug for two days. The cause is a
+  shutdown-then-boot in the same pane: the departing session's `SessionEnd` hook matched its
+  own successor's registry entry by pane token and deleted it.
+- **A lane with no engine.** `review_status` then answers *"No feedback pending."* — a wrong
+  answer rather than an error, which is the worst failure this fleet produces.
+- **A lane with no companion pane.** Its window closes when the agent exits, so the loss shows
+  up a cycle later attached to nothing.
+
+**Do not hand-inspect instead.** These were manual steps and they were skipped; that is the
+entire reason this verb exists. Fix anything it reports before telling the user the fleet is up.
+
+## Step 6 — Report
 
 One line per lane: name, branch, pid, and where it is now. Then the fleet total. If anything
 was skipped or missing, that goes in the same report, not a footnote.

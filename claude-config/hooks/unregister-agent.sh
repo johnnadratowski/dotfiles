@@ -23,13 +23,39 @@ for _fleet_candidate in "$HOME/.claude/scripts/_fleet.sh" "$hook_dir/../scripts/
 done
 tok=""
 type fleet_self_token >/dev/null 2>&1 && tok="$(fleet_self_token)"
+
+# Is <pid> this session's own claude, i.e. somewhere in OUR process ancestry?
+#
+# THE TOKEN ALONE IS NOT AN IDENTITY — it is a LOCATION. `fleet_self_token` is the tmux pane,
+# and a successor booted into the same pane (a lead that exits and is relaunched in place, which
+# is exactly what /shutdown then boot does) carries the identical token. Matching on it alone,
+# this hook deleted its OWN SUCCESSOR's registration: the new lead registered, the old lead's
+# SessionEnd fired moments later, and the live lead was left unregistered.
+#
+# That is not cosmetic. Every fleet reader resolves "who is in this window" from this registry,
+# so an unregistered lead reads as no-agent-resident — `_window_rank` then ranks its window
+# 300+idx and sorts it LAST, which is how the lead's tab kept ending up at position 5.
+_ours() {
+  local want="$1" p="$$" i=0
+  [ -n "$want" ] || return 1
+  while [ "$i" -lt 12 ] && [ -n "$p" ] && [ "$p" != 0 ] && [ "$p" != 1 ]; do
+    [ "$p" = "$want" ] && return 0
+    p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')"
+    i=$((i + 1))
+  done
+  return 1
+}
+
 for f in "$HOME/.claude/running-agents/"*; do
   [ -f "$f" ] || continue
   bn="$(basename "$f")"
+  pid="${bn##*.}"
   match=0
   [ -n "$tok" ] && [ "$(cat "$f" 2>/dev/null)" = "$tok" ] && match=1
-  [ "${bn##*.}" = "$PPID" ] && match=1
+  [ "$pid" = "$PPID" ] && match=1
   [ "$match" = 1 ] || continue
+  # A token match on a LIVE pid we do not own is a successor in our seat. Leave it.
+  _ours "$pid" || { kill -0 "$pid" 2>/dev/null && continue; }
   rm -f "$HOME/.claude/agent-busy/${bn%.*}"    # clear the busy marker too
   rm -f "$f"
 done

@@ -654,6 +654,62 @@ cmd_stop_engines() {
   return "$rc"
 }
 
+# `verify` — the end-of-boot check. Every item here is something a lead has silently skipped,
+# and each one fails in a way that looks like something else:
+#
+#   lead unregistered   -> no agent resident in its window -> `_window_rank` scores it 300+idx
+#                          and its tab sorts LAST. Read as a layout bug for two days.
+#   engine missing      -> `review_status` answers "No feedback pending." with no engine at all.
+#                          A WRONG ANSWER, not an error.
+#   companion missing   -> the window closes when the agent exits, so the lane loses its engine
+#                          on the next cycle rather than this one.
+#
+# Verified by process and by tmux, never by config: config says what was intended.
+cmd_verify() {
+  local rc=0 lead_pane lead_idx name d pid engines win agent_pane comp
+  echo "== fleet verify =="
+
+  # 1. The lead: registered, and its window first.
+  if ls "$HOME/.claude/running-agents/$LEAD_LANE".* >/dev/null 2>&1; then
+    echo "  ok    lead registered"
+  else
+    echo "  FAIL  lead NOT registered — its tab will sort last and the panel reads it as down"
+    rc=1
+  fi
+  if fleet_tmux_ok; then
+    lead_pane="$(tmux list-panes -a -F '#{window_index} #{pane_current_path}' 2>/dev/null \
+                 | awk -v p="$LANES_DIR/$LEAD_LANE" '$2==p{print $1; exit}')"
+    if [ "${lead_pane:-}" = 1 ]; then echo "  ok    lead window is first"
+    else echo "  FAIL  lead window is at index ${lead_pane:-?}, expected 1 — run fleet-layout.sh reapply"; rc=1; fi
+  fi
+
+  # 2. Per lane: an agent standing in it, an engine serving it, and a companion holding the window.
+  # `pgrep -a` is GNU-only; BSD/macOS spells the same thing `-l`. Using -a here silently
+  # produced an empty engine list and reported every lane's engine missing — a check that
+  # fails closed on its own portability bug is worse than no check.
+  engines="$(pgrep -lf "${MONOCLE_ENGINE_MATCH:-monocle serve}" 2>/dev/null || true)"
+  for d in "$LANES_DIR"/*/; do
+    d="${d%/}"                       # cwd comparisons below are exact — a trailing slash never matches
+    name="$(basename "$d")"
+    fleet_not_a_lane "$name" && continue
+    [ "$name" = "$LEAD_LANE" ] && continue
+    pid="$(fleet_agent_in_dir "$d")" || pid=""
+    [ -n "$pid" ] && echo "  ok    $name agent (pid $pid)" || { echo "  FAIL  $name has NO agent"; rc=1; }
+    case "$engines" in *"-C $LANES_DIR/$name"*) echo "  ok    $name engine" ;;
+      *) echo "  FAIL  $name has NO monocle engine — review_status will lie rather than error"; rc=1 ;;
+    esac
+    if fleet_tmux_ok; then
+      comp="$(tmux list-panes -a -F '#{pane_current_path} #{pane_current_command}' 2>/dev/null \
+              | awk -v p="$LANES_DIR/$name" '$1==p && $2!~/^[0-9]+\./' | wc -l | tr -d ' ')"
+      [ "${comp:-0}" -ge 1 ] && echo "  ok    $name companion pane" \
+        || { echo "  FAIL  $name has no companion pane — its window dies with the agent"; rc=1; }
+    fi
+  done
+
+  [ "$rc" = 0 ] && echo "== all checks passed ==" || echo "== FAILURES above — fix before calling the fleet up =="
+  return "$rc"
+}
+
 # Sourcing this file as a library (TEAM_BOOT_LIB=1) defines the functions without running a
 # verb, so the test suite can drive cmd_down and its guards directly. Without it, `. team-boot.sh`
 # would execute `status` — and a test that has to shell out for every case cannot stub alive_in,
@@ -666,6 +722,7 @@ case "${1:-status}" in
   spawn-prompt) shift; cmd_spawn_prompt "$@" ;;
   down)         shift; cmd_down "$@" ;;
   stop-engines) shift; cmd_stop_engines "$@" ;;
+  verify)       shift || true; cmd_verify ;;
   *) cat >&2 <<EOF
 usage: team-boot.sh <verb>
   status                 what is alive, verified by process cwd (not team config)
