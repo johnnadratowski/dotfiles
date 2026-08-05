@@ -63,6 +63,15 @@ owner of a tracked issue is a lane, not you.** When work comes up:
    verbosity — it was starting at complexity and staying there. Derived rules, in the order they
    bind:
 
+   - **ONE IDEA PER SENTENCE, AND NO COMPOUND SENTENCES.** A compound sentence is two ideas
+     sharing a clause, which defeats the level-at-a-time rule at the smallest scale: whichever
+     idea arrives second is riding on the first's altitude rather than earning its own. It is
+     also what makes ordering undecidable — a natural compound reverses two slots textually
+     without being disordered.
+   - **THE DEPTH FLOOR IS NAMED, not left to taste.** A database table, "this model", "that API
+     route" — all fine. **Functions and code are not**, ever. That is the line: a reader can
+     hold a table or a route without reading the repo; a function name means nothing to them
+     and belongs in the plan body.
    - **Sentence one orients someone with zero context.** *"We're switching to documents because
      comments are noisy and immutable."* If a reader needs to already know the system to parse
      your first sentence, nothing after it will land.
