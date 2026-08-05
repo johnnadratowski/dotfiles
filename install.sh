@@ -46,6 +46,20 @@ chmod +x ~/bin/cht.sh
 log "Install Claude Code"
 curl -fsSL https://claude.ai/install.sh | bash
 
+# Monocle is a LOCAL command, not a project resource, so it belongs to this machine rather
+# than to any repo's `.mcp.json` -- and MCP servers cannot live in settings.json, so an
+# install step is the only way dotfiles can own it. `-s user` writes `~/.claude.json`,
+# which is machine state and deliberately not symlinked.
+#
+# The 2h timeout is the point of doing this at all: `get_feedback(wait=true)` blocks until
+# a human answers, and at the default 1800s of MCP silence the wait aborted BEFORE the
+# verdict rather than after it -- indistinguishable from an empty inbox, so an agent could
+# read a dead listener as "no feedback" and walk past a gate nobody answered. Per-server,
+# because long silence is correct for this one server and a hang everywhere else.
+log "Register the Monocle MCP server (user scope, long wait timeout)"
+claude mcp remove monocle -s user 2>/dev/null || true
+claude mcp add-json monocle '{"command":"monocle","args":["serve-mcp","--experimental-channels"],"timeout":7200000}' -s user
+
 curl https://cheat.sh/:zsh > ~/scripts/zsh/plugins/_cht
 
 log "Setup Git Config"
