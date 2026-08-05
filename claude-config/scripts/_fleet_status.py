@@ -15,8 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, ask_kind, clip, context_for, fmt_secs, needs_input, needs_input_items, status_line,
-    todo_for, todo_pairs_for,
+    ASK, ask_kind, clip, context_for, fmt_secs, needs_input, needs_input_items, open_pr_for,
+    status_line, todo_for, todo_pairs_for,
 )
 
 
@@ -169,6 +169,10 @@ def rows():
             # Kept alongside "issue" rather than replacing it: JSON consumers want the bare
             # ids, the terminal wants them clickable, and one field cannot be both.
             "issue_links": todo_pairs_for(path),
+            # (number, url, is_draft) or None. A lane's open PR is the one piece of its state
+            # that lives off this machine, so it comes from a cache a long-running caller
+            # refreshes -- never a fetch on the render path. See refresh_open_prs().
+            "open_pr": open_pr_for(path),
             "needs_input": needs_input(path),
             # One element per ask. "needs_input" stays a string for JSON consumers; the panel
             # renders these, because a lane routinely owes the human more than one answer.
@@ -256,6 +260,13 @@ def main():
             links = r.get("issue_links") or []
             line += "  ▸ " + (" ".join(osc8(i, u) for i, u in links) if links
                               else (r["issue"] or "—"))
+            # The PR rides with the ticket because they answer one question together: what is
+            # this lane on, and has it left the lane yet. A lane with an open PR is waiting on
+            # review, not working, and that is invisible from the ticket alone.
+            pr = r.get("open_pr")
+            if pr:
+                num, url, draft = pr
+                line += "  " + osc8("PR#%s%s" % (num, " draft" if draft else ""), url)
         sys.stdout.write(line.rstrip() + "\n")
 
         # SECOND LINE: what this lane is doing, now. It leads and it is unmarked — a glyph in

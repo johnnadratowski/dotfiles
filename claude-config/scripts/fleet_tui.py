@@ -31,7 +31,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
-from _agent_facts import ASK, ASK_KINDS, ask_kind, clip  # noqa: E402
+from _agent_facts import ASK, ASK_KINDS, ask_kind, clip, refresh_open_prs  # noqa: E402
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
@@ -221,6 +221,26 @@ class Lane(ListItem):
         self.row = row
         self.ctx = ctx or {}
 
+    def pr_markup(self):
+        """This lane's open PR, beside its ticket.
+
+        They belong together because they answer one question jointly: what is this lane on,
+        and has the work left the lane yet. A lane with an open PR is waiting on review rather
+        than working, and nothing about the ticket alone says so.
+
+        A draft is DIM, never green — the colour is the whole signal at a glance, and a draft
+        rendered like a ready PR is the one way this field could mislead.
+
+        The URL stays https: GitHub registers no custom scheme, unlike Linear's `linear://`.
+        """
+        pr = self.row.get("open_pr")
+        if not pr:
+            return ""
+        num, url, draft = pr
+        label = "PR#%s%s" % (num, " draft" if draft else "")
+        body = "[link='%s']%s[/link]" % (url, label) if url else label
+        return "  [%s]%s[/]" % ("dim" if draft else "b green", body)
+
     def head_markup(self):
         r = self.row
         state = r.get("state", "?")
@@ -244,6 +264,7 @@ class Lane(ListItem):
             f"[{pcolor}]{pcs:>5}[/]  "
             f"[dim]{up:>6}[/]   "
             f"[cyan]{ids}[/]"
+            f"{self.pr_markup()}"
         )
 
     def compose(self):
@@ -409,6 +430,20 @@ class FleetTUI(App):
         data = snapshot()
         if not get_current_worker().is_cancelled:
             self.call_from_thread(self.apply, data)
+        # Then refresh the PR cache, on this same worker thread and AFTER the screen is
+        # already updated. It is the one fact in the panel that costs a network round trip.
+        # Refreshing after rather than before costs one tick of latency on a newly-opened PR
+        # and buys two things: the render never waits on the network, and the repo directory
+        # comes from a lane we just saw rather than from a guess about where the repo is.
+        # `refresh_open_prs` is itself a no-op until the cache ages out, so most ticks pay
+        # nothing at all.
+        lanes = data.get("lanes") or []
+        path = next((r.get("path") for r in lanes if r.get("path")), "")
+        if path:
+            try:
+                refresh_open_prs(path)
+            except Exception:
+                pass
 
     @staticmethod
     def structure_sig(data):

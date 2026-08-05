@@ -116,6 +116,82 @@ def todo_pairs_for(cwd):
     return pairs
 
 
+def branch_for(cwd):
+    """The checked-out branch, read from git's own files. No subprocess.
+
+    A worktree's `.git` is a FILE holding `gitdir: <path>`, not a directory — so the naive
+    `<cwd>/.git/HEAD` finds nothing in exactly the layout this fleet runs in.
+    """
+    p = os.path.join(cwd or "", ".git")
+    try:
+        if os.path.isfile(p):
+            with open(p) as fh:
+                line = fh.read().strip()
+            if not line.startswith("gitdir:"):
+                return ""
+            p = line.split(":", 1)[1].strip()
+            if not os.path.isabs(p):
+                p = os.path.normpath(os.path.join(cwd, p))
+        with open(os.path.join(p, "HEAD")) as fh:
+            head = fh.read().strip()
+    except OSError:
+        return ""
+    return head[16:] if head.startswith("ref: refs/heads/") else ""
+
+
+# Open PRs are the one fact here that is NOT on disk — it lives on GitHub. So it is split in
+# two: `refresh_open_prs` is the ONLY blocking function in this module and is called by a
+# long-running caller on its own schedule, while `open_pr_for` is a plain cache read that
+# obeys the module contract like everything else. Putting the network call on the per-row
+# path would have every surface pay a round trip per lane per tick.
+PR_CACHE = os.path.expanduser("~/.claude/cache/fleet-prs.json")
+PR_MAX_AGE = 180
+
+
+def refresh_open_prs(repo_dir, max_age=PR_MAX_AGE):
+    """BLOCKING. Re-fetch open PRs into the cache when it is older than max_age."""
+    import subprocess
+    try:
+        if time.time() - os.path.getmtime(PR_CACHE) < max_age:
+            return
+    except OSError:
+        pass
+    try:
+        out = subprocess.run(
+            ["gh", "pr", "list", "--state", "open", "--limit", "100",
+             "--json", "number,url,title,headRefName,isDraft"],
+            cwd=repo_dir, capture_output=True, text=True, timeout=20,
+        )
+        if out.returncode != 0:
+            return
+        prs = {}
+        for pr in json.loads(out.stdout or "[]"):
+            prs.setdefault(pr.get("headRefName") or "", pr)
+        os.makedirs(os.path.dirname(PR_CACHE), exist_ok=True)
+        tmp = PR_CACHE + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(prs, fh)
+        os.replace(tmp, PR_CACHE)   # atomic: a reader never sees a half-written cache
+    except Exception:
+        return
+
+
+def open_pr_for(cwd):
+    """(number, url, is_draft) for the open PR whose head is this lane's branch, else None."""
+    branch = branch_for(cwd)
+    if not branch:
+        return None
+    try:
+        with open(PR_CACHE) as fh:
+            prs = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    pr = prs.get(branch)
+    if not pr:
+        return None
+    return (pr.get("number"), pr.get("url") or "", bool(pr.get("isDraft")))
+
+
 def status_line(cwd):
     """What this lane is doing right now — ONE shorthand line, written by the LEAD.
 

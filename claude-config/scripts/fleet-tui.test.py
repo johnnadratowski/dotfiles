@@ -239,6 +239,48 @@ async def main():
         ok("x on the fleet panel clears that item",
            "merge #124" not in open(fleet_path).read())
 
+    # ── a lane's open PR, beside its ticket ──────────────────────────────────────────────
+    # Driven against Lane.pr_markup directly rather than restarting the app three times. The
+    # two cases that could LIE are the ones worth locking: a PR shown for a lane that has
+    # none, and a draft presented as if it were ready to merge.
+    lane_row = {"name": "feature-1", "label": "vii", "state": "idle", "kind": "lane"}
+    mk = fleet_tui.Lane.pr_markup
+
+    class _R:
+        def __init__(self, row):
+            self.row = row
+
+    ready = mk(_R(dict(lane_row, open_pr=(999, "https://gh/x/pull/999", False))))
+    draft = mk(_R(dict(lane_row, open_pr=(1000, "https://gh/x/pull/1000", True))))
+    none_ = mk(_R(dict(lane_row)))
+
+    ok("an open PR renders its number", "PR#999" in ready, ready)
+    ok("…as a clickable https link — GitHub registers no custom scheme",
+       "[link='https://gh/x/pull/999']" in ready, ready)
+    ok("a draft PR says so", "PR#1000 draft" in draft, draft)
+    ok("…and is dim rather than green, so it cannot read as ready to merge",
+       "dim" in draft and "b green" not in draft, draft)
+    ok("a lane with no PR renders nothing at all", none_ == "", repr(none_))
+
+    # branch_for is the half that fails silently: a worktree's `.git` is a FILE, so the
+    # obvious <cwd>/.git/HEAD read finds nothing in exactly the layout this fleet runs in.
+    import _agent_facts
+    with tempfile.TemporaryDirectory() as td:
+        real = os.path.join(td, "realgit")
+        os.makedirs(real)
+        with open(os.path.join(real, "HEAD"), "w") as fh:
+            fh.write("ref: refs/heads/some/branch\n")
+        wt = os.path.join(td, "wt")
+        os.makedirs(wt)
+        with open(os.path.join(wt, ".git"), "w") as fh:
+            fh.write("gitdir: %s\n" % real)
+        ok("branch_for follows a worktree's .git FILE",
+           _agent_facts.branch_for(wt) == "some/branch", _agent_facts.branch_for(wt))
+        with open(os.path.join(real, "HEAD"), "w") as fh:
+            fh.write("9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c\n")
+        ok("…and returns empty on a detached HEAD rather than a fake branch name",
+           _agent_facts.branch_for(wt) == "", _agent_facts.branch_for(wt))
+
     print("\n  %d passed, %d failed" % (PASS, FAIL))
     return 1 if FAIL else 0
 
