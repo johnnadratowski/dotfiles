@@ -47,6 +47,28 @@ owner of a tracked issue is a lane, not you.** When work comes up:
      real answer.
    - **Run a `/challenge` round on the spec itself** before sending. It is the cheapest place to
      find a wrong premise; every later round costs an agent's context.
+   **WRITE IT SHORT, AND WRITE IT AS A CHANGE.** This section is read by a person to learn what
+   is being built; it is not a design document and it is not a bug report. Measured 2026-08-05
+   on DX-16, where every one of these was violated at once:
+
+   - **Frame it as a change, not a repair.** "What is broken / how we are fixing it" is wrong
+     for most work — nothing is broken, we are changing how the system works. *"We're switching
+     to documents because comments are noisy and immutable"* replaced two paragraphs.
+   - **One sentence per decision.** Two paragraphs on changelogs and verdicts should have been
+     *"Agents will use a changelog to version on green light as we do not have access to a
+     Linear API key."*
+   - **Migration/rollout is a line, not a section.** *"We're migrating all N open issues and
+     leaving comments on items that have them."*
+   - **NEVER list the options you rejected.** A "what we're deliberately not doing" section is
+     noise here; rejected candidates belong in the plan's `### Decisions`, which exists for
+     agents. **Deferred** work is fine to list, and an **exclusions** list is fine — but only
+     when the *user* supplied it.
+   - **No "costs we are accepting" section.** A short **Trade-offs** bullet list is welcome when
+     the trade is genuinely live.
+   - **Every product decision in it must be the user's.** Anything you decided yourself is a
+     rule violation wearing the clothes of a section. DX-16 carried a "leave a pointer comment"
+     decision the lead invented while drafting and never asked about.
+
 3. **Hand it over with the issue, and say it is FINAL.** `/todo` step 3 takes it as an INPUT: the
    agent researches the plan from it and carries it as the plan's human-readable opening
    section. If planning changes anything in it, the agent asks rather than editing it silently.
