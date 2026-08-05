@@ -103,9 +103,24 @@ owner of a tracked issue is a lane, not you.** When work comes up:
      when the *user* supplied it.
    - **No "costs we are accepting" section.** A short **Trade-offs** bullet list is welcome when
      the trade is genuinely live.
-   - **Every product decision in it must be the user's.** Anything you decided yourself is a
-     rule violation wearing the clothes of a section. DX-16 carried a "leave a pointer comment"
-     decision the lead invented while drafting and never asked about.
+   - **ASK BEFORE BUILDING ON A DESIGN CHANGE THE USER DID NOT MAKE.** The user reviews the
+     section regardless, so the risk is never that a wrong sentence ships — it is that an agent
+     quietly adopts a different design and then plans a large amount of work on top of it. The
+     cost is the work, not the words.
+
+     So **edit the prose freely**: reflow, tighten, correct a stale fact, make it readable. An
+     agent that will not touch the text produces a section nobody can review, which defeats the
+     point. **Stop and ask at the moment a plan starts depending on a design decision the user
+     did not make** — scope, what is being built, what happens to what exists, what is
+     deliberately excluded. Wording, ordering and corrected numbers are never that.
+
+     **This rule was wrong twice before it was right, and the shape of the error is worth more
+     than the rule.** First it was "every product decision here is the user's" — true and
+     unactionable. Then "ask before changing anything in this section" — a proxy for the real
+     concern, which generated four rounds of machinery for deciding who wrote which sentence and
+     never made the problem smaller. **When successive refinements all land and the thing being
+     refined never shrinks, the question is wrong.** Ask what the rule is protecting against;
+     here it was wasted work, and that has an obvious trigger the text-based versions never had.
 
 3. **Hand it over with the issue, and say it is FINAL.** `/todo` step 3 takes it as an INPUT: the
    agent researches the plan from it and carries it as the plan's human-readable opening
