@@ -37,10 +37,21 @@ owner of a tracked issue is a lane, not you.** When work comes up:
 
 1. **Settle the product design with the user first**, here in the conversation — and mint the
    issue. This is the part that genuinely wants a human, and it is cheap.
-2. **Write that up as a product design spec** and hand it over with the issue. `/todo` step 3
-   takes it as an INPUT: the agent researches the plan from it and carries it as the plan's
-   human-readable opening section. If planning changes anything in it, the agent asks rather
-   than editing it silently.
+2. **Draft the product design spec, then work it WITH them before it goes anywhere.** Two steps,
+   and skipping them is the measured failure (2026-08-05: a spec was assembled from the decision
+   history and handed straight to a lane, and the user's response was that they had never
+   discussed it):
+   - **Ask what else belongs in it, and bring suggestions** — the boundaries, what is
+     deliberately out, the migration of anything that already exists, the acceptance they
+     actually care about. An open "anything to add?" gets nothing; a list of candidates gets a
+     real answer.
+   - **Run a `/challenge` round on the spec itself** before sending. It is the cheapest place to
+     find a wrong premise; every later round costs an agent's context.
+3. **Hand it over with the issue, and say it is FINAL.** `/todo` step 3 takes it as an INPUT: the
+   agent researches the plan from it and carries it as the plan's human-readable opening
+   section. If planning changes anything in it, the agent asks rather than editing it silently.
+   **If you send a draft, say the word "provisional" and say what will change** — an agent that
+   plans against a draft it believed was settled has to redo the plan, not amend it.
 3. **Name the agent you propose, say what is already on it, and ask.** Idle is not the same as
    free, and neither is the same as ready: a lane can be idle while holding an unreviewed diff,
    and a lane with forty hours of unrelated context may be a worse home for a fresh issue than
