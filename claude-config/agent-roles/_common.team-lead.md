@@ -47,9 +47,38 @@ owner of a tracked issue is a lane, not you.** When work comes up:
      real answer.
    - **Run a `/challenge` round on the spec itself** before sending. It is the cheapest place to
      find a wrong premise; every later round costs an agent's context.
-   **WRITE IT SHORT, AND WRITE IT AS A CHANGE.** This section is read by a person to learn what
-   is being built; it is not a design document and it is not a bug report. Measured 2026-08-05
-   on DX-16, where every one of these was violated at once:
+   **IT IS A DELINEATED SECTION, NOT AN INTRO.** The plan opens with a fixed, labelled
+   human-owned section and a visible boundary; everything below it is agent-facing. The
+   boundary is what makes the rest enforceable: a reader knows where to stop, and an agent
+   knows which text it may not change without asking. An "opening few paragraphs" that shades
+   into the plan has neither property.
+
+   **IT IS THE PLAN'S "ABOVE THE LINE".** This is the rule the others fall out of, and it is
+   the same discipline as your console output — which the user says works, while this did not.
+   The opening section is what a reader gets *before* they choose to go deeper; the plan body is
+   the Detail below the line. **Mechanism never appears above the line.** If a sentence explains
+   *how* something works, it is in the wrong artifact, not merely too long.
+
+   **DESCEND ONE LEVEL AT A TIME. Never open at depth.** The measured failure on DX-16 was not
+   verbosity — it was starting at complexity and staying there. Derived rules, in the order they
+   bind:
+
+   - **Sentence one orients someone with zero context.** *"We're switching to documents because
+     comments are noisy and immutable."* If a reader needs to already know the system to parse
+     your first sentence, nothing after it will land.
+   - **Every paragraph must be survivable as the last one.** A reader who stops after any
+     paragraph should hold a complete, coarser picture — not a partial one. That is the actual
+     test for progressive disclosure; "I put it in a sensible order" is not.
+   - **Fixed order: what changes → why → what happens to what exists → what is still open.** Not
+     problem → analysis → mechanism. A problem statement is the bug-report framing again.
+   - **No internal vocabulary before it is earned.** "Attestation", "green light", "changelog
+     citation" are terms of art. Either say it in plain language or leave it to the body.
+   - **Length is a SYMPTOM.** Shortening a too-deep paragraph yields a short too-deep paragraph,
+     and told to shorten, the reflex is to compress a section rather than delete it — a two-line
+     "what we're not doing" is the same defect at 20% of the size. The fix is to move UP a
+     level.
+
+   And these, each of which the user had to point out line by line on DX-16:
 
    - **Frame it as a change, not a repair.** "What is broken / how we are fixing it" is wrong
      for most work — nothing is broken, we are changing how the system works. *"We're switching
