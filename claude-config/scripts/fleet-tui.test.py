@@ -113,9 +113,16 @@ async def main():
         ok("the ticket column links to the URL the tracker gave",
            "[link='https://example.invalid/DX-6']DX-6[/link]" in text, text)
         ok("a ticket id inside an ASK is linked too",
-           "[link='https://linear.app/acme/issue/DX-6']DX-6[/link]" in text, text)
+           "[link='linear://acme/issue/DX-6']DX-6[/link]" in text, text)
         ok("a ticket id inside a STATUS is linked too",
-           text.count("[link='https://linear.app/acme/issue/SRV-11']SRV-11[/link]") == 1, text)
+           text.count("[link='linear://acme/issue/SRV-11']SRV-11[/link]") == 1, text)
+        ok("a ticket link uses the linear:// app scheme, never https",
+           "https://linear.app" not in text, text)
+        ok("…but a PR link stays https, since GitHub registers no scheme",
+           "[link='https://github.com/acme/goals/pull/124']#124[/link]" in text, text)
+        ok("a non-Linear URL is returned untouched rather than coerced",
+           fleet_tui.linear_uri("https://example.invalid/DX-6")
+           == "https://example.invalid/DX-6")
         ok("a PR number in a fleet ask is linked",
            "[link='https://github.com/acme/goals/pull/124']#124[/link]" in text, text)
 
@@ -144,13 +151,24 @@ async def main():
         ok("…but the row shows the new value", "9h99m" in screen_text(app))
         ok("…and the new context%", "71%" in screen_text(app))
 
-        # A real change must still rebuild.
+        # A changed STATUS is also line-confined, so it must not rebuild either — the lead
+        # rewrites these constantly, and every rewrite used to repaint the whole panel.
         volatile["status"] = "now something else entirely"
         app.load()
         await pilot.pause()
         await pilot.pause()
-        ok("a changed status DOES rebuild", lanes.children[0] is not before)
-        ok("…and shows the new status", "now something else entirely" in screen_text(app))
+        ok("a changed status does NOT rebuild either", lanes.children[0] is before)
+        ok("…but the new status is shown", "now something else entirely" in screen_text(app))
+
+        # Only a change of SHAPE rebuilds. An ask appearing adds a line to the item, so it must.
+        with open(ask_path, "a") as f:
+            f.write("plan: a brand new ask\n")
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a NEW ASK does rebuild — it changes the item's shape",
+           lanes.children[0] is not before)
+        ok("…and the new ask is shown, typed", "📋 a brand new ask" in screen_text(app))
 
         # ── layout controls ──────────────────────────────────────────────────────────────
         lanes.focus()

@@ -110,11 +110,30 @@ def linkify(text, ctx):
     base, repo = ctx.get("linear_base"), ctx.get("repo")
     if base:
         text = _TICKET.sub(
-            lambda m: "[link='%s/issue/%s']%s[/link]" % (base, m.group(1), m.group(1)), text)
+            lambda m: "[link='%s']%s[/link]" % (
+                linear_uri("%s/issue/%s" % (base, m.group(1))), m.group(1)), text)
     if repo:
         text = _PR.sub(
             lambda m: "[link='%s/pull/%s']#%s[/link]" % (repo, m.group(1), m.group(1)), text)
     return text
+
+
+_LINEAR_URL = re.compile(r"https?://linear\.app/([^/]+)/issue/([A-Za-z]{2,5}-\d+)")
+
+
+def linear_uri(url):
+    """Rewrite a Linear https URL to `linear://` so the desktop app opens it, not a browser.
+
+    Only the SCHEME is swapped — the workspace and the identifier still come from a URL the
+    tracker itself produced. A URL that does not match the expected Linear shape is returned
+    untouched rather than coerced: opening a browser is a mild disappointment, opening the
+    wrong ticket is not.
+
+    PR links stay https on purpose. GitHub's desktop app registers no comparable scheme, so a
+    `github://` URI would simply fail to open.
+    """
+    m = _LINEAR_URL.match(url or "")
+    return "linear://%s/issue/%s" % (m.group(1), m.group(2)) if m else url
 
 
 def _repo_url(path):
@@ -214,7 +233,8 @@ class Lane(ListItem):
         # The recorded URL wins over the learned base — it is what the tracker actually
         # returned, slug and all. linkify() is the fallback for ids that have none.
         links = r.get("issue_links") or []
-        ids = " ".join("[link='%s']%s[/link]" % (u, i) if u else linkify(i, self.ctx)
+        ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
+                       else linkify(i, self.ctx)
                        for i, u in links) or linkify(escape(r.get("issue") or "—"), self.ctx)
         return (
             f"[{icolor}]{icon}[/] "
@@ -228,27 +248,41 @@ class Lane(ListItem):
 
     def compose(self):
         yield Static(self.head_markup(), classes="lane-head")
-        status = self.row.get("status") or ""
-        yield Static(f"[i]{linkify(escape(status), self.ctx)}[/]" if status
-                     else "[dim i]— no status —[/]", classes="lane-status")
+        yield Static(self.status_markup(), classes="lane-status")
         for raw in self.row.get("raw_asks") or []:
             icon, text = ask_kind(raw)
             yield Static(f"{icon} {linkify(escape(clip(text)), self.ctx)}",
                          classes="lane-ask")
 
-    def refresh_volatile(self, row):
-        """Update ONLY the fields that change every tick, in place.
+    def status_markup(self):
+        status = self.row.get("status") or ""
+        return (f"[i]{linkify(escape(status), self.ctx)}[/]" if status
+                else "[dim i]— no status —[/]")
 
-        Uptime and context% move on every refresh, so folding them into the redraw signature
-        made the signature differ every five seconds — which rebuilt both lists, every time,
-        and is exactly the periodic blink the user saw. They live on the head line alone, so
-        updating that one Static costs nothing and disturbs nothing.
+    def refresh_volatile(self, row):
+        """Update everything that is CONFINED TO A LINE, in place — never a rebuild.
+
+        Uptime, context%, the state word and its icon all live on the head line; the status
+        lives on its own line. None of them changes the shape of this item, so none of them
+        needs the list torn down. Folding them into the redraw signature is what produced the
+        periodic full repaint: uptime moves every tick and `state` flips whenever any lane
+        starts or finishes a turn, so on a working fleet the signature was rarely stable for
+        two consecutive refreshes.
+
+        **Each Static is written only when its markup actually differs.** `Static.update()`
+        repaints unconditionally, so calling it every five seconds with an identical string is
+        itself a visible flicker — the cheap equality check is the difference between a quiet
+        panel and one that twitches.
         """
         self.row = row
-        try:
-            self.query_one(".lane-head", Static).update(self.head_markup())
-        except Exception:
-            pass
+        for sel, markup in ((".lane-head", self.head_markup()),
+                            (".lane-status", self.status_markup())):
+            try:
+                w = self.query_one(sel, Static)
+            except Exception:
+                continue
+            if str(w.content) != markup:
+                w.update(markup)
 
 
 class Ask(ListItem):
@@ -380,12 +414,14 @@ class FleetTUI(App):
     def structure_sig(data):
         """What a rebuild is actually FOR — everything except the per-tick counters.
 
-        Deliberately excludes `uptime` and `context_pct`. They change on every single refresh,
-        so including them made the signature differ every time and rebuilt both lists every
-        five seconds: the periodic blink, and a cursor that could not be kept anywhere.
+        SHAPE ONLY — which rows exist, in what order, each with how many asks. Everything a
+        row can say without changing shape (uptime, context%, state, status) is deliberately
+        absent: those are updated in place by refresh_volatile, and including them is what made
+        the panel repaint on a timer. `state` was the subtle one — it flips whenever any lane
+        starts or ends a turn, so on a working fleet it alone kept the signature unstable.
         """
-        rows = [[r.get("name"), r.get("kind"), r.get("label"), r.get("state"),
-                 r.get("status"), r.get("raw_asks"), r.get("issue_links")]
+        rows = [[r.get("name"), r.get("kind"), r.get("label"),
+                 r.get("raw_asks"), r.get("issue_links")]
                 for r in data["lanes"] + data["subs"]]
         return json.dumps([rows, data["fleet"]], sort_keys=True, default=str)
 
@@ -438,8 +474,15 @@ class FleetTUI(App):
             bits.append(f"{len(d['subs'])} sub")
         if n_ask:
             bits.append(f"[b yellow]{ASK} {n_ask} needs you[/]")
-        self.query_one("#head", Static).update("  " + "  ·  ".join(bits))
-        self.query_one("#fleet").border_title = f"NEEDS YOU  ({len(d['fleet'])})"
+        # Written only when changed, for the same reason the lane lines are: an unconditional
+        # update() on a timer repaints, and a repaint of the header is as visible as any other.
+        head, markup = self.query_one("#head", Static), "  " + "  ·  ".join(bits)
+        if str(head.content) != markup:
+            head.update(markup)
+        title = f"NEEDS YOU  ({len(d['fleet'])})"
+        fleet = self.query_one("#fleet")
+        if fleet.border_title != title:
+            fleet.border_title = title
 
     # ── actions ──────────────────────────────────────────────────────────────────────────
     def _focused_list(self):
