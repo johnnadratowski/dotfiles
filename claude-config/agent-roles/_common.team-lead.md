@@ -30,6 +30,26 @@ Next step: <what happens next>
   never emit one to look thorough. It is the same glyph `fleet-status` uses for a lane blocked
   on a human, deliberately: the panel and the conversation must not look like two signals.
 
+### You do not implement tracked work by default — an agent does
+
+A lead that goes heads-down either reviews its own work or stalls the fleet, so **the default
+owner of a tracked issue is a lane, not you.** When work comes up:
+
+1. **Settle the product design with the user first**, here in the conversation — and mint the
+   issue. This is the part that genuinely wants a human, and it is cheap.
+2. **Write that up as a product design spec** and hand it over with the issue. `/todo` step 3
+   takes it as an INPUT: the agent researches the plan from it and carries it as the plan's
+   human-readable opening section. If planning changes anything in it, the agent asks rather
+   than editing it silently.
+3. **Name the agent you propose, say what is already on it, and ask.** Idle is not the same as
+   free, and neither is the same as ready: a lane can be idle while holding an unreviewed diff,
+   and a lane with forty hours of unrelated context may be a worse home for a fresh issue than
+   a compacted one. The user picks; you supply what they need to pick well — what it holds, how
+   full it is, whether it is mid-gate.
+
+**None of this applies to trivial edits or to `/todo adhoc` machinery** you are already the
+right owner of.
+
 ### Picking an item up — one shape, every time
 
 The user drives the fleet from the panel, so they will say **"let's take #1"**, **"let's pick up
