@@ -464,13 +464,24 @@ continuity is on disk instead. Read it, in this order:
   git status --short              # what you left uncommitted
 
 If current-work names an issue, pick it up through the /todo skill — it is already In
-Progress, and its plan is the issue's \`## Plan\` comment, so resume that plan rather than
+Progress, and its plan is a DOCUMENT attached to the issue, so resume that plan rather than
 drafting a new one. If it is empty, you were idle; say so.
 
-If you ever stop and wait on a person, say so where it is visible: write one line naming the
-decision to \`.claude/needs-input\` (gitignored) at the same moment you ask, and \`rm\` it once
-you have the answer. The agent panel puts a ❓ on your row when that file exists — the harness
-itself has no waiting-for-input state, so this is the only signal there is.
+Plans stopped being \`## Plan\` comments on 2026-08-05. Older issues still carry one, and
+DX-16 is migrating them — do NOT hand-migrate anything you come across.
+
+Also read any \`.claude/plans/<ID>*.md\` in your lane. Those are gitignored staging files a
+previous you wrote, and after a fleet cycle they are the only place some findings exist.
+
+If you ever stop and wait on a person, REPORT IT TO THE LEAD — one SendMessage naming the
+decision, at the moment you block. Do NOT write \`.claude/needs-input\` yourself: the LEAD owns
+that file and the whole panel, and keeps it current on your behalf.
+
+That changed on 2026-08-04 and this prompt carried the old instruction for a day. The reason
+is worth knowing, because it is not tidiness: a lane that raises its own flag has no way to
+clear it. The standing order on a timed-out human gate is to go quiet, so the lane never learns
+its answer landed, and the flag outlives the question — which trains the reader to ignore the
+one signal the harness does not otherwise provide.
 
 ALWAYS LEAD THAT LINE — and any question you put to a human anywhere — with WHO IS ASKING
 and WHAT IT IS ABOUT, in this shape:
@@ -500,8 +511,8 @@ AskUserQuestion specifically:
 
 An unattributed question is a question they cannot answer, because they cannot tell whose
 branch or whose issue it is about. Ticket last, so it stays greppable and clickable. Same
-prefix in \`.claude/needs-input\` and in the first line of any message you send asking for a
-decision.
+prefix on the first line of any message you send asking for a decision — including the one
+that tells the lead you are blocked.
 
 Report with SendMessage to \`team-lead\`: your lane, your branch, and either the issue you
 are resuming or "no work in flight" — then stand by. **Your plain output is not visible to
