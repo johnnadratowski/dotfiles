@@ -222,24 +222,29 @@ class Lane(ListItem):
         self.ctx = ctx or {}
 
     def pr_markup(self):
-        """This lane's open PR, beside its ticket.
+        """This lane's open PRs — its own column, beside the tickets.
 
-        They belong together because they answer one question jointly: what is this lane on,
-        and has the work left the lane yet. A lane with an open PR is waiting on review rather
+        A LIST like the tickets, because a lane can have more than one in flight and showing
+        only the first is a lie that looks like a fact.
+
+        They sit together because they answer one question jointly: what is this lane on, and
+        has the work left the lane yet. A lane with an open PR is waiting on review rather
         than working, and nothing about the ticket alone says so.
 
-        A draft is DIM, never green — the colour is the whole signal at a glance, and a draft
-        rendered like a ready PR is the one way this field could mislead.
+        A draft is DIM and marked, never green — colour is the whole signal at a glance, and a
+        draft rendered like a ready PR is the one way this field could mislead.
 
         The URL stays https: GitHub registers no custom scheme, unlike Linear's `linear://`.
         """
-        pr = self.row.get("open_pr")
-        if not pr:
+        prs = self.row.get("open_prs") or []
+        if not prs:
             return ""
-        num, url, draft = pr
-        label = "PR#%s%s" % (num, " draft" if draft else "")
-        body = "[link='%s']%s[/link]" % (url, label) if url else label
-        return "  [%s]%s[/]" % ("dim" if draft else "b green", body)
+        out = []
+        for num, url, draft in prs:
+            label = "#%s%s" % (num, "…" if draft else "")
+            body = "[link='%s']%s[/link]" % (url, label) if url else label
+            out.append("[%s]%s[/]" % ("dim" if draft else "b green", body))
+        return "  " + " ".join(out)
 
     def head_markup(self):
         r = self.row

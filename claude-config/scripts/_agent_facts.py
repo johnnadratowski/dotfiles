@@ -164,9 +164,12 @@ def refresh_open_prs(repo_dir, max_age=PR_MAX_AGE):
         )
         if out.returncode != 0:
             return
-        prs = {}
-        for pr in json.loads(out.stdout or "[]"):
-            prs.setdefault(pr.get("headRefName") or "", pr)
+        # A LIST, not a dict keyed by head branch. Keying by branch made the lookup a single
+        # equality test, which is wrong for this workflow: a PR ships from a DEDICATED branch
+        # (`pr/dx-16-…`, `john/feat-6-…`) and the lane returns to its own branch immediately
+        # after `gh pr create`, so the lane's checked-out branch stops matching the moment the
+        # PR exists. Both live PRs were invisible in the panel for exactly that reason.
+        prs = json.loads(out.stdout or "[]")
         os.makedirs(os.path.dirname(PR_CACHE), exist_ok=True)
         tmp = PR_CACHE + ".tmp"
         with open(tmp, "w") as fh:
@@ -176,20 +179,46 @@ def refresh_open_prs(repo_dir, max_age=PR_MAX_AGE):
         return
 
 
-def open_pr_for(cwd):
-    """(number, url, is_draft) for the open PR whose head is this lane's branch, else None."""
-    branch = branch_for(cwd)
-    if not branch:
-        return None
+def open_prs_for(cwd):
+    """[(number, url, is_draft), …] — every open PR belonging to this lane.
+
+    A LIST, like the tracker ids beside it, because a lane routinely has more than one PR in
+    flight and showing only the first is a lie that looks like a fact.
+
+    MATCHED TWO WAYS, and the second is the one that works:
+
+      1. head branch == the lane's checked-out branch — true only before a PR exists.
+      2. an in-progress ISSUE ID from `.claude/current-work` appearing in the PR's title or
+         its head branch name.
+
+    (2) exists because the branch match is dead on arrival here: PRs ship from a dedicated
+    branch and the lane switches back to its own immediately after create, so from the moment
+    a PR is openable the lane's branch no longer names it. The id is what survives — it is in
+    the branch name (`john/feat-6-…`, `pr/dx-16-…`) AND in the title (`(Fixes FEAT-6)`), by
+    the same conventions that make the tracker close the issue on merge.
+    """
     try:
         with open(PR_CACHE) as fh:
             prs = json.load(fh)
     except (OSError, ValueError):
-        return None
-    pr = prs.get(branch)
-    if not pr:
-        return None
-    return (pr.get("number"), pr.get("url") or "", bool(pr.get("isDraft")))
+        return []
+    if isinstance(prs, dict):        # pre-2026-08-06 cache shape; treat as empty, not as a crash
+        return []
+
+    branch = branch_for(cwd)
+    ids = [i for i, _u in todo_pairs_for(cwd)]
+    out, seen = [], set()
+    for pr in prs:
+        head = pr.get("headRefName") or ""
+        title = pr.get("title") or ""
+        hit = bool(branch) and head == branch
+        if not hit:
+            hit = any(i.lower() in head.lower() or i in title for i in ids)
+        num = pr.get("number")
+        if hit and num not in seen:
+            seen.add(num)
+            out.append((num, pr.get("url") or "", bool(pr.get("isDraft"))))
+    return out
 
 
 def status_line(cwd):

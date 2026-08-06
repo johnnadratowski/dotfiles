@@ -250,17 +250,24 @@ async def main():
         def __init__(self, row):
             self.row = row
 
-    ready = mk(_R(dict(lane_row, open_pr=(999, "https://gh/x/pull/999", False))))
-    draft = mk(_R(dict(lane_row, open_pr=(1000, "https://gh/x/pull/1000", True))))
+    ready = mk(_R(dict(lane_row, open_prs=[(999, "https://gh/x/pull/999", False)])))
+    draft = mk(_R(dict(lane_row, open_prs=[(1000, "https://gh/x/pull/1000", True)])))
     none_ = mk(_R(dict(lane_row)))
 
-    ok("an open PR renders its number", "PR#999" in ready, ready)
+    ok("an open PR renders its number", "#999" in ready, ready)
     ok("…as a clickable https link — GitHub registers no custom scheme",
        "[link='https://gh/x/pull/999']" in ready, ready)
-    ok("a draft PR says so", "PR#1000 draft" in draft, draft)
+    ok("a draft PR is marked", "#1000…" in draft, draft)
     ok("…and is dim rather than green, so it cannot read as ready to merge",
        "dim" in draft and "b green" not in draft, draft)
     ok("a lane with no PR renders nothing at all", none_ == "", repr(none_))
+
+    # MULTIPLE PRs, like the tickets beside them. Showing only the first is a lie that looks
+    # like a fact — the reader cannot tell one-PR from first-of-two.
+    two = mk(_R(dict(lane_row, open_prs=[(1, "https://gh/x/pull/1", False),
+                                         (2, "https://gh/x/pull/2", True)])))
+    ok("a lane with two PRs renders both", "#1" in two and "#2…" in two, two)
+    ok("…and only the draft is dimmed", two.index("b green") < two.index("dim"), two)
 
     # branch_for is the half that fails silently: a worktree's `.git` is a FILE, so the
     # obvious <cwd>/.git/HEAD read finds nothing in exactly the layout this fleet runs in.
