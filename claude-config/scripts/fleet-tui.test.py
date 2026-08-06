@@ -12,6 +12,8 @@ What it locks in — each is a way this view could lie or lose work:
   - `x` removes the ask from the FILE, not merely from the screen
   - `u` puts it back — an accidental keypress on the user's to-do list must be recoverable
   - an unchanged snapshot does not rebuild the lists, so the cursor survives a refresh
+  - the FLEET panel is as tall as the agents in it — at startup, and again whenever one
+    arrives or leaves — without ever pushing the NEEDS YOU panel off the screen
 """
 
 import asyncio
@@ -32,7 +34,7 @@ def ok(name, cond, detail=""):
         print("  PASS: %s" % name)
         PASS += 1
     else:
-        print("  FAIL: %s%s" % (name, ("\n        " + detail) if detail else ""))
+        print("  FAIL: %s%s" % (name, ("\n        " + str(detail)) if detail else ""))
         FAIL += 1
 
 
@@ -72,17 +74,24 @@ async def main():
         "status": "SRV-11 done [b]2 GREEN[/b], uncommitted",
     }
 
+    # The roster the SIZING tests drive: how many agents beyond the fixture lane, and whether
+    # that lane is there at all — a fleet can be empty, and the panel still has to be a panel.
+    roster = {"extra": 0, "base": True}
+
     def fake_snapshot():
+        base = {
+            "name": "feature-1", "path": lane, "state": "idle",
+            "uptime": volatile["uptime"],
+            "kind": "lane", "label": "vii", "context_pct": volatile["pct"],
+            "issue": "DX-6",
+            "issue_links": [("DX-6", "https://example.invalid/DX-6")],
+            "status": volatile["status"],
+            "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
+        }
+        extra = [dict(base, name="extra-%d" % i, label="e%d" % i, issue_links=[],
+                      status="", raw_asks=[]) for i in range(roster["extra"])]
         return {
-            "lanes": [{
-                "name": "feature-1", "path": lane, "state": "idle",
-                "uptime": volatile["uptime"],
-                "kind": "lane", "label": "vii", "context_pct": volatile["pct"],
-                "issue": "DX-6",
-                "issue_links": [("DX-6", "https://example.invalid/DX-6")],
-                "status": volatile["status"],
-                "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
-            }],
+            "lanes": ([base] if roster["base"] else []) + extra,
             "subs": [],
             "fleet": fleet_tui._ask_lines(fleet_path),
             "fleet_path": fleet_path,
@@ -170,27 +179,133 @@ async def main():
            lanes.children[0] is not before)
         ok("…and the new ask is shown, typed", "📋 a brand new ask" in screen_text(app))
 
-        # ── layout controls ──────────────────────────────────────────────────────────────
+        # ── the FLEET panel is sized to the agent list, not to a fixed split ──────────────
+        # Half the screen was the wrong height for every fleet but the one it was picked for:
+        # two lanes left a panel of blank rows above a cramped to-do list, six hid the last
+        # two behind a scrollbar with room going spare below them.
+        panels = app.query_one("#panels")
+
+        def panel_rows():
+            return app.query_one("#lanes").outer_size.height
+
+        def content_rows():
+            """Measured off the laid-out items — an expectation INDEPENDENT of the arithmetic
+            under test, so a wrong ITEM_ROWS cannot quietly agree with itself."""
+            return sum(c.outer_size.height for c in lanes.children)
+
         lanes.focus()
         await pilot.pause()
-        ok("the two panels start at an even split",
-           str(app.query_one("#lanes").styles.height) ==
-           str(app.query_one("#fleet").styles.height))
+        ok("the panel is exactly as tall as the agents in it, plus its border",
+           panel_rows() == content_rows() + fleet_tui.PANEL_BORDER,
+           "panel %d, content %d" % (panel_rows(), content_rows()))
+        ok("…and NEEDS YOU takes every row it does not need",
+           app.query_one("#fleet").outer_size.height == panels.size.height - panel_rows())
+
+        fitted = panel_rows()
+        roster["extra"] = 1
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a second agent grows the panel by exactly one agent's rows",
+           panel_rows() == fitted + fleet_tui.ITEM_ROWS, panel_rows())
+        ok("…and it still fits its content exactly",
+           panel_rows() == content_rows() + fleet_tui.PANEL_BORDER,
+           "panel %d, content %d" % (panel_rows(), content_rows()))
+        roster["extra"] = 0
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("…and shrinks back when that agent goes away", panel_rows() == fitted)
+
+        # A fleet with nothing in it. The panel must stay a titled box: a zero-height FLEET
+        # header reads as a broken view, not as an empty one.
+        roster["base"] = False
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("with no agents at all the panel is still a titled box",
+           panel_rows() == fleet_tui.PANEL_MIN, panel_rows())
+        roster["base"] = True
+
+        # More agents than the terminal has rows: the panel stops at NEEDS YOU's floor
+        # instead of pushing it off the bottom of the screen.
+        roster["extra"] = 20
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a fleet taller than the terminal stops at the NEEDS YOU floor",
+           panel_rows() == panels.size.height - fleet_tui.FLEET_MIN, panel_rows())
+        ok("…so NEEDS YOU is still on screen rather than pushed off it",
+           app.query_one("#fleet").outer_size.height == fleet_tui.FLEET_MIN)
+        tall = panel_rows()
+        await pilot.resize_terminal(80, 60)
+        await pilot.pause()
+        await pilot.pause()
+        ok("…and a taller terminal hands the new rows to the agents, with no keypress",
+           panel_rows() > tall
+           and panel_rows() == panels.size.height - fleet_tui.FLEET_MIN, panel_rows())
+        await pilot.resize_terminal(80, 24)
+        roster["extra"] = 0
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("…and it comes back to the fit when the fleet does", panel_rows() == fitted)
+
+        # ── + / - nudge the fit; they do not replace it ───────────────────────────────────
         await pilot.press("plus")
         await pilot.pause()
-        ok("+ grows the focused panel", app.split == 6)
+        ok("+ gives the focused panel one more row",
+           panel_rows() == fitted + 1 and app.nudge == 1, panel_rows())
         await pilot.press("minus")
         await pilot.press("minus")
         await pilot.pause()
-        ok("- shrinks it", app.split == 4)
+        ok("- takes one off", panel_rows() == fitted - 1 and app.nudge == -1, panel_rows())
+        roster["extra"] = 1
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a nudge survives a roster change, as an OFFSET from the new fit — the panel does "
+           "not snap back to the size picked for a smaller fleet",
+           panel_rows() == fitted - 1 + fleet_tui.ITEM_ROWS, panel_rows())
+        roster["extra"] = 0
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
 
+        for _ in range(20):
+            await pilot.press("plus")
+        await pilot.pause()
+        ok("a run of + cannot push NEEDS YOU off the bottom",
+           app.query_one("#fleet").outer_size.height == fleet_tui.FLEET_MIN)
+        await pilot.press("minus")
+        await pilot.pause()
+        ok("…and one - hands a row straight back — the extra presses are not banked",
+           app.query_one("#fleet").outer_size.height == fleet_tui.FLEET_MIN + 1)
+        for _ in range(30):
+            await pilot.press("minus")
+        await pilot.pause()
+        ok("a run of - cannot shrink the panel past its own border",
+           panel_rows() == fleet_tui.PANEL_MIN, panel_rows())
+        app.nudge = 0                       # back to the plain fit for what follows
+        app._fit_lanes()
+        await pilot.pause()
+
+        # ── fullscreen ───────────────────────────────────────────────────────────────────
         await pilot.press("f")
         await pilot.pause()
         ok("f hides the other panel", app.query_one("#fleet").display is False)
         ok("…and keeps the focused one", app.query_one("#lanes").display is True)
+        ok("…which fills the box rather than staying fitted to its agents",
+           panel_rows() == panels.size.height, panel_rows())
+        await pilot.press("plus")
+        await pilot.press("plus")
+        await pilot.pause()
         await pilot.press("f")
         await pilot.pause()
         ok("f again restores both", app.query_one("#fleet").display is True)
+        ok("…and the FLEET panel is back to fitting its agents", panel_rows() == fitted)
+        ok("…with no nudge banked from the presses made while it was fullscreen — there was "
+           "no boundary to move", app.nudge == 0, app.nudge)
 
         # ── the legend TOGGLES; as a toast each press stacked another copy ────────────────
         legend = app.query_one("#legend")

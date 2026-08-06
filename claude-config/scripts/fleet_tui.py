@@ -213,6 +213,27 @@ def snapshot():
     }
 
 
+# ── how much room the agent list needs, in rows ──────────────────────────────────────────
+# Lane.compose draws two lines — the head and the status — plus one per ask, and the ListItem
+# rule leaves a blank row under each item.
+#
+# COUNTED, NOT MEASURED. A widget's real height only exists after a layout pass, so sizing
+# from the measurement means drawing the panel at the wrong height once per change to learn
+# the right one — and, once the panel is clamped, a scrollbar narrowing the content can change
+# the measurement that set the width, which is a loop. The price of counting is a terminal
+# narrow enough to wrap a status: that row is not counted, and the panel scrolls, exactly as it
+# did at every size before.
+ITEM_ROWS = 3
+PANEL_BORDER = 2      # the round border takes a row off the top and one off the bottom
+PANEL_MIN = 3         # border + a row: a fleet with nothing in it still shows a titled box
+FLEET_MIN = 4         # rows NEEDS YOU keeps however many lanes there are — its border + an ask
+
+
+def fit_height(rows):
+    """Rows the FLEET panel needs to show every agent in `rows` without scrolling."""
+    return PANEL_BORDER + sum(ITEM_ROWS + len(r.get("raw_asks") or []) for r in rows)
+
+
 class Lane(ListItem):
     """One lane: the identity row, its status, then its asks. Selectable as a unit."""
 
@@ -327,6 +348,20 @@ class Ask(ListItem):
                                              linkify(escape(clip(text)), self.ctx)))
 
 
+class Panels(Vertical):
+    """The box the two panels share.
+
+    It is a class at all so that the fit can follow a terminal resize. The App's own Resize
+    event lands BEFORE this container has been re-measured — `self.size` there is still the
+    size the terminal just stopped being, so a fit from that handler clamps the panel against
+    the old screen and then has nothing to trigger a correction. The event delivered HERE
+    carries the new measurement with it.
+    """
+
+    def on_resize(self, event):
+        self.app._fit_lanes(avail=event.size.height)
+
+
 class FleetTUI(App):
     CSS = """
     Screen { background: $surface; layers: base overlay; }
@@ -357,7 +392,9 @@ class FleetTUI(App):
         border-title-color: $accent;
         border-title-style: bold;
     }
-    #lanes { height: 1fr; }
+    /* The FLEET panel is sized to the agents in it by _fit_lanes(); NEEDS YOU takes the
+       rest. `auto` is only what it looks like for the one frame before the first fit. */
+    #lanes { height: auto; }
     #fleet { height: 1fr; }
 
     ListView { background: transparent; }
@@ -393,22 +430,18 @@ class FleetTUI(App):
         Binding("k", "cursor_up", "", show=False),
     ]
 
-    # 1..9 — how many parts of the split the LANES panel takes; the fleet panel takes the
-    # rest. Starts even, which is what the user asked for.
-    SPLIT_MIN, SPLIT_MAX, SPLIT_TOTAL = 1, 9, 10
-
     def __init__(self, interval=5.0):
         super().__init__()
         self.interval = interval
         self.data = {"lanes": [], "subs": [], "fleet": [], "error": ""}
         self.sig = None            # last STRUCTURAL snapshot, to skip no-op rebuilds
         self.undo = None           # (path, raw) of the last cleared ask
-        self.split = 5             # even
+        self.nudge = 0             # rows the user has added to the fit with + / -
         self.full = None           # id of the panel currently fullscreened, or None
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
-        with Vertical():
+        with Panels(id="panels"):
             yield ListView(id="lanes")
             yield ListView(id="fleet")
         yield Static(self.legend_markup(), id="legend")
@@ -417,7 +450,7 @@ class FleetTUI(App):
     def on_mount(self):
         self.query_one("#lanes").border_title = "FLEET"
         self.query_one("#fleet").border_title = "NEEDS YOU"
-        self._apply_split()
+        self._fit_lanes()
         self.reload()
         self.set_interval(self.interval, self.reload)
 
@@ -499,6 +532,11 @@ class FleetTUI(App):
             fleet.append(Ask(i, raw, data.get("fleet_path", ""), ctx))
         if keepf is not None and 0 <= keepf < len(data["fleet"]):
             fleet.index = keepf
+
+        # The roster just changed shape — an agent came or went, or one grew an ask — which is
+        # the only thing the panel's height depends on. Nothing here runs on the tick that
+        # merely moves uptime, so the fit costs nothing on a steady fleet.
+        self._fit_lanes()
 
     def update_head(self):
         d = self.data
@@ -600,21 +638,64 @@ class FleetTUI(App):
         self.query_one("#legend").toggle_class("-show")
 
     # ── layout ───────────────────────────────────────────────────────────────────────────
-    def _apply_split(self):
-        self.query_one("#lanes").styles.height = "%dfr" % self.split
-        self.query_one("#fleet").styles.height = "%dfr" % (self.SPLIT_TOTAL - self.split)
+    def _rows(self):
+        """The agents on screen — lanes and their subagents, in the order they are drawn."""
+        return self.data["lanes"] + self.data["subs"]
+
+    def _ceiling(self, want, avail=None):
+        """The tallest the FLEET panel may be: the shared space less NEEDS YOU's floor.
+
+        Before the first layout pass there is no measurement to clamp against, so nothing is
+        clamped — the first snapshot fits again the moment there is one.
+        """
+        if avail is None:
+            avail = self.query_one("#panels").size.height
+        return max(PANEL_MIN, avail - FLEET_MIN) if avail else want
+
+    def _fit_lanes(self, avail=None):
+        """Size the FLEET panel to the agents in it, and give NEEDS YOU whatever is left.
+
+        WHY NOT A FIXED SPLIT. Half the screen is the wrong height for every fleet except the
+        one it was chosen for: two lanes left a panel of blank rows above a cramped to-do
+        list, and six lanes hid the last two behind a scrollbar in a panel that had room to
+        spare below it. The list is a handful of cards, so it can simply be as tall as it is.
+
+        Called when the roster changes shape, when the terminal resizes and when the user
+        nudges the boundary — never on the refresh tick, which is why a fleet that is merely
+        working does not relayout every five seconds.
+        """
+        if self.full:
+            return                 # a fullscreened panel owns the whole box; leave it alone
+        try:
+            lanes, fleet = self.query_one("#lanes"), self.query_one("#fleet")
+        except Exception:
+            return                 # a resize can land before compose does; on_mount fits again
+        want = fit_height(self._rows()) + self.nudge
+        lanes.styles.height = max(PANEL_MIN, min(want, self._ceiling(want, avail)))
+        fleet.styles.height = "1fr"
+
+    def _bump(self, d):
+        """Move the boundary by a row, and remember it as an OFFSET from the fit — so a lane
+        that appears later still grows the panel by its own height instead of snapping back
+        to the size the user picked for a smaller fleet.
+
+        The offset is clamped to what the screen can actually honour, so a run of `+` is not
+        banked: one `-` gives a row back, rather than the first dozen presses doing nothing.
+        """
+        if self.full:
+            return                 # no boundary to move, and a nudge nobody can see is worse
+        natural = fit_height(self._rows())
+        hi = self._ceiling(natural + self.nudge + d) - natural
+        self.nudge = max(PANEL_MIN - natural, min(hi, self.nudge + d))
+        self._fit_lanes()
 
     def action_grow(self):
         """Grow the FOCUSED panel — the same key does opposite things in the two panels,
         which is right: the reader is asking for more of what they are looking at."""
-        d = 1 if self._focused_list().id == "lanes" else -1
-        self.split = max(self.SPLIT_MIN, min(self.SPLIT_MAX, self.split + d))
-        self._apply_split()
+        self._bump(1 if self._focused_list().id == "lanes" else -1)
 
     def action_shrink(self):
-        d = -1 if self._focused_list().id == "lanes" else 1
-        self.split = max(self.SPLIT_MIN, min(self.SPLIT_MAX, self.split + d))
-        self._apply_split()
+        self._bump(-1 if self._focused_list().id == "lanes" else 1)
 
     def action_fullscreen(self):
         """Toggle: hide the other panel outright.
@@ -628,10 +709,13 @@ class FleetTUI(App):
             for wid in ("#lanes", "#fleet"):
                 self.query_one(wid).display = True
             self.full = None
-            self._apply_split()
+            self._fit_lanes()
         else:
             other = "#fleet" if target == "lanes" else "#lanes"
             self.query_one(other).display = False
+            # Explicitly, because the FLEET panel's height is a row count now: hiding its
+            # neighbour would otherwise leave it fitted to its content with dead space below.
+            self.query_one("#" + target).styles.height = "1fr"
             self.full = target
 
     def action_unfullscreen(self):
