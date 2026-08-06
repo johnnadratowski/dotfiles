@@ -903,3 +903,30 @@ files the map names. Include changelogs, docstrings, fixtures and commit-adjacen
 are the containers that carry text nobody re-reads. Then **name a tie-break**: if two documents
 state the same fact, say which one wins, so the next divergence has a resolution instead of
 needing to be prevented.
+
+---
+
+## A check's SCOPING instruction is load-bearing, and the document that defines a marker is the first thing it misclassifies
+
+**DX-16, 2026-08-06, measured on the plan that shipped the rule.** `reviewer.md` identifies a
+migrated plan by a marker string, and says explicitly: search **inside changelog entries only,
+never a whole-document text search**. DX-16's own plan contains that marker **seven times in
+prose and zero times in a changelog entry** — because it is the document that *defines* the
+marker and therefore discusses it constantly.
+
+A reviewer that "simplifies" the scoped search into a plain grep classifies that plan as
+**migrated**, which it is not — it was born a document — and then softens its criterion into the
+"this plan predates the rules" wording. **Wrong classification, actionable-looking output, no
+error anywhere.**
+
+**The general shape: any check keyed on a string will be tripped first, and hardest, by the
+document that introduced the string.** Specs, style guides, hazard notes and skill definitions
+all quote the thing they govern, at a density no ordinary document reaches. So:
+
+- **Never key a check on a bare string when a container makes it unambiguous.** "Inside a
+  changelog entry" is not a stylistic refinement of "somewhere in the file" — it is the whole
+  correctness of the check.
+- **When you write the scoping clause, write WHY next to it**, or the next reader deletes it as
+  redundant. A scoping clause looks like caution; it is usually the load-bearing half.
+- **Test any string-keyed check against its own defining document first.** It is the worst case
+  and it is always available.
