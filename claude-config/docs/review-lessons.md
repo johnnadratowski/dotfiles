@@ -871,3 +871,35 @@ off a background wrapper whose real exit was 1.
 4. **This is a general shape, not a husky quirk.** Any config pointing at a shared absolute path —
    hooks, lint config, a toolchain manifest — means the file you edited is not necessarily the
    file that runs. Check the resolution before trusting the experiment.
+
+---
+
+## A commit message that retires a claim does not retire the claim
+
+**DX-16, 2026-08-06.** A causal explanation for Linear's `updatedAt` drift was measured, found
+backwards, and disowned — in a commit body and in two documents. A **third** statement of the
+same claim survived in a skill's own CHANGELOG, one hop away via its version-history link. The
+reviewer found it; the author, who had written the retraction, did not.
+
+**The shape.** Retracting a claim feels like a single act, so attention goes to the passage you
+are rewriting and to explaining the retraction. But a claim that was worth stating once has
+usually been stated in every place that argued from it — a changelog entry, a tool docstring, a
+skill step, a commit body — and those are the copies nobody is editing. **The retraction lands;
+the claim survives beside it.**
+
+**Three things that make this worse than an ordinary stale reference:**
+
+- **A retraction is high-confidence text**, so the file containing it reads as authoritative on
+  the subject — including where it still asserts the old claim two hops away.
+- **The imperative voice a tool header or a checklist wants is the voice that strips
+  qualifiers.** A hedge written in prose dies on its way into a docstring, a step, or a commit
+  subject, so the unqualified form is over-represented exactly where it is hardest to spot.
+- **Provenance travels badly.** One unhedged sentence at the source needed correcting at four
+  sites, and the agent that propagated it had faithfully reported what it was told.
+
+**How to apply.** When you retract or narrow a claim, **grep the claim's own words across the
+whole corpus before committing the retraction** — not the file you are editing, and not only the
+files the map names. Include changelogs, docstrings, fixtures and commit-adjacent prose, which
+are the containers that carry text nobody re-reads. Then **name a tie-break**: if two documents
+state the same fact, say which one wins, so the next divergence has a resolution instead of
+needing to be prevented.
