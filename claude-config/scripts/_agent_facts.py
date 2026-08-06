@@ -202,7 +202,16 @@ def open_prs_for(cwd):
             prs = json.load(fh)
     except (OSError, ValueError):
         return []
-    if isinstance(prs, dict):        # pre-2026-08-06 cache shape; treat as empty, not as a crash
+    # A cache written in the OLD shape (dict keyed by head branch) is not merely useless — it is
+    # SELF-PERPETUATING if we just return []. `refresh_open_prs` rewrites on AGE alone, so any
+    # still-running old process keeps re-writing the old shape inside the refresh window and the
+    # panel stays empty forever with nothing looking broken. Delete it instead: an absent cache
+    # forces the very next refresh, and the writer that wins is whichever process has new code.
+    if not isinstance(prs, list):
+        try:
+            os.remove(PR_CACHE)
+        except OSError:
+            pass
         return []
 
     branch = branch_for(cwd)
