@@ -65,6 +65,17 @@ pane-dwelling team member instead. Two consequences before you change it:
 - Per the Claude Code docs, in-process teammates are **not restored by `/resume`** and
   **cannot spawn background subagents** at all.
 
+## The scratchpad is SHARED between siblings — name your files after yourself
+
+A session's scratchpad directory is per-session, but **subagents you spawn write into the same
+one**, so two siblings running concurrently share a namespace. Measured 2026-08-06: two
+migration agents each wrote a `verify.py`, and one overwrote the other mid-run. Nothing was
+lost only because the loser happened to re-run under a different name — luck, not design.
+
+**Prefix every scratch filename with your own agent name**: `feature-3-verify.py`, not
+`verify.py`. The collision is silent in the worst way — the second writer succeeds, and the
+first agent then executes a file that is no longer the one it wrote.
+
 ## Saying you need the human
 
 Nothing in the harness reports "waiting for input" — its status field only ever says `running`

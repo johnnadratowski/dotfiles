@@ -1,4 +1,8 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_RETRY_WATCHDOG": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(npm run typecheck:*)",
@@ -34,6 +38,7 @@
     "ask": [],
     "defaultMode": "auto"
   },
+  "model": "opus[1m]",
   "skillOverrides": {
     "unblock": "off"
   },
@@ -51,90 +56,90 @@
     ],
     "PermissionRequest": [
       {
+        "matcher": "ExitPlanMode",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks exit-plan --agent claude",
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks exit-plan --agent claude",
             "timeout": 3600
           }
-        ],
-        "matcher": "ExitPlanMode"
+        ]
       }
     ],
     "PostToolUse": [
       {
+        "matcher": "Edit|Write|NotebookEdit|MultiEdit",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks mark-activity --agent claude",
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks mark-activity --agent claude",
             "timeout": 5
           }
-        ],
-        "matcher": "Edit|Write|NotebookEdit|MultiEdit"
+        ]
       }
     ],
     "PreToolUse": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\"",
-            "type": "command"
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\""
           }
-        ],
-        "matcher": ""
+        ]
       },
       {
+        "matcher": "ExitPlanMode",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks enter-plan --agent claude",
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks enter-plan --agent claude",
             "timeout": 5
           }
-        ],
-        "matcher": "ExitPlanMode"
+        ]
       }
     ],
     "SessionEnd": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/unregister-agent.sh\"",
-            "type": "command"
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/unregister-agent.sh\""
           }
-        ],
-        "matcher": ""
+        ]
       }
     ],
     "Stop": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\" clear",
-            "type": "command"
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\" clear"
           }
-        ],
-        "matcher": ""
+        ]
       },
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks on-stop --agent claude",
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/monocle.sh\" hooks on-stop --agent claude",
             "timeout": 3600
           }
-        ],
-        "matcher": ""
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
+        "matcher": "",
         "hooks": [
           {
-            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\"",
-            "type": "command"
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/mark-busy.sh\""
           }
-        ],
-        "matcher": ""
+        ]
       }
     ],
     "SubagentStart": [
@@ -155,6 +160,10 @@
     "padding": 0,
     "refreshInterval": 30
   },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "bash \"$HOME/.claude/scripts/subagent-statusline.sh\""
+  },
   "enabledPlugins": {
     "claude-notifications-go@claude-notifications-go": true,
     "typescript-lsp@claude-plugins-official": true,
@@ -174,7 +183,7 @@
     }
   },
   "outputStyle": "Concise",
-  "effortLevel": "xhigh",
+  "effortLevel": "low",
   "tui": "fullscreen",
   "voice": {
     "enabled": true,
@@ -187,14 +196,5 @@
   "remoteControlAtStartup": true,
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "model": "opus[1m]",
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
-    "CLAUDE_CODE_RETRY_WATCHDOG": "1"
-  },
-  "subagentStatusLine": {
-    "type": "command",
-    "command": "bash \"$HOME/.claude/scripts/subagent-statusline.sh\""
-  }
+  "voiceEnabled": true
 }

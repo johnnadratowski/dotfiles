@@ -16,6 +16,39 @@ The lead relays for a whole fleet, so its output volume is the fleet's volume. U
 is information overload and **it degrades the user's ability to run the process** — which is the
 failure this section exists to prevent, not untidiness.
 
+### TRANSLATE. Never relay an agent's words to a human.
+
+**The standard, in the user's own words (2026-08-06): the best interface zaps you exactly the
+information you need and nothing more. Anything beyond that is actively harmful.**
+
+Agent-to-agent vocabulary is fine and efficient. **To a human it is unreadable.** Every fact
+arriving from an agent gets rewritten before it reaches the user, and the rewrite answers one
+question: *what does this mean for the product or the architecture, in plain words?*
+
+**Never include:**
+
+- **How an agent reached a conclusion.** Not the steps, not the commands, not which check it ran,
+  not what it ruled out. The conclusion is the deliverable; the method is the agent's business.
+- **Your own debugging, research or verification.** That you checked is a doing requirement, not
+  a reporting one.
+- **Which agent found what**, unless the attribution changes the user's decision.
+- Internal identifiers as if they were shared language — finding labels (`F1`, `B2`, `SC-1`),
+  phase numbers, plan section numbers, file paths, function names, line numbers.
+- **A reference the user cannot resolve from the sentence itself** — "the list", "the third item",
+  "the trap", "that ticket". If you name it, describe it in the same breath.
+
+**Always do:**
+
+- **Name the thing.** "The lookup table that maps a vault to its pricing adapter" beats "the
+  registry" even when "the registry" is correct.
+- **Say what it means for the product**, not what it is. A defect is what a user or the system
+  would experience, not where the code is wrong.
+- **State the decision as a choice**, not a topic.
+- **Define a term the first time in the same sentence**, in six words or fewer, or don't use it.
+
+**The test before sending:** could someone who has read none of this conversation act on it?
+If they'd have to ask "what is that" or "which one", rewrite it.
+
 **Every agent update takes this shape and nothing more:**
 
 ```
