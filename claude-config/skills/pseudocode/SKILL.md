@@ -63,6 +63,40 @@ Rules that make the comparison do the work:
 - **≤ 15 lines per block.** Over that, the topic is more than one fix — split it or narrow to
   the half the user asked about.
 
+## Delivery — contrasts go to Monocle, single blocks stay here
+
+**When the output contrasts two states** — before/after, or the two-options variant — **send
+it to Monocle as a real file diff** so the user reads it side-by-side. **A single block with
+no counterpart is chat output**; a diff viewer adds nothing to an example that contrasts with
+nothing, so print it and stop.
+
+Monocle renders *file diffs*, not documents — a markdown artifact full of diff markers shows
+raw symbols. So the contrast must be staged as an actual changed file in the repo:
+
+1. Scratch path: `.claude/pseudocode/<topic>.pseudo` (the directory is gitignored-adjacent
+   scratch; keep it out of real commits' way).
+2. Write the **before** block to the file and commit it locally — this commit exists only to
+   give the diff a left-hand side, and step 6 removes it.
+3. Overwrite the file with the **after** block, uncommitted. The working-tree change against
+   the scratch commit *is* the side-by-side.
+4. For the two-options variant: one file per option (`<topic>-reject.pseudo`,
+   `<topic>-proceed.pseudo`), each committed with the shared before and overwritten with its
+   option, so every option renders as its own before/after diff.
+5. `set_review_name` to `pseudocode: <topic>` and tell the user it is staged.
+6. **After the user has looked: revert the scratch** — restore the file, then drop the scratch
+   commit (`git reset` of the one top commit, verifying first that nothing else landed on the
+   branch meanwhile). The lane branch must end byte-identical to how it started.
+
+**Two standing hazards, both non-negotiable:**
+
+- **`set_review_name` silently replaces the repo's open review.** If a real review is staged
+  or awaiting a verdict — check `review_status` first — do NOT send pseudocode; print it in
+  chat and say why. A plan review clobbered by an illustration is a real loss for a cosmetic
+  gain.
+- **Never do the commit/reset dance with unrelated uncommitted work in the tree**, and never
+  in a lane that is mid-review-round — the tree must stay frozen under an in-flight reviewer.
+  When in doubt, chat output is always correct.
+
 ## Variants
 
 - **No before-state** (a new capability, not a fix): a single block, plus one line on what is
