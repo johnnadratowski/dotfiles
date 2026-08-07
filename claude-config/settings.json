@@ -183,7 +183,7 @@
     }
   },
   "outputStyle": "Concise",
-  "effortLevel": "low",
+  "effortLevel": "xhigh",
   "tui": "fullscreen",
   "voice": {
     "enabled": true,
