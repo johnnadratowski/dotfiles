@@ -207,6 +207,19 @@ hasnt "a subagent does NOT borrow its spawner's issue"  "FEAT-42"               
 hasnt "a subagent does NOT borrow its spawner's status" "PR #124 staged, parked" "$sub"
 rm -f "$FAKEHOME/.claude/running-agents/rev-a.$$" "$FAKEHOME/.claude/agents/rev-a.cwd"
 
+# ── 4ME, the fleet-level list ────────────────────────────────────────────────────────────
+# It belongs to no lane, so it renders last under its own heading. The label and the row
+# NUMBERS are one contract with the TUI: the user says "4me 2", and a reference that resolves
+# to a different item depending on which of the two views happens to be open is worse than no
+# numbering at all.
+printf 'ship: merge #124\nproduct: fold MON-10 in?\n' > "$T/needs-input-fleet"
+has   "the fleet-level list is headed 4ME"  "4ME  (not lane-specific)"  "$(run)"
+has   "its first item is numbered 1"        " 1  🚀 merge #124"         "$(run)"
+has   "…and its second is numbered 2"       " 2  💬 fold MON-10 in?"    "$(run)"
+hasnt "the old label is gone from the table" "NEEDS YOU"                "$(run)"
+rm -f "$T/needs-input-fleet"
+hasnt "with no fleet asks there is no heading" "4ME" "$(run)"
+
 # ── json ─────────────────────────────────────────────────────────────────────────────────
 j="$(run --json | python3 -c '
 import json,sys

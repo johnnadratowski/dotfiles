@@ -289,10 +289,15 @@ def main():
 
     # Fleet-level asks last, under their own heading — they are real work for the user but
     # belong to no lane, and hanging them off an arbitrary agent would misattribute them.
+    #
+    # 4ME, THE SAME NAME THE TUI GIVES THIS LIST, and numbered the way the TUI numbers it. The
+    # user refers to these rows by position — "4me 2" — so the two renderers have to agree on
+    # both the label and the numbers, or the reference resolves differently depending on which
+    # view they happened to be looking at.
     if general:
-        sys.stdout.write("\n  NEEDS YOU  (not lane-specific)\n")
-        for icon, text in general:
-            out = wrap(icon + " " + text, 6)
+        sys.stdout.write("\n  4ME  (not lane-specific)\n")
+        for n, (icon, text) in enumerate(general, 1):
+            out = wrap("%2d  %s %s" % (n, icon, text), 4)
             if out:
                 sys.stdout.write(out + "\n")
 

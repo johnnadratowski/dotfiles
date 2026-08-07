@@ -193,6 +193,39 @@ unbound plan review looks entirely healthy. **The `set_repo` echo is the check**
 repo identity when no review is loaded, so it cannot tell a bound agent from an unbound one.
 `MONOCLE_REQUIRE_SET_REPO=1` refusing an unbound call is the backstop.
 
+## Step 4c — Apply the configured effort level and model
+
+Teammates boot at the machine-global level, which is rarely the level you want for every lane.
+Apply the project's configured values once the panes exist:
+
+```bash
+.claude/scripts/agent-tune.sh apply            # add --dry-run first if you want the plan
+```
+
+Knobs live in the project's `.claude/workflow.config` (`WORKFLOW_LANE_EFFORT[_N]`,
+`WORKFLOW_LANE_MODEL[_N]`, and the per-subagent `WORKFLOW_*_EFFORT` set). **Empty means
+inherit**, so a fleet that configures nothing is unaffected by this step and `apply` is a
+no-op that reports SKIP for every lane.
+
+**Why this is a post-spawn step and not a spawn parameter.** The Agent tool takes `model` but
+has no `effort` at all, so effort can only ever be set after the fact. And a subagent
+definition's `effort:` frontmatter — the obvious place to put it — is **accepted and then
+ignored for teammates**; it applies only to a solo session's in-process spawn. Under
+`--teammate-mode tmux` each teammate is its own process with its own TUI, which is both why
+the frontmatter misses and why typing into its pane works.
+
+**It verifies rather than assumes.** `apply` re-reads each pane's status line and reports
+PASS / FAIL / REFUSED per agent, because a `send-keys` can be lost, and because both commands
+raise a confirmation dialog on any session that already has history — an unanswered dialog
+leaves the old value in place and looks exactly like success from the sending side. Treat a
+FAIL row as "not applied", and re-run that lane; do not re-run blind.
+
+**One hazard worth knowing even if you never touch the script:** `/effort` and `/model`
+persist to `~/.claude/settings.json` as the default for NEW sessions, from a teammate's pane
+as readily as the lead's. `agent-tune.sh` snapshots that file and restores it afterwards. If
+you ever set a level by hand instead, you have just re-levelled every future agent on this
+machine — check that file after.
+
 ## Step 5 — Run the mechanical check. It catches what steps 1.5–4 let through.
 
 ```bash
