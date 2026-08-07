@@ -224,14 +224,53 @@ def snapshot():
 # narrow enough to wrap a status: that row is not counted, and the panel scrolls, exactly as it
 # did at every size before.
 ITEM_ROWS = 3
+ASK_ROWS = 2          # a 4ME row is one line, plus the blank the same ListItem rule leaves
 PANEL_BORDER = 2      # the round border takes a row off the top and one off the bottom
 PANEL_MIN = 3         # border + a row: a fleet with nothing in it still shows a titled box
-FLEET_MIN = 4         # rows NEEDS YOU keeps however many lanes there are — its border + an ask
+FLEET_MIN = 4         # rows 4ME keeps however many lanes there are — its border + one ask
 
 
 def fit_height(rows):
     """Rows the FLEET panel needs to show every agent in `rows` without scrolling."""
     return PANEL_BORDER + sum(ITEM_ROWS + len(r.get("raw_asks") or []) for r in rows)
+
+
+def asks_fit_height(n):
+    """Rows the 4ME panel needs to show `n` items without scrolling.
+
+    Never below FLEET_MIN, which is the same floor every other path respects: an empty list
+    is still a titled box, and a panel that vanished would read as a broken view rather than
+    an empty one.
+    """
+    return max(FLEET_MIN, PANEL_BORDER + n * ASK_ROWS)
+
+
+def visible_items(heights, room):
+    """How many items, in order, are WHOLLY visible in `room` content rows.
+
+    Counted the same way the fit is, off the same row arithmetic, because this number exists
+    to contradict it: when a list is taller than the terminal the panel stops at the other
+    one's floor, and a stop that says nothing is indistinguishable from a successful fit.
+    A partly-drawn row does not count — "8 of 20 visible" should undercount rather than
+    promise a line the reader has to scroll to finish.
+    """
+    n = 0
+    for h in heights:
+        if h > room:
+            break
+        room -= h
+        n += 1
+    return n
+
+
+def fit_note(mode, shown, total):
+    """What `=` actually managed, in one line."""
+    if not total:
+        return ("4ME is empty — the agents keep the rows" if mode == "4ME"
+                else "no agents to fit")
+    if shown >= total:
+        return "fit %s · all %d visible" % (mode, total)
+    return "fit %s · %d of %d visible, the rest scroll" % (mode, shown, total)
 
 
 class Lane(ListItem):
@@ -392,8 +431,8 @@ class FleetTUI(App):
         border-title-color: $accent;
         border-title-style: bold;
     }
-    /* The FLEET panel is sized to the agents in it by _fit_lanes(); NEEDS YOU takes the
-       rest. `auto` is only what it looks like for the one frame before the first fit. */
+    /* The FLEET panel is sized to the agents in it by _fit_lanes(); 4ME takes the rest.
+       `auto` is only what it looks like for the one frame before the first fit. */
     #lanes { height: auto; }
     #fleet { height: 1fr; }
 
@@ -420,8 +459,11 @@ class FleetTUI(App):
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
         Binding("question_mark", "legend", "legend"),
+        # `=` USED TO BE an unshifted alias for `+`. It is the coarse version of the same
+        # gesture now — one press shows a whole list instead of one more row of one — and a
+        # key cannot be both. `+` keeps the fine adjustment; `-` was already unshifted.
+        Binding("equals_sign", "autofit", "autofit"),
         Binding("plus", "grow", "grow panel"),
-        Binding("equals_sign", "grow", "", show=False),
         Binding("minus", "shrink", "shrink panel"),
         Binding("underscore", "shrink", "", show=False),
         Binding("escape", "unfullscreen", "", show=False),
@@ -438,6 +480,7 @@ class FleetTUI(App):
         self.undo = None           # (path, raw) of the last cleared ask
         self.nudge = 0             # rows the user has added to the fit with + / -
         self.full = None           # id of the panel currently fullscreened, or None
+        self.fit_mode = "agents"   # which list `=` is currently fitting: "agents" or "4ME"
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
@@ -449,7 +492,7 @@ class FleetTUI(App):
 
     def on_mount(self):
         self.query_one("#lanes").border_title = "FLEET"
-        self.query_one("#fleet").border_title = "NEEDS YOU"
+        self.query_one("#fleet").border_title = "4ME"
         self._fit_lanes()
         self.reload()
         self.set_interval(self.interval, self.reload)
@@ -557,7 +600,9 @@ class FleetTUI(App):
         head, markup = self.query_one("#head", Static), "  " + "  ·  ".join(bits)
         if str(head.content) != markup:
             head.update(markup)
-        title = f"NEEDS YOU  ({len(d['fleet'])})"
+        # 4ME, and the count is part of the label: the user refers to these rows by number
+        # ("4me 1"), so the panel says how many numbers there are.
+        title = f"4ME  ({len(d['fleet'])})"
         fleet = self.query_one("#fleet")
         if fleet.border_title != title:
             fleet.border_title = title
@@ -642,37 +687,77 @@ class FleetTUI(App):
         """The agents on screen — lanes and their subagents, in the order they are drawn."""
         return self.data["lanes"] + self.data["subs"]
 
+    def _avail(self, avail=None):
+        """Rows the two panels share. 0 before the first layout pass — there is no
+        measurement then, and a guess would clamp the panel against a size the screen never
+        had."""
+        if avail is not None:
+            return avail
+        try:
+            return self.query_one("#panels").size.height
+        except Exception:
+            return 0
+
     def _ceiling(self, want, avail=None):
-        """The tallest the FLEET panel may be: the shared space less NEEDS YOU's floor.
+        """The tallest the FLEET panel may be: the shared space less 4ME's floor.
 
         Before the first layout pass there is no measurement to clamp against, so nothing is
         clamped — the first snapshot fits again the moment there is one.
         """
-        if avail is None:
-            avail = self.query_one("#panels").size.height
+        avail = self._avail(avail)
         return max(PANEL_MIN, avail - FLEET_MIN) if avail else want
 
+    def _base_height(self, avail=None):
+        """The FLEET panel's height before the user's nudge — what the two `=` states differ in.
+
+        In `agents` mode it is the agent list's own height: the sizing the view opens with,
+        and the one every other caller has always used.
+
+        In `4ME` mode it is whatever is left once 4ME has the rows ITS list needs — but never
+        MORE than the agents' own fit, so a short 4ME list cannot inflate the agent panel into
+        a column of dead space. The two modes therefore COINCIDE whenever 4ME already fits,
+        which is the common case; `=` says as much rather than leaving a press that changes
+        nothing to look like a key that does nothing.
+        """
+        natural = fit_height(self._rows())
+        if self.fit_mode != "4ME":
+            return natural
+        avail = self._avail(avail)
+        if not avail:
+            return natural
+        return min(natural, avail - asks_fit_height(len(self.data["fleet"])))
+
     def _fit_lanes(self, avail=None):
-        """Size the FLEET panel to the agents in it, and give NEEDS YOU whatever is left.
+        """Size the FLEET panel to the agents in it, and give 4ME whatever is left.
 
         WHY NOT A FIXED SPLIT. Half the screen is the wrong height for every fleet except the
         one it was chosen for: two lanes left a panel of blank rows above a cramped to-do
         list, and six lanes hid the last two behind a scrollbar in a panel that had room to
         spare below it. The list is a handful of cards, so it can simply be as tall as it is.
 
-        Called when the roster changes shape, when the terminal resizes and when the user
-        nudges the boundary — never on the refresh tick, which is why a fleet that is merely
-        working does not relayout every five seconds.
+        Called when the roster changes shape, when the terminal resizes, when the user nudges
+        the boundary and when `=` switches which list is being fitted — never on the refresh
+        tick, which is why a fleet that is merely working does not relayout every five seconds.
+
+        ONE SIZING PATH, TWO BASES. `=` does not size anything itself: it moves `fit_mode`,
+        and _base_height answers differently, so a resize or a lane arriving re-derives the
+        chosen fit for free instead of dropping back to the other one.
+
+        Returns the height it set, or None when there was nothing to size — that number is
+        what `=` reports on, and recomputing it afterwards would be a second answer to a
+        question already settled here.
         """
         if self.full:
-            return                 # a fullscreened panel owns the whole box; leave it alone
+            return None            # a fullscreened panel owns the whole box; leave it alone
         try:
             lanes, fleet = self.query_one("#lanes"), self.query_one("#fleet")
         except Exception:
-            return                 # a resize can land before compose does; on_mount fits again
-        want = fit_height(self._rows()) + self.nudge
-        lanes.styles.height = max(PANEL_MIN, min(want, self._ceiling(want, avail)))
+            return None            # a resize can land before compose does; on_mount fits again
+        want = self._base_height(avail) + self.nudge
+        height = max(PANEL_MIN, min(want, self._ceiling(want, avail)))
+        lanes.styles.height = height
         fleet.styles.height = "1fr"
+        return height
 
     def _bump(self, d):
         """Move the boundary by a row, and remember it as an OFFSET from the fit — so a lane
@@ -684,10 +769,52 @@ class FleetTUI(App):
         """
         if self.full:
             return                 # no boundary to move, and a nudge nobody can see is worse
-        natural = fit_height(self._rows())
-        hi = self._ceiling(natural + self.nudge + d) - natural
-        self.nudge = max(PANEL_MIN - natural, min(hi, self.nudge + d))
+        # From whichever fit is in force, not always the agents' one: in 4ME mode the nudge
+        # has to be an offset from where `=` put the boundary, or the first press would jump.
+        base = self._base_height()
+        hi = self._ceiling(base + self.nudge + d) - base
+        self.nudge = max(PANEL_MIN - base, min(hi, self.nudge + d))
         self._fit_lanes()
+
+    def action_autofit(self):
+        """`=` — grow one panel until its whole list is visible, alternating between them.
+
+        THE CYCLE IS DERIVED FROM THE LAYOUT, not counted blindly. A press that lands while
+        the boundary has been nudged goes back to the agent fit first, because "put it back
+        how it opened" is what the key is for and a nudged boundary is neither of the two
+        states. Only a press from an untouched agent fit hands the rows to 4ME. Blind
+        alternation would spend the first press doing nothing whenever the view was already
+        fitted, which is most of the time.
+
+        IT ALWAYS SAYS WHAT IT MANAGED. When a list is taller than the terminal the panel
+        stops at the other one's floor and stays scrollable — silence there is
+        indistinguishable from a successful fit, which is the one way this key could mislead.
+        An empty 4ME is the same case in miniature: nothing moves, and the message is the only
+        thing separating that from a key that did not fire.
+        """
+        if self.full:
+            self.action_fullscreen()   # a maximised panel has no boundary to size
+        self.fit_mode = "agents" if (self.nudge or self.fit_mode == "4ME") else "4ME"
+        self.nudge = 0
+        self.notify(self._fit_note(self._fit_lanes()))
+
+    def _fit_note(self, lanes_h):
+        """How much of the fitted list actually landed on screen.
+
+        Counted off the same row arithmetic as the fit itself rather than measured, for the
+        reason the constants block gives: a widget's real height exists only after a layout
+        pass, and this runs before one.
+        """
+        avail = self._avail()
+        if lanes_h is None or not avail:
+            return "fit %s" % self.fit_mode
+        if self.fit_mode == "4ME":
+            heights = [ASK_ROWS] * len(self.data["fleet"])
+            room = avail - lanes_h - PANEL_BORDER
+        else:
+            heights = [ITEM_ROWS + len(r.get("raw_asks") or []) for r in self._rows()]
+            room = lanes_h - PANEL_BORDER
+        return fit_note(self.fit_mode, visible_items(heights, room), len(heights))
 
     def action_grow(self):
         """Grow the FOCUSED panel — the same key does opposite things in the two panels,

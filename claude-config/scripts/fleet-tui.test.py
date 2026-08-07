@@ -13,7 +13,9 @@ What it locks in — each is a way this view could lie or lose work:
   - `u` puts it back — an accidental keypress on the user's to-do list must be recoverable
   - an unchanged snapshot does not rebuild the lists, so the cursor survives a refresh
   - the FLEET panel is as tall as the agents in it — at startup, and again whenever one
-    arrives or leaves — without ever pushing the NEEDS YOU panel off the screen
+    arrives or leaves — without ever pushing the 4ME panel off the screen
+  - `=` cycles which of the two lists is shown WHOLE, and says what it actually managed to
+    fit — the user refers to 4ME rows by number, so those rows are numbered too
 """
 
 import asyncio
@@ -118,6 +120,15 @@ async def main():
         ok("the kind token is consumed, not printed", "review:" not in text, text)
         ok("the header counts every ask", "3 needs you" in text, text)
 
+        # ── the panel the user calls "4me", and the numbers they call its rows by ─────────
+        # "4me 1" is only unambiguous if the row wears the 1. The panel's own title carries
+        # the count, so the label and the numbering are one contract, tested together.
+        ok("the fleet-level panel is titled 4ME, with its count",
+           app.query_one("#fleet").border_title == "4ME  (1)",
+           app.query_one("#fleet").border_title)
+        ok("…and its rows are numbered, so \"4me 1\" resolves to a row",
+           "[dim] 1[/]" in text, text)
+
         # ── linking, everywhere an id appears ────────────────────────────────────────────
         ok("the ticket column links to the URL the tracker gave",
            "[link='https://example.invalid/DX-6']DX-6[/link]" in text, text)
@@ -198,7 +209,7 @@ async def main():
         ok("the panel is exactly as tall as the agents in it, plus its border",
            panel_rows() == content_rows() + fleet_tui.PANEL_BORDER,
            "panel %d, content %d" % (panel_rows(), content_rows()))
-        ok("…and NEEDS YOU takes every row it does not need",
+        ok("…and 4ME takes every row it does not need",
            app.query_one("#fleet").outer_size.height == panels.size.height - panel_rows())
 
         fitted = panel_rows()
@@ -227,15 +238,15 @@ async def main():
            panel_rows() == fleet_tui.PANEL_MIN, panel_rows())
         roster["base"] = True
 
-        # More agents than the terminal has rows: the panel stops at NEEDS YOU's floor
+        # More agents than the terminal has rows: the panel stops at 4ME's floor
         # instead of pushing it off the bottom of the screen.
         roster["extra"] = 20
         app.load()
         await pilot.pause()
         await pilot.pause()
-        ok("a fleet taller than the terminal stops at the NEEDS YOU floor",
+        ok("a fleet taller than the terminal stops at the 4ME floor",
            panel_rows() == panels.size.height - fleet_tui.FLEET_MIN, panel_rows())
-        ok("…so NEEDS YOU is still on screen rather than pushed off it",
+        ok("…so 4ME is still on screen rather than pushed off it",
            app.query_one("#fleet").outer_size.height == fleet_tui.FLEET_MIN)
         tall = panel_rows()
         await pilot.resize_terminal(80, 60)
@@ -275,7 +286,7 @@ async def main():
         for _ in range(20):
             await pilot.press("plus")
         await pilot.pause()
-        ok("a run of + cannot push NEEDS YOU off the bottom",
+        ok("a run of + cannot push 4ME off the bottom",
            app.query_one("#fleet").outer_size.height == fleet_tui.FLEET_MIN)
         await pilot.press("minus")
         await pilot.pause()
@@ -289,6 +300,116 @@ async def main():
         app.nudge = 0                       # back to the plain fit for what follows
         app._fit_lanes()
         await pilot.pause()
+
+        # ── = cycles which list is shown WHOLE ───────────────────────────────────────────
+        # The fixture here is deliberately over-full — seven agents and eight items in a
+        # 24-row terminal — because in a fleet where BOTH lists already fit the two states are
+        # legitimately identical, so a test on that fixture would pass no matter what `=` did.
+        #
+        # notify is captured rather than displayed: the message is the only thing that
+        # distinguishes "your whole list is on screen" from "this is as far as it goes", and a
+        # real toast is a widget that later content assertions would then have to step around.
+        notes = []
+        real_notify, app.notify = app.notify, lambda msg, **kw: notes.append(str(msg))
+
+        def said():
+            """The last thing `=` reported — never an IndexError, because a key that
+            failed to fire at all is a result this suite has to be able to PRINT."""
+            return notes[-1] if notes else "(nothing was reported)"
+
+        with open(fleet_path, "w") as f:
+            f.write("".join("todo: fleet item %d\n" % i for i in range(1, 9)))
+        roster["extra"] = 6
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+
+        def fleet_rows():
+            return app.query_one("#fleet").outer_size.height
+
+        ok("the view opens fitted to the agents", app.fit_mode == "agents", app.fit_mode)
+        ok("…so with both lists over-full, 4ME is down to its floor",
+           fleet_rows() == fleet_tui.FLEET_MIN, fleet_rows())
+
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("= hands the rows over and 4ME shows its whole list",
+           app.fit_mode == "4ME" and fleet_rows() == fleet_tui.asks_fit_height(8),
+           "%s / fleet %d" % (app.fit_mode, fleet_rows()))
+        ok("…and says so", said() == "fit 4ME · all 8 visible", said())
+        ok("…without collapsing the agent panel to nothing",
+           panel_rows() >= fleet_tui.PANEL_MIN, panel_rows())
+
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("= again gives them back to the agents, at the size the view opens with",
+           app.fit_mode == "agents"
+           and panel_rows() == panels.size.height - fleet_tui.FLEET_MIN, panel_rows())
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("…and a third press is on 4ME again — the cycle does not settle",
+           app.fit_mode == "4ME" and fleet_rows() == fleet_tui.asks_fit_height(8))
+
+        # A nudged boundary is NOT one of the two states, so the next `=` returns to the fit
+        # rather than advancing — "put it back how it opened" is what the key is for.
+        await pilot.press("plus")
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("= after a +/- nudge returns to the agent fit rather than advancing the cycle",
+           app.fit_mode == "agents" and app.nudge == 0, "%s %d" % (app.fit_mode, app.nudge))
+
+        # ── a list taller than the terminal cannot be fitted, and must not pretend ────────
+        with open(fleet_path, "w") as f:
+            f.write("".join("todo: fleet item %d\n" % i for i in range(1, 21)))
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("twenty 4ME items in a 24-row terminal are reported as PARTLY shown, not as fitted",
+           "of 20 visible, the rest scroll" in said(), said())
+        ok("…while the agent panel keeps its own floor rather than vanishing",
+           panel_rows() == fleet_tui.PANEL_MIN, panel_rows())
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("…and so are seven agents", "of 7 visible, the rest scroll" in said(),
+           said())
+
+        # ── an empty 4ME is the common case ──────────────────────────────────────────────
+        with open(fleet_path, "w") as f:
+            f.write("")
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        empty_fleet, empty_lanes = fleet_rows(), panel_rows()
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("an empty 4ME says it is empty instead of claiming a fit",
+           said() == "4ME is empty — the agents keep the rows", said())
+        ok("…and the layout does not collapse: 4ME keeps its floor, the agents keep the rest",
+           fleet_rows() == fleet_tui.FLEET_MIN
+           and (fleet_rows(), panel_rows()) == (empty_fleet, empty_lanes),
+           "%d / %d" % (panel_rows(), fleet_rows()))
+
+        # `=` is a sizing request, and a maximised panel has no boundary to size.
+        await pilot.press("f")
+        await pilot.pause()
+        ok("f still maximises", app.query_one("#fleet").display is False)
+        await pilot.press("equals_sign")
+        await pilot.pause()
+        ok("= leaves fullscreen rather than doing nothing there",
+           app.full is None and app.query_one("#fleet").display is True)
+
+        with open(fleet_path, "w") as f:
+            f.write("ship: merge #124\n")
+        roster["extra"] = 0
+        app.fit_mode, app.nudge = "agents", 0
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        app.notify = real_notify
+        ok("the fit is back where the rest of the tests expect it", panel_rows() == fitted,
+           panel_rows())
 
         # ── fullscreen ───────────────────────────────────────────────────────────────────
         await pilot.press("f")
