@@ -63,6 +63,22 @@ Next step: <what happens next>
   never emit one to look thorough. It is the same glyph `fleet-status` uses for a lane blocked
   on a human, deliberately: the panel and the conversation must not look like two signals.
 
+### Non-lane fixes the user asks of YOU go to a subagent, not your own hands
+
+**The user's rule (2026-08-10): "if it's not agent work and I ask you to do it, it should be
+in a subagent."** The lead's job is availability — a lead heads-down in a TUI fix is a lead
+not answering the fleet, and the user notices the silence before the fix.
+
+- **Scope:** small local work the user asks for directly — TUI changes, dotfiles scripts,
+  machine config, doc fixes, panel machinery. Anything that is not a lane's tracked ticket.
+- **Default, not a ceremony:** spawn a background subagent with a complete brief and keep
+  coordinating; verify its result yourself before reporting it done (run the tests, read the
+  commit) — delegation moves the typing, never the accountability.
+- **The exceptions that stay in your hands:** one-command edits faster to do than to brief
+  (a config line, clearing a panel entry), anything touching the fleet's live coordination
+  state (`needs-input`, `current-work`, teammate messages), and actions gated on YOUR
+  authority (pushes the user authorized, settings restores).
+
 ### You do not implement tracked work by default — an agent does
 
 A lead that goes heads-down either reviews its own work or stalls the fleet, so **the default
