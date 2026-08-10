@@ -91,13 +91,21 @@ def as_int(x):
 
 
 def window_for(model):
-    """Context window when the harness did not supply one — same rule agent-fanout uses:
-    an explicit [1m] marker wins, then opus/sonnet major >= 4 means 1M, else 200k."""
+    """Context window when the harness did not supply one, or None when the model name is
+    not recognised. KEEP IN SYNC with _agent_facts.window_for, which carries the reasoning:
+    an unknown family yields NO window rather than a 200k default, because that default read
+    216% for a lane on a 1M model — and reads a believable 80% at half the occupancy."""
     m = str(model or "").lower()
+    if not m:
+        return None
     if "1m" in re.findall(r"\[([^\]]*)\]", m) or m.endswith("-1m"):
         return 1_000_000
-    fam = re.search(r"(opus|sonnet)[-_]?(\d+)", m)
-    return 1_000_000 if (fam and int(fam.group(2)) >= 4) else 200_000
+    if "haiku" in m:
+        return 200_000
+    fam = re.search(r"(opus|sonnet|fable|mythos)[-_]?(\d+)", m)
+    if fam:
+        return 1_000_000 if int(fam.group(2)) >= 4 else 200_000
+    return None
 
 
 def uptime(start):
@@ -154,19 +162,20 @@ def todo_for(cwd):
 
     ONLY the machine-readable head of the file: agents also leave themselves resume context
     below the pointer lines, and reading that as ids once rendered a 60-line checkpoint into the
-    status bar. Blank and `#` lines are skipped; the first line whose first field is not
-    id-shaped ends the list.
+    status bar. KEEP IN SYNC with _agent_facts.todo_pairs_for, which carries the reasoning:
+    anything ABOVE the first ticket-shaped line is a header and is skipped (a lane whose file
+    opened with a shutdown checkpoint showed no ticket at all), and the pointer block is
+    CONTIGUOUS — from the first ticket on, the first line that is not one ends the list.
     """
     ids = []
     for ln in _walk_up(cwd, ".claude", "current-work").splitlines():
-        ln = ln.strip()
-        if not ln or ln.startswith("#"):
+        first = ln.strip().split("\t")[0].strip()
+        if not re.match(r"^[A-Z]{2,5}-\d+$", first):
+            if ids:
+                break
             continue
-        first = ln.split("\t")[0].strip()
-        if first and " " not in first and len(first) <= 24:
+        if first not in ids:
             ids.append(first)
-        else:
-            break
     return " ".join(ids)
 
 
@@ -296,9 +305,14 @@ for t in tasks:
     win = as_int(t.get("contextWindowSize")) or (window_for(t.get("model")) if used else None)
     if used and win:
         pct = round(100 * used / win)
-        # The flags are the point of a percentage: ~ is "hand off soon", ! is "compact now".
-        flag = "!" if pct >= 90 else ("~" if pct >= 80 else "")
-        parts.append("%s%d%%" % (flag, pct))
+        # Over 100% is impossible, so it means the DENOMINATOR is wrong, not the agent. Say
+        # that rather than printing a number — see the same clamp in _fleet_status.py.
+        if pct > 100:
+            parts.append("?%")
+        else:
+            # The flags are the point of a percentage: ~ is "hand off soon", ! is "compact now".
+            flag = "!" if pct >= 90 else ("~" if pct >= 80 else "")
+            parts.append("%s%d%%" % (flag, pct))
         parts.append("%dk" % round(used / 1000) if used >= 1000 else str(used))
 
     up = uptime(t.get("startTime"))

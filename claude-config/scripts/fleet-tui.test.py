@@ -26,9 +26,11 @@ What it locks in — each is a way this view could lie or lose work:
 """
 
 import asyncio
+import json
 import os
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fleet_tui  # noqa: E402
@@ -81,6 +83,9 @@ async def main():
         # leaves it alone and so does the parser. `[b]` is the real case: unescaped it turns
         # the rest of the status bold and vanishes itself.
         "status": "SRV-11 done [b]2 GREEN[/b], uncommitted",
+        # A PR list is volatile too: it disappears the moment the PR merges. It rides the
+        # head line rather than a shape change, so it has to survive the no-rebuild path.
+        "prs": [(133, "https://gh/x/pull/133", False)],
     }
 
     # The roster the SIZING tests drive: how many agents beyond the fixture lane, and whether
@@ -95,10 +100,12 @@ async def main():
             "issue": "DX-6",
             "issue_links": [("DX-6", "https://example.invalid/DX-6")],
             "status": volatile["status"],
+            "open_prs": volatile["prs"],
             "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
         }
         extra = [dict(base, name="extra-%d" % i, label="e%d" % i, issue_links=[],
-                      status="", raw_asks=[]) for i in range(roster["extra"])]
+                      status="", raw_asks=[], open_prs=[])
+                 for i in range(roster["extra"])]
         return {
             "lanes": ([base] if roster["base"] else []) + extra,
             "subs": [],
@@ -186,6 +193,18 @@ async def main():
         await pilot.pause()
         ok("a changed status does NOT rebuild either", lanes.children[0] is before)
         ok("…but the new status is shown", "now something else entirely" in screen_text(app))
+        ok("…and the lane's open PR is on the row while it is open",
+           "#133" in screen_text(app), screen_text(app))
+
+        # THE STALE-PR REGRESSION. The PR merges, so the snapshot stops carrying it. Nothing
+        # about the row's SHAPE changed, so this goes down the no-rebuild path — which is
+        # exactly where a merged PR could linger on screen indefinitely.
+        volatile["prs"] = []
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a merged PR leaves the row on the next refresh, without a rebuild",
+           lanes.children[0] is before and "#133" not in screen_text(app), screen_text(app))
 
         # Only a change of SHAPE rebuilds. An ask appearing adds a line to the item, so it must.
         with open(ask_path, "a") as f:
@@ -712,8 +731,14 @@ async def main():
     mk = fleet_tui.Lane.pr_markup
 
     class _R:
+        """A Lane stand-in: these markup builders read only `row` and `ctx`, so driving them
+        directly beats restarting the app once per case."""
+
+        pr_markup = fleet_tui.Lane.pr_markup
+
         def __init__(self, row):
             self.row = row
+            self.ctx = {}
 
     ready = mk(_R(dict(lane_row, open_prs=[(999, "https://gh/x/pull/999", False)])))
     draft = mk(_R(dict(lane_row, open_prs=[(1000, "https://gh/x/pull/1000", True)])))
@@ -752,6 +777,169 @@ async def main():
             fh.write("9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c\n")
         ok("…and returns empty on a detached HEAD rather than a fake branch name",
            _agent_facts.branch_for(wt) == "", _agent_facts.branch_for(wt))
+
+    # ── the context gauge: the DENOMINATOR is the model's, and it is never guessed ────────
+    # A lead running a 1M-context model against a hardcoded 200k denominator read 216%, which
+    # is the visible half of the bug. The invisible half is that the SAME wrong denominator
+    # reads a plausible 80% at 128k used — so the fix is both a correct per-model window and
+    # a renderer that refuses to print a percentage it cannot stand behind.
+    ok("a 1M model resolves a 1M window even though its name carries no [1m] marker",
+       _agent_facts.window_for("claude-fable-5") == 1_000_000,
+       _agent_facts.window_for("claude-fable-5"))
+    ok("…and so does the current Opus", _agent_facts.window_for("claude-opus-5") == 1_000_000,
+       _agent_facts.window_for("claude-opus-5"))
+    ok("a 200k model is not promoted to 1M by its major version",
+       _agent_facts.window_for("claude-haiku-4-5") == 200_000,
+       _agent_facts.window_for("claude-haiku-4-5"))
+    ok("an explicit [1m] marker still wins",
+       _agent_facts.window_for("claude-haiku-4-5[1m]") == 1_000_000)
+    # THE ROOT CAUSE, GENERALISED. Guessing 200k for a name we do not recognise is what
+    # produced 216%; an unknown model must yield no window, so the gauge renders "—".
+    ok("an unrecognised model yields NO window rather than a 200k guess",
+       _agent_facts.window_for("claude-something-new-9") is None,
+       _agent_facts.window_for("claude-something-new-9"))
+    ok("…and so does an absent model", _agent_facts.window_for(None) is None)
+
+    with tempfile.TemporaryDirectory() as td:
+        tr = os.path.join(td, "t.jsonl")
+        with open(tr, "w") as fh:
+            fh.write(json.dumps({
+                "type": "assistant",
+                "message": {"model": "claude-fable-5",
+                            "usage": {"input_tokens": 2, "cache_read_input_tokens": 356750,
+                                      "cache_creation_input_tokens": 434,
+                                      "output_tokens": 568}},
+            }) + "\n")
+        used, win = _agent_facts.context_for(td, tr)
+        ok("a real 1M-model transcript reports a 1M window", win == 1_000_000, win)
+        ok("…so 357k used is a third of the window, not double it",
+           round(100 * used / (win * 0.8)) == 45, (used, win))
+
+    # The clamp. Even with the denominator fixed, a gauge that CAN print 216% will one day
+    # print 80% wrong. Over 100% is rendered as an admission, not as a number.
+    over = fleet_tui.Lane.head_markup(_R(dict(lane_row, context_pct=216, issue_links=[])))
+    ok("a percentage over 100 is not printed as a confident number", "216%" not in over, over)
+    ok("…it says >100% instead", ">100%" in over, over)
+    ok("…louder than a merely-full lane, since it means the gauge is broken",
+       "[b red]" in over, over)
+    fine = fleet_tui.Lane.head_markup(_R(dict(lane_row, context_pct=45, issue_links=[])))
+    ok("a percentage in range is still printed plainly", " 45%" in fine, fine)
+
+    # ── the PR list is never stickier than the cache it came from ────────────────────────
+    # The cache has a max age on the WRITE path only; nothing bounded the READ. A `gh` that
+    # stops working (expired auth, offline) leaves the last good file in place forever, and
+    # the panel goes on advertising PRs that closed days ago with nothing looking broken.
+    with tempfile.TemporaryDirectory() as td:
+        cache = os.path.join(td, "fleet-prs.json")
+        real_cache, _agent_facts.PR_CACHE = _agent_facts.PR_CACHE, cache
+        wt = os.path.join(td, "lane")
+        os.makedirs(os.path.join(wt, ".claude"))
+        with open(os.path.join(wt, ".claude", "current-work"), "w") as fh:
+            fh.write("DX-16\thttps://linear.app/acme/issue/DX-16\n")
+
+        def write_cache(prs, age=0):
+            with open(cache, "w") as fh:
+                json.dump(prs, fh)
+            if age:
+                t = time.time() - age
+                os.utime(cache, (t, t))
+
+        pr = {"number": 133, "url": "https://gh/x/pull/133", "isDraft": False,
+              "title": "plans become Linear documents (Fixes DX-16)",
+              "headRefName": "pr/dx-16-plans"}
+        write_cache([pr])
+        ok("a fresh cache surfaces the lane's open PR",
+           _agent_facts.open_prs_for(wt) == [(133, "https://gh/x/pull/133", False)],
+           _agent_facts.open_prs_for(wt))
+        # THE REGRESSION: the PR closes, so it leaves the cache. The next read must drop it.
+        write_cache([])
+        ok("a PR that left the cache leaves the row on the very next read",
+           _agent_facts.open_prs_for(wt) == [], _agent_facts.open_prs_for(wt))
+        # And the unbounded-staleness case the write-side max age cannot cover.
+        write_cache([pr], age=_agent_facts.PR_STALE_AFTER + 60)
+        ok("a cache too old to trust reports nothing rather than yesterday's PRs",
+           _agent_facts.open_prs_for(wt) == [], _agent_facts.open_prs_for(wt))
+        _agent_facts.PR_CACHE = real_cache
+
+    # ── the ticket column survives a lane agent's sloppy bookkeeping ─────────────────────
+    # The column reads line 1 of .claude/current-work, a file the lane agents maintain by
+    # hand. Two live lanes had it wrong at once: one opened with a shutdown checkpoint, the
+    # other still named the ticket before last. Neither is fixable by asking agents harder.
+    with tempfile.TemporaryDirectory() as td:
+        def lane_at(body, branch=None):
+            d = os.path.join(td, "l%d" % lane_at.n)
+            lane_at.n += 1
+            os.makedirs(os.path.join(d, ".claude"))
+            with open(os.path.join(d, ".claude", "current-work"), "w") as fh:
+                fh.write(body)
+            if branch:
+                g = os.path.join(d, "gitdir")
+                os.makedirs(g)
+                with open(os.path.join(g, "HEAD"), "w") as fh:
+                    fh.write("ref: refs/heads/%s\n" % branch)
+                with open(os.path.join(d, ".git"), "w") as fh:
+                    fh.write("gitdir: %s\n" % g)
+            return d
+        lane_at.n = 0
+
+        buried = lane_at("# CHECKPOINT 2026-08-01 — feature-3, 2nd revision.\n"
+                         "Resume by re-reading the plan document, then the diff.\n"
+                         "SRV-22\thttps://linear.app/acme/issue/SRV-22\n")
+        ok("a ticket buried under a checkpoint header is still found",
+           _agent_facts.todo_for(buried) == "SRV-22", _agent_facts.todo_for(buried))
+        ok("…with its URL, so the column stays clickable",
+           _agent_facts.todo_pairs_for(buried)
+           == [("SRV-22", "https://linear.app/acme/issue/SRV-22")],
+           _agent_facts.todo_pairs_for(buried))
+
+        commented = lane_at("# ACTIVE: DX-6 (then DX-5). Plan approved 2026-08-04.\n")
+        ok("a file that is only comments yields no ticket at all",
+           _agent_facts.todo_for(commented) == "", _agent_facts.todo_for(commented))
+        ok("…and never renders the comment line as if it were one",
+           "#" not in _agent_facts.todo_for(commented))
+
+        # The pointer block is contiguous, which is what BOUNDS the forgiving scan. One live
+        # file carries 370 commented checkpoint lines and then repeats its pointer; treating
+        # comments as invisible everywhere read the same ticket twice.
+        repeated = lane_at("DX-5\thttps://linear.app/acme/issue/DX-5\n"
+                           + "# checkpoint\n" * 40
+                           + "DX-5\thttps://linear.app/acme/issue/DX-5\n")
+        ok("a commented checkpoint ends the pointer block rather than being skipped over",
+           _agent_facts.todo_for(repeated) == "DX-5", _agent_facts.todo_for(repeated))
+
+        prose = lane_at("DX-5\thttps://linear.app/acme/issue/DX-5\n"
+                        "Now write the warmup navigation into authSetup.\n"
+                        "SRV-99\thttps://linear.app/acme/issue/SRV-99\n")
+        ok("resume prose still ends the ticket list — a later id is not a second ticket",
+           _agent_facts.todo_for(prose) == "DX-5", _agent_facts.todo_for(prose))
+
+        # The branch is machine truth; the file is agent diligence. When they disagree, the
+        # column follows the branch and SAYS SO, rather than silently picking a side.
+        ok("a ticket id is read out of the branch name",
+           _agent_facts.branch_ticket_for(
+               lane_at("", branch="john/dx-16-move-plans-to-documents")) == "DX-16")
+        ok("…and a branch that names no ticket yields none",
+           _agent_facts.branch_ticket_for(lane_at("", branch="feature-2")) == "")
+
+        agreed = lane_at("SRV-22\thttps://linear.app/acme/issue/SRV-22\n",
+                         branch="john/srv-22-unnameable-nft-identity")
+        ok("agreement between branch and file is not flagged",
+           _agent_facts.tickets_for(agreed) == ([("SRV-22",
+                                                  "https://linear.app/acme/issue/SRV-22")],
+                                                False),
+           _agent_facts.tickets_for(agreed))
+
+        stale = lane_at("DX-6\thttps://linear.app/acme/issue/DX-6\n",
+                        branch="john/dx-16-move-plans-to-documents")
+        pairs, mismatch = _agent_facts.tickets_for(stale)
+        ok("a stale current-work loses to the branch", pairs == [("DX-16", "")], pairs)
+        ok("…and the disagreement is reported, not swallowed", mismatch is True)
+        ok("…so the row shows the branch's ticket with a ≠ marker",
+           "≠" in fleet_tui.Lane.head_markup(
+               _R(dict(lane_row, issue_links=pairs, ticket_mismatch=True))))
+        ok("…and an agreeing row wears no marker",
+           "≠" not in fleet_tui.Lane.head_markup(
+               _R(dict(lane_row, issue_links=[("SRV-22", "")]))))
 
     # ── the detail overlay's own data, against real files and a real repo ────────────────
     # The UI tests above drive the overlay; these drive the functions under it, where the

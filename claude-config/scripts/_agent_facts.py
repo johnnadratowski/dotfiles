@@ -64,35 +64,29 @@ def _walk_up(cwd, *rel):
     return ""
 
 
-def todo_for(cwd):
-    """In-progress tracker id(s) for the worktree this agent works in.
-
-    Tracking lives in Linear, which has no cheap local state to read, so `/todo` mirrors
-    the id to a gitignored per-worktree file and every status surface reads that -- the
-    same mirror the main bar uses, so the surfaces cannot disagree. Everything after the
-    first TAB on a line is a URL or resume prose; only the id is wanted here.
-    """
-    body = _walk_up(cwd, ".claude", "current-work")
-    ids = []
-    for ln in body.splitlines():
-        ln = ln.strip()
-        if not ln or ln.startswith("#"):
-            continue
-        first = ln.split("\t")[0].strip()
-        # Resume prose lives in the same file below the pointer line; an id is short and
-        # has no spaces, which is what separates it from a paragraph.
-        if first and " " not in first and len(first) <= 24:
-            ids.append(first)
-        else:
-            break
-    return " ".join(ids)
+# A tracker id, and nothing else. Recognising the SHAPE rather than "a short token with no
+# spaces" is what lets the reader skip a checkpoint header or a stray word and still find the
+# pointer line underneath it -- and what stops a `#` comment ever being rendered as a ticket.
+_TICKET = re.compile(r"^[A-Z]{2,5}-\d+$")
+# The same id inside a branch name (`john/dx-16-...`, `pr/srv-22-...`). Anchored on a
+# separator so `feature-2` is not read as a ticket.
+_BRANCH_TICKET = re.compile(r"(?:^|[/_-])([A-Za-z]{2,5}-\d+)(?![A-Za-z0-9])")
 
 
 def todo_pairs_for(cwd):
-    """(id, url) per in-progress tracker line -- todo_for plus the URL it discards.
+    """[(id, url), …] for the worktree this agent works in.
 
-    Same file and the SAME stop rules as todo_for, deliberately: two surfaces reading one
-    mirror by different rules is how they end up disagreeing about what a lane is working on.
+    Tracking lives in Linear, which has no cheap local state to read, so `/todo` mirrors the
+    id to a gitignored per-worktree file and every status surface reads that -- the same
+    mirror the main bar uses, so the surfaces cannot disagree.
+
+    THE FILE IS AGENT DILIGENCE, SO THE READER IS FORGIVING ABOUT WHERE THE POINTER SITS.
+    It used to read line 1 and stop at the first line that did not look like an id, which is
+    correct for a tidy file and silently blank for a real one: two live lanes at once had a
+    shutdown checkpoint above the pointer, so the column showed nothing at all. Now anything
+    before the first ticket-shaped line is a header and is skipped; the run of ticket lines
+    that follows is the answer; the first non-ticket line after it is resume prose and ends
+    the list, so an id mentioned in a paragraph never becomes a second ticket.
 
     The URL is validated, not just taken. Field 2 is a URL *by convention* — `/todo` writes
     `<ID>\\t<url>` — but the same file is where agents leave themselves resume prose, and a
@@ -100,20 +94,59 @@ def todo_pairs_for(cwd):
     caller that cannot tell a real link from a broken one shows a broken one, so the scheme
     check happens here, once, rather than in each surface.
     """
-    pairs = []
+    pairs, seen = [], set()
     for ln in _walk_up(cwd, ".claude", "current-work").splitlines():
         ln = ln.strip()
-        if not ln or ln.startswith("#"):
-            continue
         parts = ln.split("\t")
         first = parts[0].strip()
-        if not (first and " " not in first and len(first) <= 24):
-            break
+        if not _TICKET.match(first):
+            # THE POINTER BLOCK IS CONTIGUOUS, and that is what bounds the search. Skipping
+            # comments everywhere would not do: one lane's file carries 370 commented
+            # checkpoint lines and then repeats its pointer, so a scan that treated `#` as
+            # invisible read the same ticket twice. Above the first ticket anything goes;
+            # from the first ticket on, the first line that is not one — blank, comment or
+            # prose — is the end of the list.
+            if pairs:
+                break
+            continue
         url = parts[1].strip() if len(parts) > 1 else ""
         if not url.startswith(("http://", "https://")):
             url = ""
-        pairs.append((first, url))
+        if first not in seen:
+            seen.add(first)
+            pairs.append((first, url))
     return pairs
+
+
+def branch_ticket_for(cwd):
+    """The tracker id encoded in this worktree's branch name, or "".
+
+    Branch names here are machine-written (`john/dx-16-…`, `pr/srv-22-…`), which is exactly
+    what `.claude/current-work` is not.
+    """
+    m = _BRANCH_TICKET.search(branch_for(cwd) or "")
+    return m.group(1).upper() if m else ""
+
+
+def tickets_for(cwd):
+    """([(id, url), …], mismatch) — what this lane is actually on.
+
+    TWO SOURCES, AND THE MACHINE ONE WINS. `current-work` is written by hand and goes stale
+    without any signal; the branch is written by the tooling that created it. When they
+    disagree the branch's id is reported and `mismatch` is True, so the surfaces can mark the
+    row rather than quietly picking a side the reader cannot see. The branch carries no URL —
+    callers linkify a bare id from the workspace base.
+    """
+    pairs = todo_pairs_for(cwd)
+    bt = branch_ticket_for(cwd)
+    if bt and bt not in [i for i, _ in pairs]:
+        return [(bt, "")], True
+    return pairs, False
+
+
+def todo_for(cwd):
+    """The in-progress tracker id(s), space-joined. See tickets_for for which source wins."""
+    return " ".join(i for i, _ in tickets_for(cwd)[0])
 
 
 def branch_for(cwd):
@@ -146,6 +179,13 @@ def branch_for(cwd):
 # path would have every surface pay a round trip per lane per tick.
 PR_CACHE = os.path.expanduser("~/.claude/cache/fleet-prs.json")
 PR_MAX_AGE = 180
+# The READ-side ceiling, and the one the write-side max age cannot stand in for. PR_MAX_AGE
+# only says when a refresh is due; nothing said when the file stops being worth believing. So
+# a `gh` that quietly stops working -- expired auth, no network, a rate limit -- left the last
+# good snapshot on disk forever and the panel went on advertising PRs that merged days ago,
+# with no symptom anywhere. Past this, an unrefreshed cache reports nothing rather than
+# yesterday's truth: a missing PR column is obviously missing, a wrong one is not.
+PR_STALE_AFTER = 900
 
 
 def refresh_open_prs(repo_dir, max_age=PR_MAX_AGE):
@@ -198,6 +238,8 @@ def open_prs_for(cwd):
     the same conventions that make the tracker close the issue on merge.
     """
     try:
+        if time.time() - os.path.getmtime(PR_CACHE) > PR_STALE_AFTER:
+            return []
         with open(PR_CACHE) as fh:
             prs = json.load(fh)
     except (OSError, ValueError):
@@ -215,7 +257,10 @@ def open_prs_for(cwd):
         return []
 
     branch = branch_for(cwd)
-    ids = [i for i, _u in todo_pairs_for(cwd)]
+    # tickets_for, not todo_pairs_for: when the lane's file has gone stale, matching on the
+    # id it still names surfaces the PREVIOUS ticket's PRs on this lane -- the same stale
+    # bookkeeping showing up in a second column.
+    ids = [i for i, _u in tickets_for(cwd)[0]]
     out, seen = [], set()
     for pr in prs:
         head = pr.get("headRefName") or ""
@@ -357,14 +402,37 @@ def _tail(path, nbytes=TAIL):
         return ""
 
 
+# Families whose current generations carry a 1M window. NOT a guess about the future: a
+# family absent from here resolves to NO window rather than to a default, because the default
+# is what produced a 216% gauge -- the lead was running `claude-fable-5`, which matched
+# neither `opus` nor `sonnet`, so it fell through to 200k against 357k of real occupancy.
+_WIDE_FAMILIES = ("opus", "sonnet", "fable", "mythos")
+_NARROW_FAMILIES = ("haiku",)
+
+
 def window_for(model):
-    """Context window when nothing supplied one -- the same rule agent-fanout uses:
-    an explicit [1m] marker wins, then opus/sonnet major >= 4 means 1M, else 200k."""
+    """Context window for a model name, or None when the name is not recognised.
+
+    NONE IS THE POINT. Every caller divides by this, and a wrong denominator does not
+    announce itself: 200k under a 1M model reads 216% at 357k used -- absurd, and therefore
+    caught -- but it also reads a perfectly plausible 80% at 128k. A gauge that can be
+    silently wrong is worse than one that admits it does not know, so an unknown model
+    yields no percentage at all.
+
+    Rules, in order: an explicit [1m] marker wins; a known-narrow family (haiku) is 200k
+    whatever its major version; a known-wide family is 1M from major 4 on, 200k before it.
+    """
     m = str(model or "").lower()
+    if not m:
+        return None
     if "1m" in re.findall(r"\[([^\]]*)\]", m) or m.endswith("-1m"):
         return 1_000_000
-    fam = re.search(r"(opus|sonnet)[-_]?(\d+)", m)
-    return 1_000_000 if (fam and int(fam.group(2)) >= 4) else 200_000
+    if any(f in m for f in _NARROW_FAMILIES):
+        return 200_000
+    fam = re.search(r"(%s)[-_]?(\d+)" % "|".join(_WIDE_FAMILIES), m)
+    if fam:
+        return 1_000_000 if int(fam.group(2)) >= 4 else 200_000
+    return None
 
 
 def context_for(cwd, path=None):

@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
     ASK, ask_kind, clip, context_for, fmt_secs, needs_input, needs_input_items, open_prs_for,
-    status_line, todo_for, todo_pairs_for,
+    status_line, tickets_for,
 )
 
 
@@ -151,6 +151,9 @@ def rows():
             continue
 
         used, win = context_for(path, tpath or None)
+        # One resolution, two fields: the branch wins over a stale `.claude/current-work`, and
+        # the fact that they disagreed travels with the answer so a surface can mark the row.
+        pairs, ticket_mismatch = tickets_for(path)
         yield {
             "name": name,
             "path": path,
@@ -164,11 +167,15 @@ def rows():
             # Dividing by the full window instead read 57% where the agent's own status line
             # said 70%, and a number that disagrees with the one beside it is worse than no
             # number: you cannot tell which lied.
+            # None when the model is unrecognised, and deliberately NOT clamped: consumers get
+            # the number that was actually computed, and each renderer flags an out-of-range
+            # one. A clamp here would erase the evidence that the denominator is wrong.
             "context_pct": round(100 * used / (win * 0.8)) if used and win else None,
-            "issue": todo_for(path),
+            "issue": " ".join(i for i, _u in pairs),
             # Kept alongside "issue" rather than replacing it: JSON consumers want the bare
             # ids, the terminal wants them clickable, and one field cannot be both.
-            "issue_links": todo_pairs_for(path),
+            "issue_links": pairs,
+            "ticket_mismatch": ticket_mismatch,
             # [(number, url, is_draft), …] — a LIST like the tracker ids, because a lane can
             # have more than one PR in flight. The only fact here that lives off this machine,
             # so it comes from a cache a long-running caller refreshes — never a fetch on the
@@ -241,7 +248,11 @@ def main():
         # cannot tell where one agent ends and the next begins. Leading rather than trailing,
         # so the pane never ends on empty space.
         sys.stdout.write("\n")
-        pct = "%d%%" % r["context_pct"] if r["context_pct"] is not None else "-"
+        # ">100%" rather than the number: see the same clamp in the TUI. A gauge that prints
+        # 216% will one day print a believable 80% that is just as wrong.
+        pct = ("-" if r["context_pct"] is None
+               else ">100%" if r["context_pct"] > 100
+               else "%d%%" % r["context_pct"])
         # A lane that is down has no live context or uptime; showing the last known values
         # would read as current.
         if r["state"] == "down":
@@ -259,8 +270,11 @@ def main():
             pad(up, 7, right=True)
         if not sub:
             links = r.get("issue_links") or []
-            line += "  ▸ " + (" ".join(osc8(i, u) for i, u in links) if links
-                              else (r["issue"] or "—"))
+            # ≠: the branch and `.claude/current-work` disagree, and this is the branch's
+            # answer. Same marker, same meaning, as the TUI's.
+            line += "  ▸ " + ("≠" if r.get("ticket_mismatch") else "") + \
+                (" ".join(osc8(i, u) for i, u in links) if links
+                 else (r["issue"] or "—"))
             # Its own column, beside the tickets: together they answer one question — what is
             # this lane on, and has the work left the lane yet. A lane with an open PR is
             # waiting on review rather than working, which the ticket alone cannot say.

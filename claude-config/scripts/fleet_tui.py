@@ -633,8 +633,18 @@ class Lane(ListItem):
         icon = LANE_ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
         icolor = "b yellow" if r.get("raw_asks") else STATE_STYLE.get(state, "white")
         pct = r.get("context_pct")
-        pcs = "—" if pct is None or state == "down" else "%d%%" % pct
-        pcolor = "red" if (pct or 0) >= 90 else "yellow" if (pct or 0) >= 80 else "dim"
+        # OVER 100% IS AN ADMISSION, NOT A NUMBER. A gauge read 216% for a lane on a 1M-token
+        # model because the denominator defaulted to 200k. That denominator is fixed, but the
+        # visible absurdity was luck: the same class of error reads a believable 80% at half
+        # the occupancy. Anything out of range is rendered as out of range, so the next wrong
+        # denominator is caught by the panel rather than by a reader who happened to look.
+        if pct is None or state == "down":
+            pcs, pcolor = "—", "dim"
+        elif pct > 100:
+            pcs, pcolor = ">100%", "b red"
+        else:
+            pcs = "%d%%" % pct
+            pcolor = "red" if pct >= 90 else "yellow" if pct >= 80 else "dim"
         up = "—" if state == "down" else (r.get("uptime") or "—")
         # The recorded URL wins over the learned base — it is what the tracker actually
         # returned, slug and all. linkify() is the fallback for ids that have none.
@@ -642,6 +652,12 @@ class Lane(ListItem):
         ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
                        else linkify(i, self.ctx)
                        for i, u in links) or linkify(escape(r.get("issue") or "—"), self.ctx)
+        # ≠ MEANS "THE BRANCH AND THE FILE DISAGREE, AND THIS IS THE BRANCH'S ANSWER". The id
+        # shown is machine truth either way; the marker is there because the other source has
+        # gone stale and someone should fix it — silently preferring the branch would hide the
+        # one fact the reader can act on.
+        if r.get("ticket_mismatch"):
+            ids = "[b yellow]≠[/]" + ids
         return (
             f"[{icolor}]{icon}[/] "
             f"[b]{escape(r.get('label') or ''):<4}[/]"
