@@ -89,6 +89,7 @@ reintroduce it):
 **Fallbacks, in order:** no engine running, or `send_diff` unavailable (older Monocle) → chat
 output, with one line saying why. Chat is always correct when in doubt — the diff view is a
 comfort, not a gate.
+
 ## Variants
 
 - **No before-state** (a new capability, not a fix): a single block, plus one line on what is
