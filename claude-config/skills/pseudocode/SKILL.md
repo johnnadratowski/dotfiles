@@ -66,37 +66,29 @@ Rules that make the comparison do the work:
 ## Delivery — contrasts go to Monocle, single blocks stay here
 
 **When the output contrasts two states** — before/after, or the two-options variant — **send
-it to Monocle as a real file diff** so the user reads it side-by-side. **A single block with
-no counterpart is chat output**; a diff viewer adds nothing to an example that contrasts with
-nothing, so print it and stop.
+it through Monocle's `send_diff` tool** so the user reads it side-by-side. **A single block
+with no counterpart is chat output**; a diff viewer adds nothing to an example that contrasts
+with nothing, so print it and stop.
 
-Monocle renders *file diffs*, not documents — a markdown artifact full of diff markers shows
-raw symbols. So the contrast must be staged as an actual changed file in the repo:
+`send_diff` takes the contents directly — nothing on disk is read, no git command runs, so it
+is safe with a dirty tree, under an in-flight reviewer, and beside a staged review, none of
+which was true of the commit/reset workaround it replaced (removed 2026-08-10; do not
+reintroduce it):
 
-1. Scratch path: `.claude/pseudocode/<topic>.pseudo` (the directory is gitignored-adjacent
-   scratch; keep it out of real commits' way).
-2. Write the **before** block to the file and commit it locally — this commit exists only to
-   give the diff a left-hand side, and step 6 removes it.
-3. Overwrite the file with the **after** block, uncommitted. The working-tree change against
-   the scratch commit *is* the side-by-side.
-4. For the two-options variant: one file per option (`<topic>-reject.pseudo`,
-   `<topic>-proceed.pseudo`), each committed with the shared before and overwritten with its
-   option, so every option renders as its own before/after diff.
-5. `set_review_name` to `pseudocode: <topic>` and tell the user it is staged.
-6. **After the user has looked: revert the scratch** — restore the file, then drop the scratch
-   commit (`git reset` of the one top commit, verifying first that nothing else landed on the
-   branch meanwhile). The lane branch must end byte-identical to how it started.
+1. `set_repo` first if this session has not already bound its lane — the standing Monocle
+   rule, unchanged.
+2. One call: `send_diff({ name: "pseudocode: <topic>", pairs: [...] })`. One pair for a
+   before/after; for the options variant, one pair per option sharing the same `before`, so
+   each option renders as its own switchable diff. `label` names the pane (it need not be a
+   real file), `lang` is an optional highlight hint, and an empty `before` renders as
+   all-new — which is the delivery for the no-before-state variant too, when the user asks to
+   see it rendered.
+3. Tell the user it is up, under what name. Re-sending the same name/label updates the
+   comparison in place, so an amended illustration replaces itself rather than stacking.
 
-**Two standing hazards, both non-negotiable:**
-
-- **`set_review_name` silently replaces the repo's open review.** If a real review is staged
-  or awaiting a verdict — check `review_status` first — do NOT send pseudocode; print it in
-  chat and say why. A plan review clobbered by an illustration is a real loss for a cosmetic
-  gain.
-- **Never do the commit/reset dance with unrelated uncommitted work in the tree**, and never
-  in a lane that is mid-review-round — the tree must stay frozen under an in-flight reviewer.
-  When in doubt, chat output is always correct.
-
+**Fallbacks, in order:** no engine running, or `send_diff` unavailable (older Monocle) → chat
+output, with one line saying why. Chat is always correct when in doubt — the diff view is a
+comfort, not a gate.
 ## Variants
 
 - **No before-state** (a new capability, not a fix): a single block, plus one line on what is
