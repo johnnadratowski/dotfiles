@@ -15,8 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, ask_kind, clip, context_for, fmt_secs, needs_input, needs_input_items, open_prs_for,
-    status_line, tickets_for,
+    ASK, ask_kind, clip, context_for, fmt_age, fmt_secs, needs_input, needs_input_items,
+    open_prs_for, status_age, status_line, tickets_for,
 )
 
 
@@ -147,7 +147,7 @@ def rows():
         if kind == "subagent":
             yield {"name": name, "path": path, "state": state, "uptime": fmt_uptime(up),
                    "kind": kind, "label": label, "tokens": None, "context_pct": None,
-                   "issue": "", "needs_input": "", "status": ""}
+                   "issue": "", "needs_input": "", "status": "", "status_age": None}
             continue
 
         used, win = context_for(path, tpath or None)
@@ -188,6 +188,11 @@ def rows():
             # Lead-written, not scraped. See status_line() for why the transcript could not
             # be the source: it reports the last thing an agent SAID, not what is true now.
             "status": status_line(path),
+            # …and how old that "now" is. Nothing refreshes the status file, so a line the
+            # lead stopped maintaining goes on reading as current forever — the age is what
+            # lets every surface say so instead. Seconds, unformatted: JSON consumers want
+            # the number, and each renderer decides its own threshold wording.
+            "status_age": status_age(path),
         }
 
 
@@ -291,7 +296,11 @@ def main():
         # rather than a next step. (This order is the user's; the reverse was tried and put the
         # question above the thing it was about.)
         if r["status"]:
-            out = wrap(r["status"], 6)
+            # The age rides WITH the line rather than replacing it, and only once the line is
+            # old enough to be lying. A four-day-old "PR #130 open; awaiting your merge" is
+            # indistinguishable from today's until something says how old it is.
+            age = fmt_age(r.get("status_age"))
+            out = wrap(r["status"] + (" (%s old)" % age if age else ""), 6)
             if out:
                 sys.stdout.write(out + "\n")
         # One typed glyph per ask. The lane's label, name and ticket are already on the row

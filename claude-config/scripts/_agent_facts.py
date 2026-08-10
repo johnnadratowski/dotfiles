@@ -41,10 +41,14 @@ def as_int(x):
         return None
 
 
-def _walk_up(cwd, *rel):
-    """First readable non-empty <ancestor>/<rel...>, walking up from cwd.
+def _find_up(cwd, *rel):
+    """Path of the first readable non-empty <ancestor>/<rel...>, walking up from cwd.
 
     Walked rather than resolved with git: no subprocess, and these run per row per tick.
+
+    Split out from _walk_up because a file's CONTENT is not the only fact worth having about
+    it — when it was last written is the other one, and a reader handed only the text cannot
+    tell a line written a minute ago from the same line written last week.
     """
     p = cwd if isinstance(cwd, str) and cwd else None
     for _ in range(24):
@@ -53,8 +57,7 @@ def _walk_up(cwd, *rel):
         f = os.path.join(p, *rel)
         try:
             if os.path.getsize(f) > 0:
-                with open(f) as fh:
-                    return fh.read()
+                return f
         except OSError:
             pass
         parent = os.path.dirname(p)
@@ -62,6 +65,18 @@ def _walk_up(cwd, *rel):
             break
         p = parent
     return ""
+
+
+def _walk_up(cwd, *rel):
+    """Contents of the first readable non-empty <ancestor>/<rel...>, walking up from cwd."""
+    f = _find_up(cwd, *rel)
+    if not f:
+        return ""
+    try:
+        with open(f) as fh:
+            return fh.read()
+    except OSError:
+        return ""
 
 
 # A tracker id, and nothing else. Recognising the SHAPE rather than "a short token with no
@@ -293,6 +308,53 @@ def status_line(cwd):
         if ln and not ln.startswith("#"):
             return clip(ln)
     return ""
+
+
+# WHEN A STATUS STOPS SPEAKING FOR THE PRESENT. The status file has no refresher: a human
+# writes it and nothing ever expires it, so the failure mode is silent and total — the panel
+# went on advertising four-day-old lines ("PR #130 open; awaiting your merge") as the live
+# state of the fleet, long after #130 merged. Every fact around it was correct and moving,
+# which is exactly what made the frozen one invisible.
+#
+# NOT the PR cache's treatment (blank it past PR_STALE_AFTER). That cache refreshes itself
+# every three minutes, so silence there means broken. Here silence is normal — a lane can
+# legitimately be doing the same thing all afternoon — and blanking would delete the only
+# description of the lane the panel has. So the line STAYS and wears its age instead: the
+# reader gets both the claim and how old the claim is, and decides.
+#
+# Two hours: longer than any turn, shorter than a working session. Past it, "now" is a claim
+# the file can no longer back.
+STATUS_STALE_AFTER = 2 * 3600
+
+
+def status_age(cwd):
+    """Seconds since this lane's status line was last written, or None if there is none.
+
+    mtime of the FILE, not of anything in it: the line carries no timestamp, and asking the
+    filesystem costs one stat on a path _find_up already resolved.
+    """
+    f = _find_up(cwd, ".claude", "status")
+    if not f:
+        return None
+    try:
+        return max(0, int(time.time() - os.path.getmtime(f)))
+    except OSError:
+        return None
+
+
+def fmt_age(secs):
+    """A staleness suffix a reader takes in without parsing — "3h", "4d", "" when fresh.
+
+    Deliberately coarser than fmt_secs, which serves uptime and owes minutes. Nobody acts on
+    the difference between a status written 102h07m ago and one written 103h ago; they act on
+    "4d". Returns "" below the threshold so the common case — a status that means what it
+    says — carries no decoration at all.
+    """
+    if secs is None or secs < STATUS_STALE_AFTER:
+        return ""
+    if secs < 86400:
+        return "%dh" % (secs // 3600)
+    return "%dd" % (secs // 86400)
 
 
 def needs_input(cwd):

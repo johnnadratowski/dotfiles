@@ -9,6 +9,8 @@ reads or writes the live fleet.
 
 What it locks in — each is a way this view could lie or lose work:
   - a lane renders its status and its asks, and the asks are TYPED by their kind token
+  - a status the lead stopped maintaining wears its age instead of passing for the present,
+    and the age is re-read from the FILE on every tick rather than fixed at startup
   - `x` removes the ask from the FILE, not merely from the screen
   - `u` puts it back — an accidental keypress on the user's to-do list must be recoverable
   - an unchanged snapshot does not rebuild the lists, so the cursor survives a refresh
@@ -34,6 +36,9 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fleet_tui  # noqa: E402
+# The threshold by NAME, not a literal: a test that hard-codes 7200 goes on passing after
+# someone retunes the constant, while asserting about a boundary that no longer exists.
+from _agent_facts import STATUS_STALE_AFTER  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
 PASS = FAIL = 0
@@ -83,6 +88,10 @@ async def main():
         # leaves it alone and so does the parser. `[b]` is the real case: unescaped it turns
         # the rest of the status bold and vanishes itself.
         "status": "SRV-11 done [b]2 GREEN[/b], uncommitted",
+        # How old that status is, in seconds. Volatile in the truest sense — it grows on
+        # every tick whether or not anyone rewrites the line, which is the whole point: a
+        # status nobody maintains has to become visibly older, not silently stay "now".
+        "status_age": 60,
         # A PR list is volatile too: it disappears the moment the PR merges. It rides the
         # head line rather than a shape change, so it has to survive the no-rebuild path.
         "prs": [(133, "https://gh/x/pull/133", False)],
@@ -100,6 +109,7 @@ async def main():
             "issue": "DX-6",
             "issue_links": [("DX-6", "https://example.invalid/DX-6")],
             "status": volatile["status"],
+            "status_age": volatile["status_age"],
             "open_prs": volatile["prs"],
             "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
         }
@@ -195,6 +205,41 @@ async def main():
         ok("…but the new status is shown", "now something else entirely" in screen_text(app))
         ok("…and the lane's open PR is on the row while it is open",
            "#133" in screen_text(app), screen_text(app))
+        ok("a status written a minute ago wears no age",
+           "old)" not in screen_text(app), screen_text(app))
+
+        # THE FROZEN-STATUS REGRESSION, and it is the same bug as the stale PR above wearing a
+        # different costume. Nothing refreshes the status file, so a lane the lead stopped
+        # updating advertised a four-day-old line as the live state of the fleet — and because
+        # linkify makes every `#N` in it clickable, "PR #130 open; awaiting your merge" looked
+        # exactly like PR data fetched a second ago, beside a correct uptime and context%.
+        # Age is line-confined like uptime, so it must land WITHOUT a rebuild.
+        volatile["status"] = "FEAT-6 PR #130 open; awaiting your merge"
+        volatile["status_age"] = 4 * 86400
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a four-day-old status is marked as old", "(4d old)" in screen_text(app),
+           screen_text(app))
+        ok("…and says so without a rebuild", lanes.children[0] is before)
+        ok("…while the line itself is kept, not blanked",
+           "awaiting your merge" in screen_text(app), screen_text(app))
+        # Blanking is what the PR cache does past PR_STALE_AFTER; it refreshes itself, so
+        # silence there means broken. Here silence is normal, and blanking would delete the
+        # only description of the lane the panel has.
+        ok("the age is a fact ABOUT the line, dim and outside the lead's italic",
+           "[/] [dim](4d old)[/]" in screen_text(app), screen_text(app))
+
+        # Crossing the threshold is the only thing that decorates. Just under it, nothing.
+        volatile["status_age"] = STATUS_STALE_AFTER - 1
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a status just under the threshold is undecorated",
+           "old)" not in screen_text(app), screen_text(app))
+        ok("…and an absent age is not an old one either",
+           fleet_tui.fmt_age(None) == "")
+        volatile["status_age"] = 60
 
         # THE STALE-PR REGRESSION. The PR merges, so the snapshot stops carrying it. Nothing
         # about the row's SHAPE changed, so this goes down the no-rebuild path — which is

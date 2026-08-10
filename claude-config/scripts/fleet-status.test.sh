@@ -146,6 +146,30 @@ has "an over-long status is clipped"          "…" "$(row bravo)"
 eq  "…to exactly 60 cells"  "60" \
     "$(row bravo | sed -n '2p' | python3 -c 'import sys;print(len(sys.stdin.readline().strip()))')"
 
+# ── a status that stopped being maintained says so ───────────────────────────────────────
+# THE REGRESSION. Nothing refreshes this file — a human writes it — so a lane the lead stopped
+# updating went on advertising its last line as the live state of the fleet, indefinitely and
+# with no symptom: every number beside it (uptime, context%, PRs) kept moving correctly, which
+# is exactly what made the frozen one invisible. Worse, ids inside it stay clickable, so a
+# four-day-old "PR #130 open; awaiting your merge" rendered like PR data fetched a second ago.
+# The line is kept — it is the only description of the lane there is — and wears its age.
+status chas "FEAT-6 PR #130 open; awaiting your merge"
+has   "a fresh status carries no age suffix" "awaiting your merge" "$(row chas)"
+hasnt "…and nothing about being old"         "old"                 "$(row chas)"
+touch -t "$(python3 -c '
+import time
+print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 4*86400)))')" \
+      "$LANES/chas/.claude/status"
+has "a four-day-old status is marked as old"     "(4d old)" "$(row chas)"
+has "…and the line itself is kept, not blanked"  "PR #130"  "$(row chas)"
+# One hour is inside a working session; the line still means "now" and must stay undecorated.
+touch -t "$(python3 -c '
+import time
+print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 3600)))')" \
+      "$LANES/chas/.claude/status"
+hasnt "an hour-old status is NOT marked" "old" "$(row chas)"
+rm -f "$LANES/chas/.claude/status"
+
 # ── needs-input renders under the status ─────────────────────────────────────────────────
 printf 'park FEAT-6 or rerun once #111 lands?\n' > "$LANES/alpha/.claude/needs-input"
 has "needs-input is shown"                   "park FEAT-6"   "$(row alpha)"

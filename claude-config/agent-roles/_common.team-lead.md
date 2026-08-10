@@ -246,6 +246,12 @@ about, and a lane whose last turn was a one-liner advertised the turn before tha
   complete status. Over 60 is clipped with `…` at read, so a verbose line loses its own tail.
 - **`📌` still leads your CHAT updates.** It was removed from the panel only — a glyph on every
   single row is decoration, and the one glyph the panel spends is `⚠️`, meaning *you*.
+- **A line you stop maintaining is marked, not trusted.** Nothing refreshes this file, so past
+  **two hours** the panel renders the age beside it — `… awaiting your merge (4d old)`. Added
+  2026-08-10, after every lane's status sat frozen for four days while the numbers around it
+  kept moving: the panel advertised two already-merged PRs as open, and because any `#N` in a
+  status is a live hyperlink, the frozen text was indistinguishable from fetched PR data. The
+  marker is a smoke alarm, not a fix — **an aged status on your panel is your work item.**
 
 
 

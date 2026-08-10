@@ -39,7 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_KINDS, ask_kind, branch_for, clip,  # noqa: E402
-                          refresh_open_prs)
+                          fmt_age, refresh_open_prs)
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
@@ -678,9 +678,23 @@ class Lane(ListItem):
                          classes="lane-ask")
 
     def status_markup(self):
+        """The lane's status, WEARING ITS AGE once the line is too old to mean "now".
+
+        This is the one line on the row that nothing refreshes — a human writes it — so it is
+        the one line that can freeze while every number beside it keeps moving. That is what
+        made it dangerous rather than merely stale: linkify turns any `#N` in it into a live
+        hyperlink, so a four-day-old "PR #130 open; awaiting your merge" rendered exactly like
+        PR data fetched a second ago, beside a correct uptime and a correct context%.
+
+        The suffix is dim and sits OUTSIDE the italic: it is a fact about the line, not part
+        of the claim, and it must not read as something the lead wrote.
+        """
         status = self.row.get("status") or ""
-        return (f"[i]{linkify(escape(status), self.ctx)}[/]" if status
-                else "[dim i]— no status —[/]")
+        if not status:
+            return "[dim i]— no status —[/]"
+        age = fmt_age(self.row.get("status_age"))
+        return (f"[i]{linkify(escape(status), self.ctx)}[/]"
+                + (f" [dim]({escape(age)} old)[/]" if age else ""))
 
     def refresh_volatile(self, row):
         """Update everything that is CONFINED TO A LINE, in place — never a rebuild.
