@@ -16,6 +16,13 @@ What it locks in — each is a way this view could lie or lose work:
     arrives or leaves — without ever pushing the 4ME panel off the screen
   - `=` cycles which of the two lists is shown WHOLE, and says what it actually managed to
     fit — the user refers to 4ME rows by number, so those rows are numbered too
+  - enter on an agent row opens the detail overlay, and enter's OLD job still has a key
+  - the overlay's git numbers are the right way round, and say "no ref" rather than 0/0
+  - a config value shows which FILE it came from, and an edit lands only in the local one,
+    preserving every unrelated line — including the comment that explained the value
+  - a value outside the allowed vocabulary is refused before it is written, because these
+    strings are later typed into a live agent's pane
+  - the overlay tells the user whether an edit reached the running agent or waits for a spawn
 """
 
 import asyncio
@@ -437,6 +444,11 @@ async def main():
         ok("…and it names every glyph on screen",
            all(g in str(legend.content) for g in
                ("🔍", "📋", "💬", "🏷️", "🚀", "✅", "●", "◔", "○")), str(legend.content))
+        # The footer structurally CANNOT advertise enter — the focused ListView's own hidden
+        # binding is what it renders — so the legend is the only place that key exists.
+        ok("…and the keys the footer cannot show",
+           "enter" in str(legend.content) and "editable" in str(legend.content),
+           str(legend.content))
         await pilot.press("question_mark")
         await pilot.pause()
         ok("? again closes it — pressing twice does not leave two",
@@ -474,6 +486,223 @@ async def main():
         await pilot.pause()
         ok("x on the fleet panel clears that item",
            "merge #124" not in open(fleet_path).read())
+
+        # ── enter opens the agent detail overlay ─────────────────────────────────────────
+        # The lane's two config files, layered the way _config.sh layers them. The fixtures
+        # are chosen so every failure mode is distinguishable: a value set in BOTH files (the
+        # local one must win and say so), one set only in the committed file, one that exists
+        # there ONLY AS A COMMENT (which is not a value), and one nobody has ever set.
+        cfg_dir = os.path.join(lane, ".claude")
+        committed_cfg = os.path.join(cfg_dir, "workflow.config")
+        local_cfg = os.path.join(cfg_dir, "workflow.config.local")
+        with open(committed_cfg, "w") as f:
+            f.write("# project defaults\n"
+                    'WORKFLOW_LANE_EFFORT="high"\n'
+                    'WORKFLOW_REVIEW_MODEL_B="sonnet"   # pinned for model diversity\n'
+                    '#   WORKFLOW_TEST_MODEL=""\n'
+                    'WORKFLOW_PR_TARGET_BRANCH="master"\n')
+        with open(local_cfg, "w") as f:
+            f.write("# per-machine\n"
+                    'WORKFLOW_TODO_NS="jn"        # unrelated, must survive every edit\n'
+                    'WORKFLOW_LANE_EFFORT="medium"\n')
+
+        # The live session is STUBBED. Reading it for real means capturing a tmux pane, which
+        # on this machine would reach into the actual running fleet — a test that touches the
+        # thing it is meant to be independent of. The parse it would have fed is covered
+        # below, against fixture bytes.
+        live = {"on": True}
+        fleet_tui.live_tuning = lambda name: (
+            {"pane": "%42", "model": "Opus", "effort": "xhigh"} if live["on"] else None)
+        applied = []
+        fleet_tui.apply_now = lambda sh, name: (
+            applied.append((sh, name)) or "  %-12s PASS     effort=xhigh✓" % name)
+
+        async def open_overlay():
+            lanes.focus()
+            lanes.index = 0
+            await pilot.pause()
+            await pilot.press("enter")
+            for _ in range(6):
+                await pilot.pause()
+
+        def detail_text():
+            return "\n".join(str(w.content)
+                             for w in app.query_one("#detail").query(Static))
+
+        def cfg_items():
+            return [c.entry for c in app.query_one("#detail-cfg", ListView).children]
+
+        await open_overlay()
+        ok("enter on an agent row opens the detail overlay",
+           app.detail is not None and app.query_one("#detail").has_class("-show"))
+        text = detail_text()
+        ok("…which names the agent and its lane path", "feature-1" in text and lane in text)
+        ok("…and shows what the session is running right now",
+           "model=[b]Opus[/]" in text and "effort=[b]xhigh[/]" in text, text)
+
+        # ── git state ────────────────────────────────────────────────────────────────────
+        ok("…the branch line is there", "branch " in text, text)
+        ok("…with a comparison against the local base", "vs [b]master[/]" in text, text)
+        ok("…and against origin, LABELLED as unfetched rather than silently stale",
+           "vs [b]origin/master[/]" in text and "not fetched" in text, text)
+
+        # ── config, with the file each value came from ────────────────────────────────────
+        keys = [e["key"] for e in cfg_items()]
+        ok("the per-lane override is listed first, above the fleet-wide fallback it beats",
+           keys[:2] == ["WORKFLOW_LANE_EFFORT_1", "WORKFLOW_LANE_MODEL_1"], keys[:2])
+        by_key = {e["key"]: e for e in cfg_items()}
+        ok("a value set in the LOCAL file wins, and says it came from there",
+           (by_key["WORKFLOW_LANE_EFFORT"]["value"],
+            by_key["WORKFLOW_LANE_EFFORT"]["origin"]) == ("medium", "local"),
+           by_key["WORKFLOW_LANE_EFFORT"])
+        ok("…a value only in the committed file is shown as committed",
+           (by_key["WORKFLOW_REVIEW_MODEL_B"]["value"],
+            by_key["WORKFLOW_REVIEW_MODEL_B"]["origin"]) == ("sonnet", "committed"),
+           by_key["WORKFLOW_REVIEW_MODEL_B"])
+        ok("…a COMMENTED-OUT assignment is not a value — the shell never sets it",
+           by_key["WORKFLOW_TEST_MODEL"]["origin"] == "unset",
+           by_key["WORKFLOW_TEST_MODEL"])
+        ok("a lane knob is marked as reaching the LIVE agent…",
+           by_key["WORKFLOW_LANE_EFFORT"]["scope"] == "live")
+        ok("…and a subagent knob as taking effect at the NEXT SPAWN",
+           by_key["WORKFLOW_TEST_MODEL"]["scope"] == "spawn")
+        ok("the two scopes are visible on the rows themselves, not only in the data",
+           "live agent" in text and "next spawn" in text, text)
+
+        # ── the overlay swallows the keys that act on what it is covering ─────────────────
+        # `x` deletes from the lead's to-do file, and `=`/`+` resize panels the overlay hides.
+        # Acting at a distance on something the reader cannot see is the worst case here.
+        before_asks = open(ask_path).read()
+        before_h = panel_rows()
+        await pilot.press("x")
+        await pilot.press("equals_sign")
+        await pilot.press("plus")
+        await pilot.pause()
+        ok("x while the overlay is open does not delete an ask behind it",
+           open(ask_path).read() == before_asks)
+        ok("…and = / + do not resize the panels it is covering",
+           panel_rows() == before_h and app.nudge == 0, panel_rows())
+
+        # ── editing: rejected before it is ever written ───────────────────────────────────
+        cfg_list = app.query_one("#detail-cfg", ListView)
+        cfg_list.index = keys.index("WORKFLOW_LANE_EFFORT")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        inp = app.query_one("#detail-input", fleet_tui.Input)
+        ok("enter on a knob opens the editor, pre-filled with its current value",
+           inp.has_class("-show") and inp.value == "medium", inp.value)
+        inp.value = "rm -rf /"
+        await pilot.press("enter")
+        await pilot.pause()
+        ok("a value outside the allowed vocabulary is REFUSED — these strings get typed into "
+           "a live agent's pane", "is not a valid effort" in detail_text(), detail_text())
+        ok("…and nothing was written", "rm -rf" not in open(local_cfg).read())
+        ok("…while the field stays open so the typo can be fixed", inp.has_class("-show"))
+
+        inp.value = "xhigh"
+        await pilot.press("enter")
+        for _ in range(6):
+            await pilot.pause()
+        on_disk = open(local_cfg).read()
+        ok("a valid value is written to the LOCAL config",
+           'WORKFLOW_LANE_EFFORT="xhigh"' in on_disk, on_disk)
+        ok("…never to the committed one",
+           'WORKFLOW_LANE_EFFORT="high"' in open(committed_cfg).read())
+        ok("…and the unrelated lines and comments survive",
+           'WORKFLOW_TODO_NS="jn"' in on_disk and "# per-machine" in on_disk
+           and "must survive every edit" in on_disk, on_disk)
+        ok("…the overlay re-reads the file rather than trusting the write",
+           {e["key"]: e for e in cfg_items()}["WORKFLOW_LANE_EFFORT"]["value"] == "xhigh")
+        ok("a LIVE knob says the running agent has not changed yet",
+           "has NOT changed" in detail_text() and "press [b]a[/]" in detail_text(),
+           detail_text())
+
+        # ── the other half of the split: a subagent knob needs no apply ───────────────────
+        cfg_list.index = keys.index("WORKFLOW_TEST_MODEL")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        inp.value = "haiku"
+        await pilot.press("enter")
+        for _ in range(6):
+            await pilot.pause()
+        ok("a knob absent from the local file is APPENDED, not silently dropped",
+           'WORKFLOW_TEST_MODEL="haiku"' in open(local_cfg).read(), open(local_cfg).read())
+        ok("…and a SPAWN knob says so instead of offering an apply",
+           "next spawns" in detail_text() or "next spawn" in detail_text(), detail_text())
+        ok("…without claiming the running agent is stale", "press [b]a[/]" not in detail_text())
+
+        # ── empty means inherit, and must be enterable ────────────────────────────────────
+        await pilot.press("enter")
+        await pilot.pause()
+        inp.value = ""
+        await pilot.press("enter")
+        for _ in range(6):
+            await pilot.pause()
+        ok("an EMPTY value is accepted and clears the override",
+           'WORKFLOW_TEST_MODEL=""' in open(local_cfg).read(), open(local_cfg).read())
+
+        # ── apply-now, for the live knobs only ───────────────────────────────────────────
+        await pilot.press("a")
+        for _ in range(6):
+            await pilot.pause()
+        ok("a runs agent-tune apply for THIS agent", applied == [
+            (os.path.join(lane, ".claude", "scripts", "agent-tune.sh"), "feature-1")], applied)
+        ok("…and surfaces its own PASS/FAIL line rather than a verdict of our own",
+           "agent-tune:" in detail_text() and "PASS" in detail_text(), detail_text())
+
+        # ── esc closes; enter elsewhere still means what it meant ─────────────────────────
+        await pilot.press("escape")
+        await pilot.pause()
+        ok("esc closes the overlay", app.detail is None
+           and not app.query_one("#detail").has_class("-show"))
+        ok("…and hands focus back to the fleet list", lanes.has_focus)
+
+        # A lane with no live agent still has git and config — the overlay must work from the
+        # roster row alone, and simply omit the line it cannot honestly fill.
+        live["on"] = False
+        await open_overlay()
+        ok("a lane with no live session still opens", app.detail is not None)
+        ok("…showing config and git, with no invented model/effort line",
+           "no live session" in detail_text() and "vs [b]master[/]" in detail_text(),
+           detail_text())
+        await pilot.press("a")
+        await pilot.pause()
+        ok("…and apply-now refuses rather than tuning nothing",
+           "nothing to apply to" in detail_text(), detail_text())
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # The key enter USED to be. It still opens the ticket from the 4ME panel, and `o`
+        # opens it from a lane row — the meaning moved, it was not deleted.
+        opened = []
+        real_popen, fleet_tui.subprocess.Popen = fleet_tui.subprocess.Popen, \
+            lambda argv, *a, **k: opened.append(argv)
+        try:
+            lanes.focus()
+            lanes.index = 0
+            await pilot.pause()
+            await pilot.press("o")
+            await pilot.pause()
+            ok("o opens the lane's ticket — enter's old job, not lost",
+               opened == [["open", "https://example.invalid/DX-6"]], opened)
+            ok("…and pressing it did NOT open the overlay", app.detail is None)
+            opened.clear()
+            with open(fleet_path, "w") as f:
+                f.write("ship: merge #124\n")
+            app.load()
+            await pilot.pause()
+            await pilot.pause()
+            fleet.focus()
+            fleet.index = 0
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            ok("enter on a 4ME row still opens the ticket rather than a detail overlay",
+               opened and app.detail is None, opened)
+        finally:
+            fleet_tui.subprocess.Popen = real_popen
 
     # ── a lane's open PR, beside its ticket ──────────────────────────────────────────────
     # Driven against Lane.pr_markup directly rather than restarting the app three times. The
@@ -523,6 +752,146 @@ async def main():
             fh.write("9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c\n")
         ok("…and returns empty on a detached HEAD rather than a fake branch name",
            _agent_facts.branch_for(wt) == "", _agent_facts.branch_for(wt))
+
+    # ── the detail overlay's own data, against real files and a real repo ────────────────
+    # The UI tests above drive the overlay; these drive the functions under it, where the
+    # numbers are actually computed and where a wrong one would be invisible on screen.
+
+    # A status line as the TUI actually pads it: U+00A0, not spaces. Every shell-native
+    # attempt at this returns empty, which a caller renders as a confident "?" — a read that
+    # never verifies anything. Locked here so a "simplification" cannot quietly reintroduce it.
+    nbsp = "Model: Opus 5  Thinking: xhigh"
+    ok("the status line parses through NBSP padding",
+       fleet_tui.parse_status_text(nbsp) == ("Opus", "xhigh"),
+       fleet_tui.parse_status_text(nbsp))
+    ok("…and a pane with no status line yields ? rather than a guess",
+       fleet_tui.parse_status_text("just some scrollback") == ("?", "?"))
+
+    ok("lane numbers match agent-tune's mapping, so the override shown is the one it reads",
+       (fleet_tui.lane_num_of("team-lead"), fleet_tui.lane_num_of("feature-3"),
+        fleet_tui.lane_num_of("rev-a")) == (0, 3, None))
+
+    # Validation: the whole safety claim of the editor. Empty must be ENTERABLE — it is how
+    # an override is cleared — while anything outside the vocabulary must be refused.
+    ok("empty is a valid value for both kinds — it means inherit",
+       fleet_tui.valid_value("effort", "") and fleet_tui.valid_value("model", ""))
+    ok("every allowed effort and model is accepted",
+       all(fleet_tui.valid_value("effort", v) for v in fleet_tui.VALID_EFFORT)
+       and all(fleet_tui.valid_value("model", v) for v in fleet_tui.VALID_MODEL))
+    ok("…and nothing else is",
+       not any(fleet_tui.valid_value("effort", v)
+               for v in ("sonnet", "LOW", "medium ", "high; rm -rf /", "$(id)"))
+       and not any(fleet_tui.valid_value("model", v) for v in ("xhigh", "opus[1m]", "gpt")))
+    try:
+        fleet_tui.write_config_value("/tmp/never-written", "WORKFLOW_LANE_MODEL",
+                                     "model", "; rm -rf /")
+        ok("a rejected value cannot be written even by calling the writer directly", False)
+    except ValueError:
+        ok("a rejected value cannot be written even by calling the writer directly",
+           not os.path.exists("/tmp/never-written"))
+
+    with tempfile.TemporaryDirectory() as td:
+        # ── the config layer ─────────────────────────────────────────────────────────────
+        cfg = os.path.join(td, "workflow.config.local")
+        with open(cfg, "w") as fh:
+            fh.write("# a header comment\n"
+                     "\n"
+                     'WORKFLOW_TODO_NS="jn"\n'
+                     'WORKFLOW_LANE_EFFORT="high"   # why it is high\n'
+                     "WORKFLOW_LANE_MODEL=sonnet\n"
+                     'export WORKFLOW_TEST_EFFORT="low"\n'
+                     '#   WORKFLOW_PLAN_MODEL="opus"\n')
+        got = fleet_tui.read_shell_config(cfg)
+        ok("quoted, bare and exported assignments all read the same",
+           (got["WORKFLOW_TODO_NS"], got["WORKFLOW_LANE_MODEL"], got["WORKFLOW_TEST_EFFORT"])
+           == ("jn", "sonnet", "low"), got)
+        ok("…an inline comment is not part of the value",
+           got["WORKFLOW_LANE_EFFORT"] == "high", repr(got.get("WORKFLOW_LANE_EFFORT")))
+        ok("…and a commented-out assignment is not a value at all",
+           "WORKFLOW_PLAN_MODEL" not in got, got)
+
+        fleet_tui.write_config_value(cfg, "WORKFLOW_LANE_EFFORT", "effort", "xhigh")
+        fleet_tui.write_config_value(cfg, "WORKFLOW_REVIEW_MODEL_A", "model", "fable")
+        body = open(cfg).read()
+        ok("a rewrite replaces the value in place", 'WORKFLOW_LANE_EFFORT="xhigh"' in body,
+           body)
+        ok("…keeping the comment that explained it — an edit must not eat the reason",
+           "# why it is high" in body, body)
+        ok("…and every unrelated line, comment and blank",
+           "# a header comment" in body and 'WORKFLOW_TODO_NS="jn"' in body
+           and '#   WORKFLOW_PLAN_MODEL="opus"' in body, body)
+        ok("a key that was not there is appended rather than lost",
+           'WORKFLOW_REVIEW_MODEL_A="fable"' in body, body)
+        ok("…exactly once", body.count("WORKFLOW_LANE_EFFORT=") == 1, body)
+
+        # A local file that does not exist yet is CREATED — a fresh clone has none, and an
+        # edit that silently no-ops there would look identical to one that worked.
+        fresh = os.path.join(td, "made", "workflow.config.local")
+        os.makedirs(os.path.dirname(fresh))
+        fleet_tui.write_config_value(fresh, "WORKFLOW_LANE_MODEL", "model", "opus")
+        ok("a missing local config is created rather than the edit being dropped",
+           fleet_tui.read_shell_config(fresh)["WORKFLOW_LANE_MODEL"] == "opus")
+
+        # ── git numbers, from a real scratch repo ─────────────────────────────────────────
+        # GIT_DIR is UNSET for every command here: this suite may run inside a hook or a
+        # worktree that exports it, and a scratch repo that silently operated on the caller's
+        # real repository is the one failure mode a git test must not have.
+        import subprocess as sp
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")}
+        repo = os.path.join(td, "repo")
+        os.makedirs(repo)
+
+        def git(*args):
+            return sp.run(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t",
+                           "-c", "commit.gpgsign=false"] + list(args),
+                          capture_output=True, text=True, env=env)
+
+        def commit(msg):
+            with open(os.path.join(repo, msg), "w") as fh:
+                fh.write(msg)
+            git("add", "-A")
+            git("commit", "-m", msg)
+
+        git("init", "-b", "master")
+        commit("a")
+        git("checkout", "-b", "work")
+        commit("b")
+        commit("c")
+        git("checkout", "master")
+        commit("d")
+        git("checkout", "work")
+        state = fleet_tui.git_state(repo, "master")
+        ok("the branch is read from git's own files", state["branch"] == "work", state)
+        ok("ahead/behind is (ahead, behind) against the local base — never the two swapped",
+           state["local"] == (2, 1), state["local"])
+        ok("a clean tree reports zero dirty files, not None", state["dirty"] == 0, state)
+        ok("with no origin/master fetched, the origin row is EMPTY rather than a fake 0/0 — "
+           "'no ref' and 'level with it' are different facts",
+           state["origin"] is None, state["origin"])
+
+        with open(os.path.join(repo, "scratch"), "w") as fh:
+            fh.write("uncommitted")
+        ok("an untracked file counts as dirt",
+           fleet_tui.git_state(repo, "master")["dirty"] == 1)
+
+        # A real origin, so the second row is exercised on a ref that exists.
+        origin = os.path.join(td, "origin.git")
+        sp.run(["git", "clone", "--bare", repo, origin], capture_output=True, env=env)
+        git("remote", "add", "origin", origin)
+        git("fetch", "-q", "origin")
+        state = fleet_tui.git_state(repo, "master")
+        ok("with the ref present, the origin row carries real numbers",
+           state["origin"] == (2, 1), state["origin"])
+
+        # A path that is not a repo at all — a lane can be a bare directory, and the overlay
+        # still has to open on it rather than throwing.
+        plain = os.path.join(td, "notarepo")
+        os.makedirs(plain)
+        ok("a non-repo path yields empties instead of an exception",
+           fleet_tui.git_state(plain) == {"base": "master", "branch": "", "dirty": None,
+                                          "local": None, "origin": None},
+           fleet_tui.git_state(plain))
 
     print("\n  %d passed, %d failed" % (PASS, FAIL))
     return 1 if FAIL else 0

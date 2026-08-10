@@ -17,9 +17,16 @@ WHAT IT DOES NOT DO: it invents no facts. Every lane field comes from `fleet-sta
 --json`, so the TUI and the table cannot disagree about who is up — and the table stays the
 fallback for anywhere textual cannot run (a hook, a CI check, a pipe).
 
-THE TWO WRITES IT PERFORMS are deletions from the lead's own ask files, because ticking an
-item off is the one interaction this view genuinely wants. Both are undoable in-session, and
-neither ever creates a file.
+WHAT IT WRITES, and nothing else. Deletions from the lead's own ask files (ticking an item
+off, undoable in-session), and the per-lane tuning knobs in a lane's GITIGNORED
+`.claude/workflow.config.local` — never the committed `workflow.config`, which belongs to the
+project rather than to this machine. Every value it can write comes from a fixed vocabulary,
+because agent-tune.sh later types those strings into a live agent's pane.
+
+ENTER ON AN AGENT ROW opens the detail overlay: that lane's branch and its distance from the
+base (local and origin, unfetched), what its session is running right now, and the config
+knobs, editable in place. The overlay is the only part of this view that shells out, and it
+does so on a worker thread — the five-second tick must never grow a subprocess.
 """
 
 import json
@@ -31,13 +38,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
-from _agent_facts import ASK, ASK_KINDS, ask_kind, clip, refresh_open_prs  # noqa: E402
+from _agent_facts import (ASK, ASK_KINDS, ask_kind, branch_for, clip,  # noqa: E402
+                          refresh_open_prs)
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
 from textual.containers import Vertical  # noqa: E402
-from textual.widgets import Footer, ListItem, ListView, Static  # noqa: E402
+from textual.widgets import Footer, Input, ListItem, ListView, Static  # noqa: E402
 from textual.worker import get_current_worker  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -145,6 +153,319 @@ def _repo_url(path):
         return ""
     m = re.match(r"(?:git@([^:]+):|https?://(?:[^@/]*@)?([^/]+)/)(.+?)(?:\.git)?$", out)
     return "https://%s/%s" % (m.group(1) or m.group(2), m.group(3)) if m else ""
+
+
+# ── the detail view's data: git, the live session, the lane's config ─────────────────────
+# Everything below is called OFF the render path, from a worker thread — a git read is tens
+# of milliseconds and a tmux capture is a round trip to another process, and the main panel
+# already refreshes on a five-second tick that must not grow either cost.
+
+VALID_EFFORT = ("low", "medium", "high", "xhigh", "max")
+VALID_MODEL = ("sonnet", "opus", "haiku", "fable")
+
+# The knobs the overlay shows and edits, in reading order. `scope` is the half the user
+# cannot infer from the name and MUST be told: a lane knob changes a session that is already
+# running (so saving the file alone changes nothing until agent-tune types it in), while a
+# subagent knob is read when that subagent is SPAWNED, so the file IS the whole story.
+CFG_SPEC = (
+    ("WORKFLOW_LANE_EFFORT", "effort", "live"),
+    ("WORKFLOW_LANE_MODEL", "model", "live"),
+    ("WORKFLOW_PLAN_EFFORT", "effort", "spawn"),
+    ("WORKFLOW_PLAN_MODEL", "model", "spawn"),
+    ("WORKFLOW_REVIEW_EFFORT_A", "effort", "spawn"),
+    ("WORKFLOW_REVIEW_MODEL_A", "model", "spawn"),
+    ("WORKFLOW_REVIEW_EFFORT_B", "effort", "spawn"),
+    ("WORKFLOW_REVIEW_MODEL_B", "model", "spawn"),
+    ("WORKFLOW_TEST_EFFORT", "effort", "spawn"),
+    ("WORKFLOW_TEST_MODEL", "model", "spawn"),
+)
+
+_ASSIGN = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+
+
+def lane_num_of(name):
+    """team-lead=0, feature-N=N, anything else None — the same mapping agent-tune.sh uses,
+    so the per-lane override the TUI shows is the one that script would actually read."""
+    if name == "team-lead":
+        return 0
+    m = re.fullmatch(r"feature-(\d+)", name or "")
+    return int(m.group(1)) if m else None
+
+
+def _split_value(rest):
+    """The value token of a shell assignment, and whatever trailed it — a comment, usually.
+
+    Returned as a PAIR so a rewrite can put the trailing comment back. The committed config
+    carries an explanation on the same line as several of these knobs, and an edit that ate
+    the reason for a setting would be a worse loss than the setting itself.
+    """
+    if rest[:1] in ('"', "'"):
+        end = rest.find(rest[0], 1)
+        return (rest[:end + 1], rest[end + 1:]) if end != -1 else (rest, "")
+    m = re.match(r"[^\s#]*", rest)
+    return m.group(0), rest[m.end():]
+
+
+def _unquote(tok):
+    return tok[1:-1] if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'" else tok
+
+
+def read_shell_config(path):
+    """`KEY=value` pairs from a shell config file. COMMENTED-OUT LINES ARE NOT VALUES.
+
+    The committed config parks unset knobs as `#   WORKFLOW_TEST_MODEL=""`, and reading those
+    as set would show a value the shell never assigns — the file would disagree with itself.
+    """
+    out = {}
+    try:
+        with open(path) as f:
+            body = f.read()
+    except OSError:
+        return out
+    for ln in body.splitlines():
+        if ln.lstrip().startswith("#"):
+            continue
+        m = _ASSIGN.match(ln)
+        if m:
+            out[m.group(1)] = _unquote(_split_value(m.group(2))[0])
+    return out
+
+
+def valid_value(kind, value):
+    """Empty means INHERIT and is always allowed; anything else must be a known word.
+
+    Enforced at input time rather than at write time because these strings are interpolated
+    into a shell config that agent-tune.sh then TYPES INTO A LIVE AGENT'S PANE. A free-text
+    field here would be a keystroke-injection surface, so the field is not free text.
+    """
+    if value == "":
+        return True
+    return value in (VALID_EFFORT if kind == "effort" else VALID_MODEL)
+
+
+def config_rows(lane_path, name):
+    """Every knob for this lane, with the file each effective value actually came from.
+
+    Layered the way _config.sh layers them: the gitignored `.local` wins over the committed
+    file. The ORIGIN is shown rather than just the value, because "medium" tells you nothing
+    about whether you are looking at a project default or at something set on this machine —
+    and the edit only ever writes one of the two files.
+    """
+    committed = read_shell_config(os.path.join(lane_path, ".claude", "workflow.config"))
+    local = read_shell_config(os.path.join(lane_path, ".claude", "workflow.config.local"))
+    n = lane_num_of(name)
+    spec = list(CFG_SPEC)
+    if n is not None:
+        # The per-lane override sits ABOVE its fleet-wide fallback, which is the order it wins in.
+        spec = ([("WORKFLOW_LANE_EFFORT_%d" % n, "effort", "live"),
+                 ("WORKFLOW_LANE_MODEL_%d" % n, "model", "live")] + spec)
+    rows = []
+    for key, kind, scope in spec:
+        if key in local:
+            value, origin = local[key], "local"
+        elif key in committed:
+            value, origin = committed[key], "committed"
+        else:
+            value, origin = "", "unset"
+        rows.append({"key": key, "value": value, "kind": kind,
+                     "scope": scope, "origin": origin})
+    return rows
+
+
+LOCAL_HEADER = (
+    "# Per-clone workflow overrides — gitignored, per-machine, NEVER shared/committed.\n"
+    "# Created by fleet-tui's agent detail view.\n"
+)
+
+
+def write_config_value(path, key, kind, value):
+    """Set `key` in the LOCAL config, in place, preserving everything else in the file.
+
+    Writes only ever land here — never in the committed `workflow.config`, which is shared
+    with every other clone and whose values are the project's, not this machine's.
+
+    Replaces the FIRST active assignment and appends when there is none, so a knob that only
+    exists as a commented-out example in the committed file gains a real line rather than
+    silently editing the comment.
+    """
+    if not valid_value(kind, value):
+        raise ValueError("%s is not a valid %s" % (value, kind))
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+    except OSError:
+        lines = LOCAL_HEADER.splitlines()
+    new = '%s="%s"' % (key, value)
+    for i, ln in enumerate(lines):
+        if ln.lstrip().startswith("#"):
+            continue
+        m = _ASSIGN.match(ln)
+        if m and m.group(1) == key:
+            lines[i] = new + _split_value(m.group(2))[1]
+            break
+    else:
+        lines.append(new)
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    return True
+
+
+def _git(path, *args, timeout=5):
+    try:
+        p = subprocess.run(["git", "-C", path] + list(args),
+                           capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return p.stdout.strip() if p.returncode == 0 else None
+
+
+def _counts(path, base):
+    """(ahead, behind) against `base`, or None when the ref does not exist here.
+
+    `--left-right --count base...HEAD` prints "<only in base>\t<only in HEAD>", so the left
+    number is how far BEHIND this lane is and the right is how far ahead. None rather than
+    (0, 0) on a missing ref: a lane with no `origin/master` yet and a lane exactly level with
+    it are different facts, and zeros would render them identically.
+    """
+    out = _git(path, "rev-list", "--left-right", "--count", "%s...HEAD" % base)
+    if not out:
+        return None
+    parts = out.split()
+    if len(parts) != 2:
+        return None
+    try:
+        return int(parts[1]), int(parts[0])
+    except ValueError:
+        return None
+
+
+def git_state(path, base="master"):
+    """Branch, dirt, and distance from the base — locally and at the last-known origin.
+
+    NO FETCH. `origin/master` is read exactly as the local ref has it, and the view says so:
+    a network call on a keypress would block the UI for as long as the network felt like it,
+    and a number that is a few minutes old is far better than a view that hangs.
+    """
+    porcelain = _git(path, "status", "--porcelain")
+    return {
+        "base": base,
+        "branch": branch_for(path),
+        "dirty": (len([ln for ln in porcelain.splitlines() if ln.strip()])
+                  if porcelain is not None else None),
+        "local": _counts(path, base),
+        "origin": _counts(path, "origin/" + base),
+    }
+
+
+def parse_status_text(text):
+    """(model, effort) out of an agent's status line — "?" for whatever is not there.
+
+    THE PADDING IS U+00A0, not a space. agent-tune.sh learned this the expensive way: every
+    shell-native match against a captured pane returns empty, which a caller renders as a
+    confident "?" that never once verified anything. Normalise, then match.
+    """
+    txt = (text or "").replace(" ", " ")
+    m = re.findall(r"Model:\s*([A-Za-z][A-Za-z0-9]*)", txt)
+    e = re.findall(r"Thinking:\s*([a-z]+)", txt)
+    return (m[-1] if m else "?"), (e[-1] if e else "?")
+
+
+def _team_panes():
+    """name -> tmux pane, for every team member the harness has placed in a live pane.
+
+    The team config is authoritative, exactly as it is for agent-tune.sh: a pane title is
+    whatever the agent renamed itself to, and `ps` cannot see the pane's claude because it is
+    a grandchild. Panes the config still lists but tmux no longer has are dropped.
+    """
+    try:
+        live = set(subprocess.run(["tmux", "list-panes", "-a", "-F", "#{pane_id}"],
+                                  capture_output=True, text=True, timeout=5).stdout.split())
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    out = {}
+    root = os.path.expanduser("~/.claude/teams")
+    try:
+        dirs = sorted(os.listdir(root))
+    except OSError:
+        return {}
+    for d in dirs:
+        try:
+            with open(os.path.join(root, d, "config.json")) as f:
+                cfg = json.load(f)
+        except (OSError, ValueError):
+            continue
+        for m in cfg.get("members") or []:
+            pane, nm = m.get("tmuxPaneId") or "", m.get("name") or ""
+            if nm and pane.startswith("%") and pane in live:
+                out[nm] = pane
+    return out
+
+
+def live_tuning(name):
+    """What the named agent's session is running RIGHT NOW, or None when it cannot be read.
+
+    None, never a guess. The status line is the session's own render of the setting it will
+    use next, so when the pane is gone or unreadable the honest answer is to say nothing —
+    a stale model name beside a live agent is the one thing this line could get wrong.
+    """
+    pane = _team_panes().get(name)
+    if not pane:
+        return None
+    try:
+        txt = subprocess.run(["tmux", "capture-pane", "-p", "-t", pane],
+                             capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    model, effort = parse_status_text(txt)
+    if model == "?" and effort == "?":
+        return None
+    return {"pane": pane, "model": model, "effort": effort}
+
+
+def detail_data(row):
+    """Everything the overlay shows, assembled fresh. Runs OFF the UI thread.
+
+    RE-READ ON EVERY OPEN, and never cached: the config files are edited by hooks, by other
+    agents and by the user's own editor, and an overlay showing what the file said when the
+    TUI started would be a confident lie in exactly the moment the user is about to act on it.
+    """
+    path = row.get("path") or ""
+    name = row.get("name") or ""
+    cfg = read_shell_config(os.path.join(path, ".claude", "workflow.config"))
+    cfg.update(read_shell_config(os.path.join(path, ".claude", "workflow.config.local")))
+    base = cfg.get("WORKFLOW_PR_TARGET_BRANCH") or "master"
+    return {
+        "name": name,
+        "label": row.get("label") or "",
+        "kind": row.get("kind") or "lane",
+        "path": path,
+        "state": row.get("state") or "?",
+        "git": git_state(path, base) if path else None,
+        "live": live_tuning(name),
+        "cfg": config_rows(path, name),
+        "local_path": os.path.join(path, ".claude", "workflow.config.local"),
+        "tune_sh": os.path.join(path, ".claude", "scripts", "agent-tune.sh"),
+    }
+
+
+def apply_now(tune_sh, name):
+    """Hand the live knobs to agent-tune.sh and return what IT said, unedited.
+
+    NOT WRAPPED. That script serializes itself against other runs and restores the
+    machine-global settings file it is forced to write through; re-implementing any part of
+    that here would give the fleet a second, unlocked path to the same shared file.
+    """
+    if not os.path.isfile(tune_sh):
+        return "agent-tune.sh not found in this lane"
+    try:
+        p = subprocess.run([tune_sh, "apply", name], capture_output=True, text=True,
+                           timeout=180)
+    except subprocess.TimeoutExpired:
+        return "agent-tune.sh timed out — check the lane's pane"
+    except OSError as e:
+        return "could not run agent-tune.sh: %s" % e
+    lines = [ln.strip() for ln in (p.stdout + p.stderr).splitlines() if name in ln]
+    return lines[-1] if lines else (p.stdout.strip().splitlines() or ["no output"])[-1]
 
 
 def _restore_line(path, raw):
@@ -387,6 +708,38 @@ class Ask(ListItem):
                                              linkify(escape(clip(text)), self.ctx)))
 
 
+DETAIL_HINT = ("[dim]j/k move · enter edits the highlighted knob · a applies the live knobs "
+               "to the running agent · o opens the ticket · esc closes[/]")
+
+
+class CfgRow(ListItem):
+    """One editable knob. Carries its own spec, so the editor never has to look it up."""
+
+    def __init__(self, entry):
+        super().__init__()
+        self.entry = entry
+
+    def markup(self):
+        e = self.entry
+        value = e["value"] or "—"
+        colour = "b" if e["value"] else "dim"
+        scope = "live agent" if e["scope"] == "live" else "next spawn"
+        return ("[cyan]%-28s[/] [%s]%-8s[/] [dim]%-9s · %s[/]"
+                % (escape(e["key"]), colour, escape(value), e["origin"], scope))
+
+    def compose(self):
+        yield Static(self.markup())
+
+
+class Detail(Vertical):
+    """The overlay Enter opens on an agent row: its git state, its live session, its config.
+
+    A PANEL, LIKE THE LEGEND — not a screen. The fleet panel behind it stays live and keeps
+    ticking, which is the point: the numbers you are about to act on and the fleet you are
+    acting on are visible at once.
+    """
+
+
 class Panels(Vertical):
     """The box the two panels share.
 
@@ -421,6 +774,26 @@ class FleetTUI(App):
     }
     #legend.-show { display: block; }
 
+    /* The detail overlay. Same layer and the same toggle as the legend, and for the same
+       reason: it is something you hold open while reading the fleet behind it. Wider and
+       taller, because it carries a list you move a cursor through rather than a fixed card. */
+    #detail {
+        layer: overlay;
+        display: none;
+        margin: 1 3;
+        padding: 1 2;
+        height: auto;
+        max-height: 100%;
+        border: heavy $accent;
+        background: $panel;
+    }
+    #detail.-show { display: block; }
+    #detail-cfg { height: auto; max-height: 14; background: transparent; }
+    #detail-cfg > ListItem { padding: 0; }
+    #detail-input { display: none; margin: 0; }
+    #detail-input.-show { display: block; }
+    #detail-msg { height: auto; color: $text-muted; }
+
     /* THE FOCUSED PANEL HAS TO BE UNMISTAKABLE. Both panels carrying the same quiet border
        left the reader guessing which one `x` was about to act on — and `x` deletes. So the
        unfocused panel is dimmed to a plain grey hairline and the focused one takes a heavy
@@ -454,7 +827,13 @@ class FleetTUI(App):
     BINDINGS = [
         Binding("q", "quit", "quit"),
         Binding("r", "reload", "reload"),
-        Binding("enter", "open_ticket", "open ticket"),
+        # ENTER GAINED A SECOND MEANING RATHER THAN LOSING ITS FIRST. On an agent row it now
+        # opens the detail overlay — the row is a card about a lane, and "show me this lane"
+        # is what pressing it on one should do. The ticket it used to open moved to `o`, is
+        # still a link inside the overlay, and is still what enter does on a 4ME row.
+        Binding("enter", "enter", "details"),
+        Binding("o", "open_ticket", "open ticket"),
+        Binding("a", "apply_now", "", show=False),
         Binding("x", "clear_ask", "clear ask"),
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
@@ -481,6 +860,8 @@ class FleetTUI(App):
         self.nudge = 0             # rows the user has added to the fit with + / -
         self.full = None           # id of the panel currently fullscreened, or None
         self.fit_mode = "agents"   # which list `=` is currently fitting: "agents" or "4ME"
+        self.detail = None         # the open overlay's assembled data, or None
+        self.editing = None        # the cfg entry currently being edited, or None
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
@@ -488,6 +869,12 @@ class FleetTUI(App):
             yield ListView(id="lanes")
             yield ListView(id="fleet")
         yield Static(self.legend_markup(), id="legend")
+        with Detail(id="detail"):
+            yield Static("", id="detail-head")
+            yield Static("", id="detail-git")
+            yield ListView(id="detail-cfg")
+            yield Input(id="detail-input")
+            yield Static("", id="detail-msg")
         yield Footer()
 
     def on_mount(self):
@@ -608,6 +995,16 @@ class FleetTUI(App):
             fleet.border_title = title
 
     # ── actions ──────────────────────────────────────────────────────────────────────────
+    def _overlay_owns_keys(self):
+        """True while the detail overlay is up.
+
+        The panel keys — `=`, `+`, `-`, `f` — and `x` all act on widgets the overlay is
+        covering. Letting them through would resize or DELETE something the user cannot see
+        while they are reading a different thing entirely, so the overlay swallows them
+        rather than acting at a distance.
+        """
+        return self.detail is not None
+
     def _focused_list(self):
         for wid in ("#lanes", "#fleet"):
             w = self.query_one(wid, ListView)
@@ -616,10 +1013,234 @@ class FleetTUI(App):
         return self.query_one("#lanes", ListView)
 
     def action_cursor_down(self):
-        self._focused_list().action_cursor_down()
+        self._cursor_list().action_cursor_down()
 
     def action_cursor_up(self):
-        self._focused_list().action_cursor_up()
+        self._cursor_list().action_cursor_up()
+
+    def _cursor_list(self):
+        """j/k move the list the reader is actually looking at — the overlay's, when it is up.
+        Moving the hidden lane cursor instead would silently re-aim `x` and `enter`."""
+        return (self.query_one("#detail-cfg", ListView) if self._overlay_owns_keys()
+                else self._focused_list())
+
+    # ── the agent detail overlay ─────────────────────────────────────────────────────────
+    def action_enter(self):
+        """One key, dispatched by what is on screen — never two meanings at once.
+
+        Inside the overlay it edits the highlighted knob. On an agent row it opens the
+        overlay. Anywhere else — the 4ME panel, chiefly — it keeps doing what it always did.
+        """
+        w = self._focused_list()
+        self._enter(w.id, w.highlighted_child)
+
+    def on_list_view_selected(self, event):
+        """Enter is delivered as a ListView SELECTION, not as an app binding.
+
+        The focused ListView binds `enter` itself, and a focused widget's binding wins — so
+        an app-level `enter` binding is only ever reached when neither list has focus, which
+        is almost never. Routing the Selected message is what actually makes the key work,
+        and it makes a mouse click do the same thing for free.
+        """
+        self._enter(event.list_view.id, event.item)
+
+    def _enter(self, list_id, item):
+        if list_id == "detail-cfg":
+            self.edit_start()
+            return
+        if self.detail is not None:
+            return                 # the overlay is up; the lists behind it are not the target
+        if list_id == "lanes" and isinstance(item, Lane):
+            self.open_detail(item.row)
+            return
+        self.action_open_ticket()
+
+    def open_detail(self, row):
+        """Show the overlay at once, fill it from a WORKER.
+
+        The git reads and the pane capture are subprocesses. Doing them here would freeze the
+        whole app — including the tick behind the overlay — for as long as git took, so the
+        panel opens saying it is loading and gains its numbers a beat later.
+        """
+        self.detail = {"row": row, "data": None}
+        self.query_one("#detail").add_class("-show")
+        self.query_one("#detail-head", Static).update(
+            "[b]%s[/]  [dim]loading…[/]" % escape(row.get("name") or "?"))
+        self.query_one("#detail-git", Static).update("")
+        self.query_one("#detail-msg", Static).update(DETAIL_HINT)
+        self.query_one("#detail-cfg", ListView).clear()
+        self.run_worker(lambda: self._load_detail(row), thread=True, group="detail")
+
+    def _load_detail(self, row):
+        data = detail_data(row)
+        if not get_current_worker().is_cancelled:
+            self.call_from_thread(self.show_detail, data)
+
+    def show_detail(self, data, msg=None, keep=None):
+        """Paint the overlay. `keep` restores the cursor across the reload a save triggers."""
+        if self.detail is None:
+            return                 # closed while the worker was still reading
+        self.detail["data"] = data
+        self.query_one("#detail-head", Static).update(self.detail_head_markup(data))
+        self.query_one("#detail-git", Static).update(self.detail_git_markup(data))
+        cfg = self.query_one("#detail-cfg", ListView)
+        cfg.clear()
+        for e in data["cfg"]:
+            cfg.append(CfgRow(e))
+        if keep is not None and 0 <= keep < len(data["cfg"]):
+            cfg.index = keep
+        if msg is not None:
+            self.query_one("#detail-msg", Static).update(msg)
+        cfg.focus()
+
+    def detail_head_markup(self, data):
+        live = data.get("live")
+        # The live line is OMITTED, not filled with a guess, when the pane cannot be read —
+        # a lane with no agent in it still has git state and config worth looking at.
+        if live:
+            line = ("  [dim]running[/] model=[b]%s[/] effort=[b]%s[/] [dim]%s[/]"
+                    % (escape(live["model"]), escape(live["effort"]), live["pane"]))
+        else:
+            line = "  [dim]no live session in this lane — config and git only[/]"
+        return ("[b]%s[/] [dim]%s[/]  [dim]%s[/]\n%s"
+                % (escape(data["name"]), escape(data["label"]),
+                   escape(data["path"]), line))
+
+    def detail_git_markup(self, data):
+        g = data.get("git")
+        if not g:
+            return "[dim]no path on this row — nothing to read[/]"
+
+        def dist(c):
+            return "[dim]—[/]" if c is None else "[green]↑%d[/] [yellow]↓%d[/]" % c
+        dirty = ("[dim]clean[/]" if g["dirty"] == 0 else
+                 "[yellow]%d dirty[/]" % g["dirty"] if g["dirty"] else "[dim]—[/]")
+        return ("branch [b cyan]%s[/]   %s\n"
+                "vs [b]%s[/]         %s\n"
+                "vs [b]origin/%s[/]  %s   [dim](local ref — not fetched, may be stale)[/]"
+                % (escape(g["branch"] or "(detached)"), dirty,
+                   escape(g["base"]), dist(g["local"]),
+                   escape(g["base"]), dist(g["origin"])))
+
+    def close_detail(self):
+        self.editing = None
+        self.detail = None
+        inp = self.query_one("#detail-input", Input)
+        inp.remove_class("-show")
+        inp.value = ""
+        self.query_one("#detail").remove_class("-show")
+        self.query_one("#lanes", ListView).focus()
+
+    def edit_start(self):
+        """Open the field on the highlighted knob, pre-filled with its current value."""
+        item = self.query_one("#detail-cfg", ListView).highlighted_child
+        if not isinstance(item, CfgRow):
+            return
+        e = item.entry
+        self.editing = e
+        inp = self.query_one("#detail-input", Input)
+        inp.value = e["value"]
+        allowed = VALID_EFFORT if e["kind"] == "effort" else VALID_MODEL
+        inp.placeholder = "%s — %s, or empty to inherit" % (e["key"], "|".join(allowed))
+        inp.add_class("-show")
+        inp.focus()
+        self.query_one("#detail-msg", Static).update(
+            "[dim]enter saves to workflow.config.local · esc cancels · "
+            "allowed: %s or empty[/]" % "|".join(allowed))
+
+    def edit_cancel(self):
+        self.editing = None
+        inp = self.query_one("#detail-input", Input)
+        inp.remove_class("-show")
+        inp.value = ""
+        self.query_one("#detail-cfg", ListView).focus()
+        self.query_one("#detail-msg", Static).update("")
+
+    def on_input_submitted(self, event):
+        """Validate, then write — and say which of the two futures the save just bought.
+
+        A REJECTED VALUE LEAVES THE FIELD OPEN. These strings are typed into a live agent's
+        pane by agent-tune.sh, so anything outside the two fixed vocabularies is refused
+        here rather than written and discovered later; keeping the field open with the bad
+        text in it is what lets the user fix a typo instead of retyping.
+        """
+        e, data = self.editing, (self.detail or {}).get("data")
+        if not e or not data:
+            return
+        value = event.value.strip()
+        if not valid_value(e["kind"], value):
+            allowed = VALID_EFFORT if e["kind"] == "effort" else VALID_MODEL
+            self.query_one("#detail-msg", Static).update(
+                "[red]%s is not a valid %s[/] — one of %s, or empty to inherit"
+                % (escape(value), e["kind"], "|".join(allowed)))
+            return
+        keep = self.query_one("#detail-cfg", ListView).index
+        try:
+            write_config_value(data["local_path"], e["key"], e["kind"], value)
+        except (OSError, ValueError) as err:
+            self.query_one("#detail-msg", Static).update("[red]could not save: %s[/]"
+                                                         % escape(str(err)))
+            return
+        self.editing = None
+        inp = self.query_one("#detail-input", Input)
+        inp.remove_class("-show")
+        inp.value = ""
+        shown = value or "(inherit)"
+        if e["scope"] == "live":
+            # THE DISTINCTION THE USER CANNOT SEE FROM THE FILE. A lane knob describes a
+            # session that is already running and re-reads nothing, so the file alone changes
+            # nothing until agent-tune types it in.
+            msg = ("[green]saved[/] %s=%s → workflow.config.local\n"
+                   "[b yellow]the running agent has NOT changed[/] — press [b]a[/] to apply "
+                   "it now with agent-tune" % (escape(e["key"]), escape(shown)))
+        else:
+            msg = ("[green]saved[/] %s=%s → workflow.config.local\n"
+                   "[dim]read when this subagent next spawns — nothing to apply[/]"
+                   % (escape(e["key"]), escape(shown)))
+        # Re-read rather than patch the row in memory: the file is the truth, and a save that
+        # silently failed to land must not leave the overlay claiming it did.
+        self.run_worker(lambda: self._reload_detail(msg, keep), thread=True, group="detail")
+
+    def _reload_detail(self, msg, keep):
+        row = (self.detail or {}).get("row")
+        if row is None:
+            return
+        data = detail_data(row)
+        if not get_current_worker().is_cancelled:
+            self.call_from_thread(self.show_detail, data, msg, keep)
+
+    def action_apply_now(self):
+        """`a` — hand the lane's configured effort/model to the running agent.
+
+        Only inside the overlay, and only when there is a live session to type into: this is
+        the one key here that reaches out and changes something outside a file.
+        """
+        if self.detail is None or self.editing is not None:
+            return
+        data = self.detail.get("data")
+        if not data:
+            return
+        if not data.get("live"):
+            self.query_one("#detail-msg", Static).update(
+                "[yellow]no live session in this lane — nothing to apply to[/]")
+            return
+        self.query_one("#detail-msg", Static).update(
+            "[dim]running agent-tune apply %s … (it serializes against other runs)[/]"
+            % escape(data["name"]))
+        self.run_worker(lambda: self._apply_now(data), thread=True, group="apply")
+
+    def _apply_now(self, data):
+        line = apply_now(data["tune_sh"], data["name"])
+        if get_current_worker().is_cancelled:
+            return
+        colour = "green" if "PASS" in line else "red" if "FAIL" in line else "yellow"
+        self.call_from_thread(self._apply_done,
+                              "[%s]agent-tune:[/] %s" % (colour, escape(line)))
+
+    def _apply_done(self, msg):
+        if self.detail is None:
+            return
+        self.query_one("#detail-msg", Static).update(msg)
 
     def action_open_ticket(self):
         item = self.query_one("#lanes", ListView).highlighted_child
@@ -638,6 +1259,8 @@ class FleetTUI(App):
         """Tick an item off. Lane panel clears that lane's FIRST ask; fleet panel clears the
         highlighted one. Undoable, because a mis-keyed `x` on someone else's to-do list is a
         silent loss otherwise."""
+        if self._overlay_owns_keys():
+            return
         w = self._focused_list()
         item = w.highlighted_child
         if isinstance(item, Ask):
@@ -676,8 +1299,17 @@ class FleetTUI(App):
             ("[dim]○[/]", "idle — between turns"),
             ("[red]·[/]", "down — lane exists, nothing running in it"),
         ))
-        return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[dim]? or esc to close[/]"
-                % (states, kinds))
+        # ENTER IS DOCUMENTED HERE BECAUSE THE FOOTER CANNOT SHOW IT. The focused ListView
+        # binds `enter` itself, so its own (hidden) binding is what the footer renders — the
+        # app's description never appears. A key with no discoverable meaning is exactly the
+        # problem this legend exists for.
+        keys = "\n".join("  %-6s %s" % (k, d) for k, d in (
+            ("enter", "on an agent row: its git state and config, editable"),
+            ("o", "open this lane's ticket"),
+            ("a", "in the detail view: apply the live knobs to the running agent"),
+        ))
+        return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
+                "\n%s\n\n[dim]? or esc to close[/]" % (states, kinds, keys))
 
     def action_legend(self):
         self.query_one("#legend").toggle_class("-show")
@@ -792,6 +1424,8 @@ class FleetTUI(App):
         An empty 4ME is the same case in miniature: nothing moves, and the message is the only
         thing separating that from a key that did not fire.
         """
+        if self._overlay_owns_keys():
+            return
         if self.full:
             self.action_fullscreen()   # a maximised panel has no boundary to size
         self.fit_mode = "agents" if (self.nudge or self.fit_mode == "4ME") else "4ME"
@@ -819,9 +1453,13 @@ class FleetTUI(App):
     def action_grow(self):
         """Grow the FOCUSED panel — the same key does opposite things in the two panels,
         which is right: the reader is asking for more of what they are looking at."""
+        if self._overlay_owns_keys():
+            return
         self._bump(1 if self._focused_list().id == "lanes" else -1)
 
     def action_shrink(self):
+        if self._overlay_owns_keys():
+            return
         self._bump(-1 if self._focused_list().id == "lanes" else 1)
 
     def action_fullscreen(self):
@@ -831,6 +1469,8 @@ class FleetTUI(App):
         container, which drops focus and the cursor with it. Display-toggling leaves the
         widget exactly where it is, so `f` twice is a genuine round trip.
         """
+        if self._overlay_owns_keys():
+            return
         target = self._focused_list().id
         if self.full:
             for wid in ("#lanes", "#fleet"):
@@ -846,10 +1486,15 @@ class FleetTUI(App):
             self.full = target
 
     def action_unfullscreen(self):
-        """Escape closes ONE thing, and the legend is the innermost. Closing both at once
-        would make escape unusable for either."""
+        """Escape closes ONE thing, innermost first. Closing two at once would make escape
+        unusable for either: an edit abandoned along with the panel it was in is a keypress
+        the user cannot undo by pressing it again."""
         legend = self.query_one("#legend")
-        if legend.has_class("-show"):
+        if self.editing is not None:
+            self.edit_cancel()
+        elif self.detail is not None:
+            self.close_detail()
+        elif legend.has_class("-show"):
             legend.remove_class("-show")
         elif self.full:
             self.action_fullscreen()
