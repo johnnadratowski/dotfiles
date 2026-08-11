@@ -1083,3 +1083,36 @@ harness's namespace" (2026-08-03) are the two prior visits: an isolation check t
 *satisfied*, so the guard said YES in the one situation it existed to catch. All three say that
 a guard phrased as "am I permitted?" is answered by whoever is asking, and a guard phrased as
 "is HEAD on `<branch>`?" is answered by the repository.
+
+## An artifact cannot tell you whether its own open questions are still open (2026-08-11)
+
+**Twice in one hour.** A dated artifact was read, checked for internal supersession, found to
+carry an open question still marked open — and the question was reported as live. Both times it
+had already been answered, in an artifact the source **could not** have referenced: a later
+addendum past the read point in one case, and in the other a ticket filed two days after the
+plan's last touch, created expressly to own that question.
+
+**Why this is not "audit snapshots go stale".** That rule was already being applied — to the
+CONTENT — and it still failed, because a question's STATUS decays by a different mechanism. The
+content ages in place, where careful re-reading finds it. The status is changed by **someone
+else, somewhere you are not looking**, and nothing about that is visible from inside the source.
+So the reflex the staleness rule trains — read the document harder — is the wrong instrument
+here; no amount of care inside the artifact can reach the fact that settles it.
+
+**The tell, and it reads as the opposite.** "Deliberately left undecided", "pending X", "owner
+TBD", "to be settled by" — each of these is a pointer to a decision expected to happen
+ELSEWHERE. Treat one as a search prompt, never as a finding. **The more emphatically a gap is
+flagged, the likelier it is that someone already acted on the flag**, which is exactly backwards
+from how the emphasis reads.
+
+**The rule.** Before reporting an open question as live, establish what DOWNSTREAM now owns it —
+a newer ticket, a later addendum, a tracker decision, a sibling workstream. Search by the
+question's **subject**, not by the document's identifiers: the artifact that closed the question
+will not cite the artifact that raised it, so an id-based search is guaranteed to miss it.
+
+**Cost direction, which is what makes it worth a rule.** The failure produces false urgency
+about someone else's completed decision, and it is expensive precisely because it looks
+diligent — here it escalated a resolved trap as time-critical and came close to re-opening
+settled scope. Compare "A watcher's completion event names a SHA, not 'the PR'" above: same
+shape, opposite direction. There the dated observation was believed about an object that had
+moved on; here the dated *gap* was.
