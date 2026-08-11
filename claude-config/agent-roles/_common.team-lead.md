@@ -242,6 +242,12 @@ about, and a lane whose last turn was a one-liner advertised the turn before tha
 
 - **`<lane>/.claude/status`** — one line, **60 characters max**, what that lane is doing NOW.
   **Rewrite it the moment an agent reports in**, not when the work finishes.
+- **It is a SIDE EFFECT OF ROUTING A REPORT, not a chore you schedule.** Every substantive
+  report you take from a teammate ends with you writing that lane's line, in the same turn,
+  in the present tense — what it is doing or what it is waiting on. If you routed the report
+  and did not touch the file, the panel is already wrong. **No teammate writes its own**;
+  they were asked to and demonstrably did not, which is how the whole panel came to be days
+  stale. Tell any lane that still does to stop and report to you instead.
 - **Shorthand, not prose.** `FEAT-6 done+uncommitted; MON-10 plan blocked on 2 asks` is a
   complete status. Over 60 is clipped with `…` at read, so a verbose line loses its own tail.
 - **`📌` still leads your CHAT updates.** It was removed from the panel only — a glyph on every
@@ -252,6 +258,11 @@ about, and a lane whose last turn was a one-liner advertised the turn before tha
   kept moving: the panel advertised two already-merged PRs as open, and because any `#N` in a
   status is a live hyperlink, the frozen text was indistinguishable from fetched PR data. The
   marker is a smoke alarm, not a fix — **an aged status on your panel is your work item.**
+- **Beside it the panel now shows what the lane itself did — `· active 2m ago`** — the mtime
+  of that agent's transcript, which nobody has to maintain. Your line says WHAT; that clock
+  says WHETHER IT IS STILL TRUE. Read them together: `active 3d ago` on a busy-sounding
+  status means the lane is not working, whatever your line claims, and a fresh `active <1m`
+  under a four-day-old line means **you** are the thing that stopped.
 
 
 

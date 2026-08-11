@@ -68,5 +68,8 @@ The agent panel under your prompt **cannot** show teammate context, and no setti
 `subagentStatusLine` decorates only rows whose type is `local_agent`, and a lead's panel is
 teammates plus `main` — zero eligible rows, so the script never runs.
 `~/.claude/scripts/fleet-status.sh` is the lead's view instead: state · context% · uptime ·
-issue · question · last summary, all read off disk from files the agents themselves write.
+issue · open PRs · the lead-written status line and its asks · and how long ago that agent
+last wrote its transcript (`active 2m ago`). All read off disk. The last one is the only
+per-lane fact nobody maintains, which is exactly why it is there: the status text says what
+a lane is doing, the mtime says whether that is still true.
 Leave it running in a window (watch is its default).

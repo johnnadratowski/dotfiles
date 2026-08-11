@@ -93,3 +93,8 @@ indicator there is, including the time it is real.
 Phrase it as the decision to be made ("commit on my lane, or hand you the diff?"), never as a
 status ("waiting") — the row already says you are waiting, and the width is better spent on
 what you are waiting FOR.
+
+**`.claude/status` is the lead's too.** Both files on your lane are written by the lead from
+what you report — two writers means neither owns it. Your reports ARE the status, and the
+panel takes your last activity from your transcript's mtime on its own, so there is nothing
+here for you to keep up to date.
