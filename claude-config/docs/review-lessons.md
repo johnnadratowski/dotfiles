@@ -1192,3 +1192,31 @@ retraction is earned rather than conceded.
 had written up this exact pattern the same morning and then did it twice. Same as the anti-vacuity
 lesson recurring inside its own fix: writing a rule down does not exempt you from it, and the
 feeling of exemption is strongest right after you write it.
+
+## A working-tree diff review cannot show an UNTRACKED file — and that file is usually the point (2026-08-11)
+
+**The instance, twice in one day and in two different lanes.** A working-tree review was about to
+be staged for a human reviewer, and in both cases it would have silently omitted the **core file
+of the change**: a new yield-math module in one lane, and in the other a new `tsconfig` that was
+the entire reason the ticket existed. Git does not diff what it does not track, so a file that has
+never been added is not absent from the review by anyone's decision — it is absent by construction.
+
+**Why nothing catches it.** The reviewer is shown N files and no hole. There is no placeholder, no
+count to reconcile against, no warning; the review looks complete because completeness is exactly
+what a file list cannot express. And the bias runs the wrong way: the newest file in a change is
+disproportionately the one carrying the new logic, so the omission is not random — it selects for
+the most important file in the diff.
+
+**The rule.** Before staging any working-tree review, run `git status` for untracked files inside
+the change's scope and `git add -N` each one, so it renders as an addition while its content stays
+unstaged. Treat **"this change adds a file" + "working-tree review"** as an automatic pairing that
+needs no deliberation — a check you run because the pair occurred, not because you suspected a
+problem.
+
+**Kin: the vacuity family.** This is a review that cannot fail for the missing-file defect, which
+puts it beside "an empty enumeration vacuously satisfies a destructive verb's success contract" and
+"an anti-vacuity assertion must be made PER ENUMERATED SOURCE" — the check reports the same
+reassuring shape whether or not it saw the thing. Closest in mechanism is "A sweep scoped by
+file-KIND misses the file that selects the thing being swept": both fail on a file the enumeration
+had no way to name, and both are fixed by reaching for a source that does not depend on your
+categories — there, grepping the outgoing literal; here, asking `git status` rather than the diff.
