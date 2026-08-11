@@ -470,6 +470,17 @@ happened to carry the real answer, so nothing broke; the pattern is the hazard. 
 `${PIPESTATUS[0]}`, or run the command unpiped when its exit code is the thing being asserted.
 Same family as the earlier `grep -A | grep -vc B` row that printed 0 on no matches.
 
+**Confirmed twice more in one session, 2026-08-11, and the second time it cost something.** A
+`git push ... | tail -5; echo "PUSH_EXIT=$?"` recorded `PUSH_EXIT=0` for a push that had been
+**rejected**; the agent went on to report the branch as published. The generalisation is worth
+stating flatly, because each costume gets rediscovered separately: **a pipeline's exit code
+belongs to the LAST command in it.** So does a compound block's — `{ a; b; echo done; }` exits
+with the `echo` — and so does a background task's, whose "exit 0" belongs to whatever ran last
+inside it, not to the thing you were watching. The two fixes are `set -o pipefail` at the top of
+any script whose pipelines are assertions, or `cmd > file; rc=$?` when you want the status of one
+specific command. Prefer the second when the exit code IS the finding: it leaves nothing to
+reason about.
+
 ## 2026-07-31 — a retraction that lives only in the chat is not a retraction
 
 **A commit was reverted on evidence that existed nowhere in the repo.** `aad6314e` landed a
@@ -942,6 +953,17 @@ all quote the thing they govern, at a density no ordinary document reaches. So:
 
 **The same error in a second costume, from the same review.** A function documented "never throws" genuinely had the try/catch. But nothing called it directly — every caller went through a wrapper that did the setup work OUTSIDE any handler, so the contract held on a function no caller reached, and a malformed input threw from the wrapper. **Verify a contract on the function the CALLERS reach, not the one that advertises it.** Both failures are one thing: the check was sound and was of the wrong object. Soundness is not the property you need; aboutness is.
 
+**A fifth instance, where the wrong object was a NUMBER (2026-08-11).** A count of how many
+source files a `tsconfig` actually pulled in was taken as `tsc --listFiles | grep -c <substring>`
+and came back **5**; the true answer was **55**. `--listFiles` prints files named on the command
+line as **relative** paths and files reached through imports as **absolute** ones, so the
+substring matched one of two populations and silently excluded the other. The number was real, it
+was reproducible, and it was of the wrong set — which is why it survived being reread. **Write
+what a number is OF next to the number, before you interpret it:** "5 files whose listed path
+contains `src/`" invites the question that "5 files" does not. And when you correct a figure, say
+what the old one actually measured, not merely that it was wrong — otherwise the next reader
+re-derives the same 5 and assumes you fat-fingered it.
+
 **Why this class survives careful review.** Neither mistake looks like an absence. There is a test, and it passes; there is a try/catch, and it works. Nothing is missing, so nothing prompts the question — the only way in is to name the object the check is OF and compare it to the object the question is ABOUT. Related: the filter lesson (a filter that makes a check look more precise is the likeliest place it stops seeing the defect) and the operation-vs-state lesson (a delta is a property of the operation; idempotence is a property of the state). Same family, third and fourth instances.
 
 ## An anti-vacuity assertion must be made PER ENUMERATED SOURCE, not on the total (2026-08-10)
@@ -968,3 +990,96 @@ written *because* three separate checks had each been correct about what they ex
 their domain excluded the next defect. The guard fixed that for the addresses and reproduced it
 for the roots. Writing a check against a defect class does not exempt the check from the class —
 and the exemption feels strongest right after you have just written the lesson down.
+
+## A watcher's completion event names a SHA, not "the PR" (2026-08-11)
+
+**The instance.** A check-watcher was started against a PR, and it fired `ALL CHECKS COMPLETE`.
+It was telling the truth — about the commit it had been started on. That head had since been
+replaced by a new push, and the current head still had a check running. The standing instruction
+was to hold if anything was red or unfinished; acting on the event would have merged under
+exactly the condition the instruction existed to prevent, while reporting that the condition had
+been checked.
+
+**Why it is missable.** The event does not read as a claim about a commit. It reads as a claim
+about *the PR*, because that is the object you asked about and the object you are about to act
+on. The SHA is in the payload and nobody looks at it, since under the common case — nobody
+pushed — the two objects coincide. The failure needs a push to land inside the watch window,
+which is precisely when you are most likely to be watching.
+
+**The rule.** A watcher started against a SHA answers only for that SHA. Before acting on its
+event, **re-resolve the current head and confirm the event's SHA still equals it**; if it does
+not, the event is stale by construction and a new watch is owed. Generalises past CI: any
+asynchronous observation of an object that can be *replaced* while you watch — a deploy watching
+a revision, a poll on a queue item that can be requeued, a review bound to a diff that can be
+force-pushed — has this shape. The completion is about the identity you started with, and your
+action is about the identity that exists now.
+
+## In a git worktree, `.git` is a FILE — any check that paths through `.git/` is false by construction (2026-08-11)
+
+**The instance.** A guard tested `test -f .git/MERGE_HEAD` to decide whether a merge was in
+progress. It reported no merge while a conflicted merge sat staged in the tree. In a **worktree**,
+`.git` is not a directory — it is a one-line file pointing at
+`…/.git/worktrees/<name>`, so `.git/MERGE_HEAD` names a path that can never exist. The check did
+not misread the state; it was incapable of reading it, and it fails in the *safe-sounding*
+direction, reporting the clean case.
+
+**The class, not the instance.** Every filesystem path under `.git/` has this defect in a
+worktree: `.git/HEAD`, `.git/refs/*`, `.git/MERGE_MSG`, `.git/rebase-merge/`, `.git/index`. Some
+resolve to the *main* checkout's state rather than to nothing, which is worse — a plausible wrong
+answer instead of an obvious empty one.
+
+**The rule: ask git, never the filesystem.** `git rev-parse -q --verify MERGE_HEAD`,
+`git symbolic-ref -q HEAD`, `git rev-parse --git-path <name>` — these resolve correctly in a
+worktree, a bare repo, and a plain clone alike, which is the whole reason porcelain exists.
+
+**The part that decides how much this matters.** In a fleet, worktrees are not the exotic case —
+they are where nearly all agent work happens. So a `.git/`-path check is wrong *exactly where it
+is used*, and its correctness in the main clone is what keeps it alive: it is written and tested
+somewhere it works, then deployed everywhere it cannot.
+
+## A bare `git push` is not scoped to your branch unless push.default says so (2026-08-11)
+
+**The instance.** A bare `git push` from a lane attempted **three refs**, not one. The machine
+carried `push.default=matching`, under which a bare push sends every local branch that has a
+same-named remote counterpart — including a `master` that was stale relative to origin. Only the
+non-fast-forward rejection stopped superseded state from being published to the shared branch.
+The command was correct-looking, habitual, and one config value away from clobbering trunk.
+
+**The rule.** Push explicitly, always: `git push origin <branch>`. Treat a bare push in a fleet
+that shares one `.git` across worktrees as unsafe **regardless of what the config currently
+says** — `simple` being today's default is not protection, because config is machine state. A
+fresh clone, another engineer's box, or a CI runner does not have your `~/.gitconfig`, and the
+safety of a command that depends on ambient configuration cannot be verified by reading the
+command.
+
+**Generalises to every ambient-scoped verb.** `git checkout` with no path, `rm` with a bare glob,
+a `kubectl` command with no `-n`, a deploy that reads its target from an env var — the scope you
+believe you are operating on lives outside the text you reviewed. Write the scope into the
+command so the review can see it.
+
+## The detached-HEAD class: NAME the forbidden git operations, and verify AFTER (2026-08-11)
+
+**The instance.** A subagent operating in a live lane was told to make **no git mutations**. It
+detached HEAD anyway — its reading of "mutation" covered commits and resets but did not extend to
+a checkout that only moves where HEAD points. The instruction was not disobeyed so much as it
+failed to name the thing.
+
+**The first rule: enumerate, do not characterise.** A category word in a spawn prompt is resolved
+by the reader, and readers resolve generously toward what they were about to do. Name the
+operations: **checkout, detach, pin, stash, reset, switch, rebase, cherry-pick, clean, branch
+-f**. This is the same failure the categorical "no destructive commands" phrasings keep having,
+and enumeration is the only fix that has held.
+
+**The second rule, which is the stronger one: verify AFTER.** A pre-check ("am I allowed to be
+here?") is racy and depends on the agent choosing to run it; a post-condition is not. After the
+work, assert `git symbolic-ref -q HEAD` equals the expected branch — this catches a detach no
+matter which verb produced it, whether the agent read the instruction at all, and whether the
+environment contract bound. **Prefer an unraceable post-condition to a well-worded pre-condition
+whenever you can express the invariant as a state rather than as a permission.**
+
+**Related, and the same root.** "A declared isolation contract is verified by the isolated party"
+(2026-07-10) and "A path-shape heuristic dies the moment a human directory moves into the
+harness's namespace" (2026-08-03) are the two prior visits: an isolation check that live lanes
+*satisfied*, so the guard said YES in the one situation it existed to catch. All three say that
+a guard phrased as "am I permitted?" is answered by whoever is asking, and a guard phrased as
+"is HEAD on `<branch>`?" is answered by the repository.
