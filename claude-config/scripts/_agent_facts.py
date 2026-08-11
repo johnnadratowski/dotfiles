@@ -425,6 +425,44 @@ def ask_kind(line):
     return ASK_GENERAL, line
 
 
+# ── the fleet's STANDING GOAL ────────────────────────────────────────────────────────────
+# One objective the whole fleet is pointed at, owned by the lead and written by the `/goal`
+# skill. It lives BESIDE the lanes dir (`<main clone>/.claude/fleet-goal`), for the same
+# reason `needs-input-fleet` does: it belongs to the fleet, not to any one lane, and a file
+# named this way inside a lane would be found by that lane's own upward walk.
+#
+# SHAPE: line 1 is the objective, in one line. Every line after it is the dependency chain or
+# the notes — what has to land, in order, for the objective to be reached. Blank lines and
+# `#` comments are skipped, so the file can be annotated.
+#
+# ABSENT FILE MEANS NO GOAL, and every reader must render that as NOTHING — not "no goal set",
+# not an empty bar. A fleet with no standing objective is the ordinary case, and a header row
+# that is always present would spend a line of screen saying so.
+GOAL_FILE = "fleet-goal"
+
+
+def fleet_goal_path(lanes_dir):
+    """Where the goal file sits, given the lanes dir. Empty in, empty out — a caller with no
+    lanes has no fleet to have a goal, and joining onto "" would name a path in the cwd."""
+    lanes_dir = (lanes_dir or "").rstrip("/")
+    return os.path.join(os.path.dirname(lanes_dir), GOAL_FILE) if lanes_dir else ""
+
+
+def fleet_goal(path):
+    """(objective, chain) from the goal file: the one-liner, and the lines under it.
+
+    Missing, unreadable or empty file → ("", []), which is how every caller spells "no goal".
+    """
+    try:
+        with open(path) as f:
+            body = f.read()
+    except OSError:
+        return "", []
+    lines = [ln.rstrip() for ln in body.splitlines()
+             if ln.strip() and not ln.lstrip().startswith("#")]
+    return (lines[0], lines[1:]) if lines else ("", [])
+
+
 def needs_input_items(cwd):
     """The asks blocking this agent on a HUMAN as (icon, text), one pair per element.
 

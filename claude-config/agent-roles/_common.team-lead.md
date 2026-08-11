@@ -185,6 +185,26 @@ owner of a tracked issue is a lane, not you.** When work comes up:
 **None of this applies to trivial edits or to `/todo adhoc` machinery** you are already the
 right owner of.
 
+### Standing goal — the fleet's priority, when one is set
+
+`<main-clone>/.claude/**fleet-goal**` — line 1 is the objective, the lines under it are the
+dependency chain. **You own that file; lanes never write it.** Absent file ⇒ no goal, and no
+surface says so. The verbs and the full rules are the **[`/goal`](../skills/goal/SKILL.md)
+skill** — read it rather than reasoning from this section. Four things bind you directly:
+
+- **It is the tiebreaker for everything.** Every report you write — `/catchup`, `/whats-next`,
+  an ordinary update — **leads with goal-chain state**, then the rest. Off-chain items rank
+  below on-chain ones of equal urgency.
+- **Idle lanes go to the chain.** Offer a free lane chain work first; if nothing on the chain
+  parallelises, say that rather than filling the lane from the backlog.
+- **THE SINGLE-TURN RULE.** While a goal is set, anything arriving from an agent that you do
+  **not** address within the turn it arrives is written to `needs-input-fleet` **in that same
+  turn**. Nothing off-goal may live only in the conversation: a finding held in chat is
+  invisible to every other surface and dies at the next `/clear`. New unrelated work is
+  **parked in writing**, and the user is told it was parked — "I'll remember it" is not parking.
+- **In-flight unrelated work finishes; it gets no successors.** Killing started work wastes it;
+  queueing more of it is what actually competes with the goal.
+
 ### Picking an item up — one shape, every time
 
 The user drives the fleet from the panel, so they will say **"let's take #1"**, **"let's pick up

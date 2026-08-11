@@ -91,6 +91,13 @@ deferral is **written into the source list in the same turn**, not merely rememb
 
 ## Step 2 — Rank
 
+**A STANDING GOAL RE-RANKS THE POOL.** If `<main clone>/.claude/fleet-goal` exists, read it as
+part of step 1 and rank **goal-chain items first**, in chain order, before the priorities
+below — an item that moves the chain outranks an off-chain item of equal urgency, and the 📌
+line says where the chain stands rather than where the biggest generic unblock is. Off-chain
+items still appear, below. No goal file ⇒ this paragraph does nothing, and never print a
+"no goal" line. Rules: [`/goal`](../goal/SKILL.md).
+
 Same priority as catchup's queue, because it answers the same question from the other side:
 
 1. A person or lane is idle right now waiting on this.
@@ -130,7 +137,7 @@ When two items tie, prefer the one that frees a whole lane over the one that fre
 
 ---
 
-**Skill Version**: 1.2.0
+**Skill Version**: 1.3.0
 **Category**: Reporting / Fleet
 
 _Companions: `/catchup` (backward-looking sibling), the 4ME list

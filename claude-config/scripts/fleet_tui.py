@@ -30,6 +30,13 @@ to tell whether it does anything. The stamp moving is the answer; past three tic
 nothing arriving it stops being a stamp and says NOT REFRESHING, in yellow, on a clock of its
 own — the state "no data is coming" cannot be drawn by the arrival of data.
 
+THE HEADER ALSO CARRIES THE FLEET'S STANDING GOAL, when one is set (`<main clone>/.claude/
+fleet-goal`, line 1). It is the one line that says what everything else on the screen is FOR,
+so it rides above the lanes rather than behind a keypress — and it is re-read on the same tick
+as everything else, so a goal the lead rewrites mid-session lands without a restart. No goal
+file means no line at all: a fleet with no standing objective is the ordinary case, and a
+permanent "no goal" row would spend a row to say nothing.
+
 `r` IS NOT THE TICK. The timer is allowed to serve a three-minute-old PR list, because the
 render must never wait on the network. A keypress is a person saying they do not believe what
 they are reading, so `r` re-fetches that too, before the snapshot, and pays the round trip.
@@ -60,7 +67,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_KINDS, ask_kind, branch_for, clip,  # noqa: E402
-                          fmt_age, fmt_ago, refresh_open_prs, status_text)
+                          fleet_goal, fleet_goal_path, fmt_age, fmt_ago,
+                          refresh_open_prs, status_text)
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
@@ -536,6 +544,9 @@ def snapshot():
     lanes_dir = os.path.dirname(lanes[0]["path"].rstrip("/")) if lanes else ""
     fleet_path = os.path.join(os.path.dirname(lanes_dir.rstrip("/")), "needs-input-fleet") \
         if lanes_dir else ""
+    # The standing goal sits beside that list and is re-read on this same tick — a goal the
+    # lead changed mid-session must not need a restart to stop pointing at the old objective.
+    goal, goal_chain = fleet_goal(fleet_goal_path(lanes_dir))
 
     for r in lanes:
         r["ask_path"] = os.path.join(r["path"], ".claude", "needs-input")
@@ -558,6 +569,8 @@ def snapshot():
         "subs": subs,
         "fleet": _ask_lines(fleet_path) if fleet_path else [],
         "fleet_path": fleet_path,
+        "goal": goal,
+        "goal_chain": goal_chain,
         "ctx": {"linear_base": linear_base,
                 "repo": _repo_url(lanes[0]["path"]) if lanes else ""},
         "error": "",
@@ -876,6 +889,12 @@ class FleetTUI(App):
     CSS = """
     Screen { background: $surface; layers: base overlay; }
     #head { padding: 0 1; height: 1; color: $text-muted; }
+    /* The standing goal. Absent file ⇒ no widget on screen at all: a fleet with no goal is
+       the ordinary case, and a permanent row saying "no goal" would cost a line to say
+       nothing. Height 1 and no wrap — the objective is a ONE-LINER by contract, and a goal
+       that reflowed the header on every edit would move the panel under it. */
+    #goal { display: none; padding: 0 1; height: 1; color: $text; }
+    #goal.-show { display: block; }
 
     /* A PANEL, NOT A TOAST. As a notification each `?` stacked another copy — press it three
        times, get three legends — because notifications queue by design and only expire on a
@@ -1002,6 +1021,11 @@ class FleetTUI(App):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
+        # THE STANDING GOAL, directly under the refresh stamp. It is the one line on this
+        # screen that says what all the others are FOR, so it sits above the lanes rather
+        # than in a panel you have to open. It is hidden entirely when no goal is set —
+        # `display: none`, not an empty string, so the row is given back to the fleet.
+        yield Static("", id="goal")
         with Panels(id="panels"):
             yield ListView(id="lanes")
             yield ListView(id="fleet")
@@ -1144,7 +1168,23 @@ class FleetTUI(App):
         # merely moves uptime, so the fit costs nothing on a steady fleet.
         self._fit_lanes()
 
+    def update_goal(self):
+        """The standing-goal line — shown only while a goal file exists.
+
+        Written through the same changed-only guard as the header, and toggled by CLASS
+        rather than by writing an empty string: an empty Static still occupies its row, and
+        the whole contract here is that no goal costs no space.
+        """
+        goal = (self.data.get("goal") or "").strip()
+        w = self.query_one("#goal", Static)
+        markup = "  [b yellow]🎯 GOAL[/]  [b]%s[/]" % linkify(
+            escape(goal), self.data.get("ctx") or {}) if goal else ""
+        if str(w.content) != markup:
+            w.update(markup)
+        w.set_class(bool(goal), "-show")
+
     def update_head(self):
+        self.update_goal()
         d = self.data
         # The indicator rides along even on the error path — an error IS a refresh result, and
         # the question "is this view still alive" is exactly the one the reader has when the

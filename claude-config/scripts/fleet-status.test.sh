@@ -282,6 +282,16 @@ hasnt "the old label is gone from the table" "NEEDS YOU"                "$(run)"
 rm -f "$T/needs-input-fleet"
 hasnt "with no fleet asks there is no heading" "4ME" "$(run)"
 
+# ── the standing goal ────────────────────────────────────────────────────────────────────
+# One objective the whole fleet is pointed at, beside the 4ME list and owned by the lead. It
+# rides the header because it is what every other line on this pane is FOR — and it is absent
+# entirely when unset, since a permanent "no goal" row spends a line to say nothing.
+hasnt "with no goal file there is no goal line" "GOAL" "$(run)"
+printf 'ship DX-6 end to end\nneeds: SRV-11 merged\n' > "$T/fleet-goal"
+has   "the goal one-liner rides the header" "🎯 GOAL  ship DX-6 end to end" "$(run)"
+hasnt "…and the chain under it is not header material" "SRV-11 merged" "$(run)"
+rm -f "$T/fleet-goal"
+
 # ── json ─────────────────────────────────────────────────────────────────────────────────
 j="$(run --json | python3 -c '
 import json,sys

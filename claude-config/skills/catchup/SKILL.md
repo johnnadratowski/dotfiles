@@ -56,6 +56,12 @@ mentioned in the output.
 **Anything you assert about repo or code state gets checked against `origin/master`**, not your
 tree. A lane behind master reports confident, checkable, wrong answers.
 
+**A STANDING GOAL OUTRANKS RECENCY.** If `<main clone>/.claude/fleet-goal` exists, read it here
+too: the 📌 line becomes where the **goal chain** now stands, the chain's own movement leads
+"what happened", and the queue ranks chain-moving items above off-chain ones of equal urgency.
+Off-chain items sort lower; they are never dropped. No goal file ⇒ nothing changes, and never
+print a "no goal" line. Rules: [`/goal`](../goal/SKILL.md).
+
 ## Step 2 — What happened
 
 **At most five bullets. One line each.** Outcomes only.
@@ -129,7 +135,7 @@ These are checkable, which is the point:
 
 ---
 
-**Skill Version**: 1.0.0
+**Skill Version**: 1.1.0
 **Category**: Reporting / Fleet
 
 _Companions: `.claude/scripts/fleet-status.sh` (the lead's live view), the per-lane

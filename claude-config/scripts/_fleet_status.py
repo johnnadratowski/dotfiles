@@ -15,9 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, agent_transcript, ask_kind, clip, context_for, fmt_age, fmt_ago, fmt_secs,
-    last_active, needs_input, needs_input_items, open_prs_for, status_age, status_line,
-    tickets_for,
+    ASK, agent_transcript, ask_kind, clip, context_for, fleet_goal, fleet_goal_path,
+    fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items, open_prs_for,
+    status_age, status_line, tickets_for,
 )
 
 
@@ -241,6 +241,14 @@ def main():
     # The clock is what tells you the view is live rather than a frozen pane you left open.
     head += "  ·  " + os.environ.get("FLEET_NOW", "")
     sys.stdout.write(head.rstrip() + "\n")
+
+    # THE STANDING GOAL, under the header and above everything it explains. Printed only when
+    # a goal file exists — no goal is the ordinary case, and a permanent "no goal" line would
+    # spend a row of the pane saying nothing. Same file and same shape as the TUI's goal line,
+    # so the two views cannot name different objectives.
+    goal, _chain = fleet_goal(fleet_goal_path(os.environ.get("FLEET_LANES", "")))
+    if goal:
+        sys.stdout.write("  🎯 GOAL  %s\n" % goal)
 
     if not data:
         sys.stdout.write("  (no lanes under %s)\n" % os.environ.get("FLEET_LANES", "?"))

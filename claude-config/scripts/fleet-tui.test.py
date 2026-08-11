@@ -41,6 +41,8 @@ What it locks in — each is a way this view could lie or lose work:
   - …and forces the one fact behind a cache (the PR list), which the timer still serves cached
   - …and the header carries a `refreshed HH:MM:SS` that moves when data LANDS, goes loud when
     three ticks bring nothing, and has its own clock so that state can draw itself at all
+  - the fleet's STANDING GOAL is on the header while one is set, re-read on the same tick as
+    everything else, and occupies no row at all when no goal file exists
 """
 
 import asyncio
@@ -87,6 +89,9 @@ async def main():
     os.makedirs(os.path.join(lane, ".claude"))
     ask_path = os.path.join(lane, ".claude", "needs-input")
     fleet_path = os.path.join(tmp, "needs-input-fleet")
+    # The standing goal sits beside the fleet ask list, and starts ABSENT: no goal is the
+    # ordinary state of a fleet, and the view has to render it as nothing at all.
+    goal_path = os.path.join(tmp, "fleet-goal")
     with open(ask_path, "w") as f:
         f.write("review: the DX-6 diff\nsomething untyped\n")
     with open(fleet_path, "w") as f:
@@ -147,6 +152,11 @@ async def main():
             "subs": [],
             "fleet": fleet_tui._ask_lines(fleet_path),
             "fleet_path": fleet_path,
+            # Read through the REAL reader on every call, exactly as snapshot() does, so the
+            # "a goal edited mid-session lands on the next tick" assertion is testing the
+            # re-read rather than a value the fixture happened to hold.
+            "goal": fleet_tui.fleet_goal(goal_path)[0],
+            "goal_chain": fleet_tui.fleet_goal(goal_path)[1],
             "ctx": {"linear_base": "https://linear.app/acme",
                     "repo": "https://github.com/acme/goals"},
             "error": "",
@@ -361,6 +371,70 @@ async def main():
             await pilot.pause()
         ok("…and clears the moment one does",
            "NOT REFRESHING" not in str(app.query_one("#head", Static).content))
+
+        # ── the standing goal ────────────────────────────────────────────────────────────
+        # The one line that says what everything else on the screen is FOR. Three properties,
+        # and the absent case is the one worth guarding: a fleet with no goal is ordinary, so
+        # a permanent row saying "no goal" would spend screen to say nothing — and, worse,
+        # would make the presence of a goal indistinguishable at a glance from its absence.
+        goal_w = app.query_one("#goal", Static)
+        ok("with no goal file there is no goal line at all",
+           str(goal_w.content) == "" and not goal_w.has_class("-show"),
+           (str(goal_w.content), goal_w.classes))
+
+        with open(goal_path, "w") as f:
+            f.write("ship DX-6 end to end\n# a comment\ndepends: SRV-11 merged\n")
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        # The id inside it is a link by now — the goal names tickets like every other line on
+        # this screen does, so it is linkified too. Match around the link, not through it.
+        ok("a goal file puts the objective on the header",
+           "ship [link='linear://acme/issue/DX-6']DX-6[/link] end to end"
+           in str(goal_w.content), str(goal_w.content))
+        ok("…in the goal line specifically, which is now shown",
+           goal_w.has_class("-show") and "GOAL" in str(goal_w.content),
+           (str(goal_w.content), goal_w.classes))
+        ok("…and only the one-liner — the chain below it is not header material",
+           "SRV-11 merged" not in str(goal_w.content), str(goal_w.content))
+
+        # RE-READ ON THE TICK, not at startup. A goal the lead rewrites mid-session must not
+        # need a restart to stop pointing the fleet at the old objective.
+        with open(goal_path, "w") as f:
+            f.write("cut the release\n")
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        ok("a rewritten goal lands on the next refresh",
+           "cut the release" in str(goal_w.content)
+           and "ship DX-6" not in str(goal_w.content), str(goal_w.content))
+
+        os.remove(goal_path)
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        ok("…and clearing the goal takes the line away again",
+           str(goal_w.content) == "" and not goal_w.has_class("-show"),
+           (str(goal_w.content), goal_w.classes))
+
+        # The reader itself, at the level the file format is decided: line 1 is the objective,
+        # everything under it is the chain, and comments and blanks are annotation.
+        with open(goal_path, "w") as f:
+            f.write("\n# heading\nland the migration\n\nneeds: SRV-11\nthen: SRV-12\n")
+        ok("the goal file is (objective, chain) with comments and blanks skipped",
+           fleet_tui.fleet_goal(goal_path)
+           == ("land the migration", ["needs: SRV-11", "then: SRV-12"]),
+           fleet_tui.fleet_goal(goal_path))
+        ok("a missing goal file is empty, not an exception",
+           fleet_tui.fleet_goal(os.path.join(tmp, "nope")) == ("", []))
+        # The goal belongs to the FLEET, so it sits beside the fleet ask list rather than in a
+        # lane — the same placement rule, resolved by the same kind of walk.
+        ok("the goal file sits beside needs-input-fleet",
+           fleet_tui.fleet_goal_path(os.path.join(tmp, "lanes")) == goal_path,
+           fleet_tui.fleet_goal_path(os.path.join(tmp, "lanes")))
+        ok("…and no lanes dir names no goal file, rather than one in the cwd",
+           fleet_tui.fleet_goal_path("") == "")
+        os.remove(goal_path)
 
         # THE OTHER CLOCK. The status text is only ever as current as the lead's memory —
         # that is what let every lane's line freeze for four days. The transcript mtime needs
