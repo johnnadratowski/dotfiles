@@ -156,7 +156,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "npx -y ccstatusline@latest",
+    "command": "/opt/homebrew/bin/ccstatusline",
     "padding": 0,
     "refreshInterval": 30
   },
