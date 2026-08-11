@@ -425,6 +425,92 @@ def ask_kind(line):
     return ASK_GENERAL, line
 
 
+# ── an ask's METADATA TRAILERS ───────────────────────────────────────────────────────────
+# An ask line is written for a HUMAN to read in one line, and that line is the product. The
+# facts around it — which ticket it is about, who raised it, when, what it is holding up —
+# are worth keeping, but every one of them spent inline is a word of the actual question
+# pushed off the 60-char list view. So they ride at the TAIL, in brackets, and the one-line
+# views drop them: `[SRV-24] [from:feature-3] [added:2026-08-10] [unblocks:vii idle]`.
+#
+# BRACKETS, AND ONLY AT THE END. Parsing is a repeated bite off the tail, never a scan of the
+# whole line, because an ask is prose and prose contains brackets — "the [sic] in their reply"
+# is text, not metadata, and a line-wide regex would eat it.
+#
+# A BARE trailer is a ticket: `[SRV-24]`, `[PR#147]`. Everything else is `key:value`.
+#
+# UNKNOWN TRAILERS ARE KEPT, NOT REJECTED. A key this reader has never heard of renders
+# verbatim in the detail dialog under an empty label. The lead writes this file by hand and
+# the format will grow; a parser that errored on the first unrecognised key would make every
+# extension a breaking change, and one that silently DROPPED it would lose the fact without
+# ever saying so.
+ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks")
+
+_TRAILER_TAIL = re.compile(r"\s*\[([^\[\]]+)\]\s*$")
+_TRAILER_KV = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$")
+_TRAILER_TICKET = re.compile(r"^(?:[A-Z]{2,5}-\d+|PR#\d+|#\d+)$")
+
+
+def ask_trailers(line):
+    """(text, trailers) — an ask split from the bracket trailers on its tail.
+
+    `trailers` is a list of (key, value) in the order they were WRITTEN, with the key lowered
+    for the ones this reader knows. An unrecognised trailer keeps its whole raw body under an
+    empty key, which is how every caller spells "render this as-is".
+    """
+    text = (line or "").rstrip()
+    found = []
+    while True:
+        m = _TRAILER_TAIL.search(text)
+        if not m:
+            break
+        found.append(m.group(1).strip())
+        text = text[:m.start()].rstrip()
+    trailers = []
+    for raw in reversed(found):          # bitten off back-to-front; restore writing order
+        kv = _TRAILER_KV.match(raw)
+        if kv and kv.group(1).lower() in ASK_TRAILER_KEYS:
+            trailers.append((kv.group(1).lower(), kv.group(2).strip()))
+        elif _TRAILER_TICKET.match(raw):
+            trailers.append(("ticket", raw))
+        else:
+            trailers.append(("", raw))
+    return text, trailers
+
+
+# The deferral stamp `/whats-next` writes into these lists when the user puts an item off. It
+# stays INLINE in the one-line views — "why is this still here" is answered by the stamp, and
+# a list that hid it would re-ask a question the user already declined. The dialog has room
+# to give it its own labelled field, so there it is lifted out of the prose.
+_DEFERRED = re.compile(r"\s*\((deferred\b[^()]*)\)\s*$", re.I)
+
+
+def ask_deferral(text):
+    """(text, stamp) — the trailing `(deferred …)` stamp lifted out of an ask's text."""
+    m = _DEFERRED.search(text or "")
+    if not m:
+        return (text or "").rstrip(), ""
+    return text[:m.start()].rstrip(), m.group(1).strip()
+
+
+def ask_detail(line):
+    """Everything one ask line carries, for the surface that has room to show all of it.
+
+    Ordered the way the line is written — kind token, prose, deferral stamp, trailers — and
+    each layer peeled by the reader that owns it, so the detail view and the one-line views
+    cannot disagree about where the prose ends.
+    """
+    raw = (line or "").strip()
+    m = _ASK_KIND.match(raw)
+    if m and m.group(1) in ASK_KINDS:
+        kind, icon, body = m.group(1), ASK_KINDS[m.group(1)], raw[m.end():].strip()
+    else:
+        kind, icon, body = "", ASK_GENERAL, raw
+    body, trailers = ask_trailers(body)   # trailers sit AFTER the stamp, so they come off first
+    body, deferral = ask_deferral(body)
+    return {"kind": kind, "icon": icon, "text": body,
+            "deferral": deferral, "trailers": trailers}
+
+
 # ── the fleet's STANDING GOAL ────────────────────────────────────────────────────────────
 # One objective the whole fleet is pointed at, owned by the lead and written by the `/goal`
 # skill. It lives BESIDE the lanes dir (`<main clone>/.claude/fleet-goal`), for the same

@@ -326,6 +326,23 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
 the per-lane reader walks *up*, so that name in the main clone gets picked up as the lead lane's
 own asks.
 
+**Write what you know about an ask as TRAILERS** — optional bracket fields at the *end* of the
+line, after any `(deferred …)` stamp:
+
+```
+product: fold MON-10 into this cycle? [MON-10] [from:feature-3] [added:2026-08-11] [unblocks:vii idle on this]
+```
+
+`[SRV-24]` / `[PR#147]` is the ticket (bare, no key); `[from:]` who raised it, `[added:]` when,
+`[unblocks:]` what is waiting. **The one-line views hide them** and show only kind + ask +
+deferral — a row is a column, and provenance there costs the width the question needs. Enter on
+a 4ME row in the TUI opens a dialog that shows the ask **in full** with the trailers as labelled
+fields, an age beside the date, and a **🎯 marker when the ticket is also named in `fleet-goal`**,
+i.e. the ask is gating the standing objective. An unknown trailer is kept and rendered as-is, so
+the format can grow without a code change; brackets are metadata only at the *end* of a line, so
+`[sic]` mid-sentence stays prose. **Trailers are optional** — a bare one-line ask is still the
+normal case, and the dialog says so rather than showing empty fields.
+
 `fleet-status` renders lane asks nested under that lane's status line, and the fleet list under
 its own heading after all lanes. **Together they are the user's live to-do list** — that is the
 artifact, not a status decoration, so it is only useful if it is exactly current. Stale entries

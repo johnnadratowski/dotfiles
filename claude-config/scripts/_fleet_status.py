@@ -15,9 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, agent_transcript, ask_kind, clip, context_for, fleet_goal, fleet_goal_path,
-    fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items, open_prs_for,
-    status_age, status_line, tickets_for,
+    ASK, agent_transcript, ask_kind, ask_trailers, clip, context_for, fleet_goal,
+    fleet_goal_path, fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items,
+    open_prs_for, status_age, status_line, tickets_for,
 )
 
 
@@ -60,6 +60,11 @@ def general_asks():
         if not ln.strip() or ln.lstrip().startswith("#"):
             continue
         icon, text = ask_kind(ln)
+        # Trailers are for the surface that can afford them. This is a one-line column, and a
+        # `[from:…] [added:…]` tail spends its width on provenance while pushing the actual
+        # question out of view. The deferral stamp deliberately STAYS: it is the answer to
+        # "why is this still on the list", which the list itself has to carry.
+        text, _trailers = ask_trailers(text)
         out.append((icon, clip(text)))
     return out
 

@@ -279,6 +279,22 @@ has   "the fleet-level list is headed 4ME"  "4ME  (not lane-specific)"  "$(run)"
 has   "its first item is numbered 1"        " 1  🚀 merge #124"         "$(run)"
 has   "…and its second is numbered 2"       " 2  💬 fold MON-10 in?"    "$(run)"
 hasnt "the old label is gone from the table" "NEEDS YOU"                "$(run)"
+
+# METADATA TRAILERS ARE NOT FOR THIS VIEW. The lead writes provenance onto these lines —
+# ticket, who raised it, when, what it blocks — and this is a one-line column: a `[from:…]`
+# tail here would spend the row's width on bookkeeping and push the actual question out of
+# sight. The TUI's detail dialog is where they are rendered as fields.
+printf 'product: fold MON-10 in? [MON-10] [from:feature-3] [added:2026-08-10]\n' \
+  > "$T/needs-input-fleet"
+has   "the ask itself survives the trailers"  " 1  💬 fold MON-10 in?"  "$(run)"
+hasnt "the ticket trailer is not in the row"  "[MON-10]"                "$(run)"
+hasnt "…nor who raised it"                    "from:feature-3"          "$(run)"
+hasnt "…nor when it was added"                "added:2026-08-10"        "$(run)"
+# THE DEFERRAL STAMP STAYS. It is the answer to "why is this still on the list", so a view
+# that hid it would re-ask a question the user has already declined once.
+printf 'product: fold MON-10 in? (deferred 2026-08-11 — until SRV-21) [MON-10]\n' \
+  > "$T/needs-input-fleet"
+has   "the deferral stamp is kept inline, unlike the trailers" "deferred 2026-08-11" "$(run)"
 rm -f "$T/needs-input-fleet"
 hasnt "with no fleet asks there is no heading" "4ME" "$(run)"
 

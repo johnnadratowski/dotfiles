@@ -43,6 +43,11 @@ What it locks in — each is a way this view could lie or lose work:
     three ticks bring nothing, and has its own clock so that state can draw itself at all
   - the fleet's STANDING GOAL is on the header while one is set, re-read on the same tick as
     everything else, and occupies no row at all when no goal file exists
+  - enter on a 4ME row opens THAT ASK, not whatever lane the other panel was left on — and
+    shows it in full, since the row clips it at sixty characters
+  - …with its bracket trailers as labelled fields, hidden from the row, unknown keys kept,
+    and a marker when the standing goal names the same ticket
+  - …and prose containing a bracketed id renders instead of taking the whole app down
 """
 
 import asyncio
@@ -56,7 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fleet_tui  # noqa: E402
 # The threshold by NAME, not a literal: a test that hard-codes 7200 goes on passing after
 # someone retunes the constant, while asserting about a boundary that no longer exists.
-from _agent_facts import STATUS_STALE_AFTER  # noqa: E402
+from _agent_facts import STATUS_STALE_AFTER, ask_deferral  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
 PASS = FAIL = 0
@@ -1060,8 +1065,15 @@ async def main():
                opened == [["open", "https://example.invalid/DX-6"]], opened)
             ok("…and pressing it did NOT open the overlay", app.detail is None)
             opened.clear()
+            # THE BUG THIS REPLACES, and why the old test could not see it. Enter on a 4ME row
+            # fell through to action_open_ticket, which read the LANES list no matter which
+            # panel had focus — so it acted on the highlighted lane while the user was looking
+            # at a fleet ask, opening DX-6 or warning "no ticket on this lane" about a row that
+            # was not on screen. The assertion here was `opened and app.detail is None`, which
+            # passed on exactly that behaviour: it never named the ticket, so the wrong one
+            # satisfied it. Every assertion below names what opened.
             with open(fleet_path, "w") as f:
-                f.write("ship: merge #124\n")
+                f.write("ship: merge the release PR [PR#124] [from:feature-2]\n")
             app.load()
             await pilot.pause()
             await pilot.pause()
@@ -1070,10 +1082,251 @@ async def main():
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
-            ok("enter on a 4ME row still opens the ticket rather than a detail overlay",
-               opened and app.detail is None, opened)
+            ok("enter on a 4ME row opens the ask overlay rather than acting on a lane",
+               app.ask is not None and app.detail is None and opened == [],
+               (app.ask, app.detail, opened))
+            await pilot.press("o")
+            await pilot.pause()
+            ok("…and o there opens the ASK's own ticket, not the highlighted lane's",
+               opened == [["open", "https://github.com/acme/goals/pull/124"]], opened)
+            await pilot.press("escape")
+            await pilot.pause()
+            ok("…and escape closes it", app.ask is None)
         finally:
             fleet_tui.subprocess.Popen = real_popen
+
+        # ── the 4ME detail overlay ───────────────────────────────────────────────────────
+        # The list beside the lanes had the same defect the lane rows had: it is a column, so
+        # it clips at sixty characters, and the clipped half was simply unreachable. This is
+        # the surface with room for it — plus the facts the lead knows about an ask and had
+        # nowhere to write: which ticket, who raised it, when, what it is holding up.
+        def ask_text():
+            return "\n".join(str(w.content)
+                             for w in app.query_one("#ask-detail").query(Static))
+
+        # A REAL over-length ask, so the clip is exercised rather than assumed. The prose runs
+        # well past sixty characters and the trailers sit behind a deferral stamp, which is
+        # the order the live file is written in.
+        LONG = ("MON-10 Phase 4 rescope — likely moot: ticket sequencing already gates "
+                "Phase 4 behind SRV-21; Phases 1-3 are unblocked")
+        with open(fleet_path, "w") as f:
+            f.write("product: %s (deferred 2026-08-11 — until SRV-11+SRV-21 merge) "
+                    "[MON-10] [from:feature-3] [added:2026-08-10] "
+                    "[unblocks:MON-10 phase 4 after SRV-21] [odd:keep me]\n" % LONG)
+        with open(goal_path, "w") as f:
+            f.write("finish the MON-10 chain\n1. SRV-11\n2. SRV-21\n3. MON-10\n")
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+
+        # THE LIST STILL CLIPS — that is the column's job and the reason the dialog exists.
+        # Asserting it here keeps the two halves of the contract in one place: what the row
+        # drops is exactly what the overlay has to go back to the file for.
+        row_text = str(app.query_one("#fleet", ListView).children[0].query_one(Static).content)
+        ok("the 4ME row still clips its ask to the column",
+           row_text.rstrip().endswith("…"), row_text)
+        ok("…and hides the trailers, which are provenance rather than the question",
+           "from:feature-3" not in row_text and "added:" not in row_text
+           and "[MON-10]" not in row_text, row_text)
+
+        fleet.focus()
+        fleet.index = 0
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+
+        # THE WHOLE ASK, and specifically the half the row threw away. Matching on the TAIL is
+        # what makes this test able to fail: asserting the opening words would pass against the
+        # clipped value too, which is the bug it is guarding.
+        ok("the overlay shows the ask in full, including what the row clipped",
+           "Phases 1-3 are unblocked" in ask_text(), ask_text())
+        ok("…and does not clip it itself", "…" not in ask_text(), ask_text())
+        # The trailers are METADATA, so they become fields — they must not be left sitting in
+        # the prose they were lifted out of.
+        ok("…with the trailers lifted out of the text rather than printed in it",
+           "[from:feature-3]" not in ask_text() and "[MON-10]" not in ask_text(), ask_text())
+
+        ok("the kind tag is a labelled field", "product" in ask_text(), ask_text())
+        ok("the ticket is a field, linked to the tracker",
+           "linear://acme/issue/MON-10" in ask_text(), ask_text())
+        ok("who raised it is a field", "raised by" in ask_text()
+           and "feature-3" in ask_text(), ask_text())
+        ok("…and when, with an age beside the date rather than instead of it",
+           "added" in ask_text() and "2026-08-10" in ask_text()
+           and "ago)" in ask_text(), ask_text())
+        ok("the deferral stamp is its own field, not left buried in the prose",
+           "deferred" in ask_text() and "until SRV-11+SRV-21 merge" in ask_text()
+           and "(deferred" not in str(
+               app.query_one("#ask-detail-text", Static).content), ask_text())
+        # The ids inside a trailer are linkified like every other id on this screen, so match
+        # AROUND the link rather than through it — `after SRV-21` is `after [link=…]SRV-21…`.
+        ok("what it unblocks is a field",
+           "unblocks" in ask_text() and "phase 4 after" in ask_text()
+           and "]SRV-21[/link]" in ask_text(), ask_text())
+        # THE GOAL MARKER. MON-10 is named in the goal chain, so this ask is not one item
+        # among many — it is gating the objective the whole fleet is pointed at.
+        ok("an ask whose ticket the standing goal names is marked as chain-gating",
+           "on the goal chain" in ask_text(), ask_text())
+        # AN UNKNOWN TRAILER IS KEPT. The lead writes this file by hand and the format will
+        # grow; a key this reader has never heard of must survive to the screen rather than
+        # being dropped silently or blowing the dialog up.
+        ok("an unknown trailer renders as-is instead of erroring or vanishing",
+           "odd:keep me" in ask_text(), ask_text())
+
+        # RE-READ ON THE TICK, from the FILE. The lead edits this list while the user is
+        # reading it, and an overlay that kept the row it was opened with would show an ask
+        # that has since been reworded — the same defect the lane dialog already fixed.
+        with open(fleet_path, "w") as f:
+            f.write("product: %s (deferred 2026-08-11 — until SRV-11+SRV-21 merge) "
+                    "[MON-10] [from:feature-3] [added:2026-08-10] "
+                    "[unblocks:MON-10 phase 4 after SRV-21] [odd:keep me]\n"
+                    % (LONG + " AND NEWLY REWORDED"))
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        ok("an ask reworded under the open overlay lands on the next tick",
+           "AND NEWLY REWORDED" in ask_text(), ask_text())
+
+        await pilot.press("escape")
+        await pilot.pause()
+        ok("escape closes the 4ME overlay", app.ask is None)
+
+        # An ask with NO metadata at all is the ordinary case — most lines in this file are
+        # one sentence. It must read as a plain ask, not as a broken one.
+        with open(fleet_path, "w") as f:
+            f.write("something untyped and bare\n")
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        fleet.focus()
+        fleet.index = 0
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        ok("an ask with no trailers opens, and says so rather than showing empty fields",
+           app.ask is not None and "no metadata" in ask_text()
+           and "something untyped and bare" in ask_text(), ask_text())
+        await pilot.press("escape")
+        await pilot.pause()
+        os.remove(goal_path)
+
+        # ── the trailer format itself ────────────────────────────────────────────────────
+        # Driven against the readers directly: this is where the FILE FORMAT is decided, and
+        # the lead writes that file by hand, so the edges are what matter.
+        ok("trailers come off the tail and keep their writing order",
+           fleet_tui.ask_trailers("do the thing [SRV-24] [from:vii] [added:2026-08-10]")
+           == ("do the thing",
+               [("ticket", "SRV-24"), ("from", "vii"), ("added", "2026-08-10")]),
+           fleet_tui.ask_trailers("do the thing [SRV-24] [from:vii] [added:2026-08-10]"))
+        # BRACKETS IN PROSE ARE PROSE. Only the tail is metadata — a line-wide scan would eat
+        # the "[sic]" out of a quoted sentence and silently change what the lead wrote.
+        ok("a bracket inside the sentence is left alone",
+           fleet_tui.ask_trailers("their reply said [sic] and then stopped [SRV-9]")
+           == ("their reply said [sic] and then stopped", [("ticket", "SRV-9")]),
+           fleet_tui.ask_trailers("their reply said [sic] and then stopped [SRV-9]"))
+        ok("an ask with no trailers is returned untouched",
+           fleet_tui.ask_trailers("just a question") == ("just a question", []))
+        ok("an unknown key is KEPT, under an empty label rather than dropped",
+           fleet_tui.ask_trailers("x [owner:jaa]") == ("x", [("", "owner:jaa")]),
+           fleet_tui.ask_trailers("x [owner:jaa]"))
+        ok("a bare non-ticket bracket is kept too, rather than mistaken for a ticket",
+           fleet_tui.ask_trailers("x [whatever]") == ("x", [("", "whatever")]),
+           fleet_tui.ask_trailers("x [whatever]"))
+        ok("a PR trailer is a ticket",
+           fleet_tui.ask_trailers("x [PR#147]") == ("x", [("ticket", "PR#147")]))
+
+        ok("the deferral stamp lifts off the tail of the prose",
+           ask_deferral("rescope it (deferred 2026-08-11 — until SRV-21)")
+           == ("rescope it", "deferred 2026-08-11 — until SRV-21"),
+           ask_deferral("rescope it (deferred 2026-08-11 — until SRV-21)"))
+        ok("…and an ordinary parenthetical is not mistaken for one",
+           ask_deferral("rescope it (per the sequencing ruling)")
+           == ("rescope it (per the sequencing ruling)", ""),
+           ask_deferral("rescope it (per the sequencing ruling)"))
+
+        # THE WHOLE LINE, in the order it is written: kind, prose, stamp, trailers. The stamp
+        # sits INSIDE the trailers' reach, so getting the peel order wrong strands one in the
+        # other — which is the one way this parser can quietly lose a field.
+        d = fleet_tui.ask_detail(
+            "product: rescope (deferred 2026-08-11 — until SRV-21) [MON-10] [from:woo]")
+        ok("ask_detail peels kind, prose, stamp and trailers in the written order",
+           d == {"kind": "product", "icon": "💬", "text": "rescope",
+                 "deferral": "deferred 2026-08-11 — until SRV-21",
+                 "trailers": [("ticket", "MON-10"), ("from", "woo")]}, d)
+        ok("an untyped ask still parses, as the general kind",
+           fleet_tui.ask_detail("bare [SRV-1]")["kind"] == "",
+           fleet_tui.ask_detail("bare [SRV-1]"))
+
+        CTX = {"linear_base": "https://linear.app/acme",
+               "repo": "https://github.com/acme/goals"}
+        ok("a ticket trailer resolves to the tracker's own deep link",
+           fleet_tui.ask_ticket_url("SRV-24", CTX) == "linear://acme/issue/SRV-24")
+        ok("a PR trailer resolves against the repo",
+           fleet_tui.ask_ticket_url("PR#147", CTX)
+           == "https://github.com/acme/goals/pull/147")
+        # NEVER A GUESSED BASE. A link that 404s is worse than plain text, because it looks
+        # authoritative — the same rule linkify already holds itself to.
+        ok("…and with no base learned there is no URL, rather than an invented one",
+           fleet_tui.ask_ticket_url("SRV-24", {}) == "")
+
+        CHAIN = ["1. SRV-11", "2. SRV-21", "3. MON-10"]
+        ok("a ticket named in the goal chain is on the chain",
+           fleet_tui.goal_mentions("MON-10", "finish the chain", CHAIN))
+        ok("…and one named in the objective line itself is too",
+           fleet_tui.goal_mentions("DX-6", "ship DX-6 end to end", []))
+        ok("a ticket the goal does not name is not",
+           not fleet_tui.goal_mentions("SRV-99", "finish the chain", CHAIN))
+        # WHOLE IDS ONLY. `SRV-1` is a different ticket from `SRV-11`, and usually a different
+        # lane — a substring match here would put the goal marker on the wrong ask.
+        ok("…and a prefix of a chain id does not count as a mention",
+           not fleet_tui.goal_mentions("SRV-1", "finish the chain", CHAIN))
+        ok("no ticket at all is never on the chain",
+           not fleet_tui.goal_mentions("", "finish the chain", CHAIN))
+
+        # ── a bracket in the prose must not take the TUI down ────────────────────────────
+        # FOUND BY MUTATION-TESTING THIS FEATURE, and pre-existing: `linkify` was called as
+        # `linkify(escape(text))` on the reasoning that ids contain no brackets. True, and
+        # beside the point — the hazard is the text AROUND the id. `rich.markup.escape` only
+        # escapes a `[` that already looks like a tag, so `[PR#124]` (capital P) survived
+        # unescaped, linkify inserted a link INSIDE it, and the renderer saw `[PR…]` as an
+        # opening tag with a stray `[/link]` after it: MarkupError, whole app down. One fleet
+        # ask or lane status mentioning a bracketed PR was enough.
+        #
+        # Asserted through the REAL renderer, not by eyeballing the string: the bug was that
+        # markup which looks plausible does not parse, so only parsing it proves anything.
+        from textual.markup import to_content
+
+        def renders(s):
+            try:
+                to_content(s)
+                return True
+            except Exception:
+                return False
+
+        CRASHERS = ["merge the release PR [PR#124] now",
+                    "see [SRV-24] and [PR#9] before deciding",
+                    "a [bracket] with no id at all",
+                    "trailing bracket [",
+                    "[link] is a word here"]
+        ok("prose containing a bracketed id still renders",
+           all(renders(fleet_tui.linkify(c, CTX)) for c in CRASHERS),
+           [c for c in CRASHERS if not renders(fleet_tui.linkify(c, CTX))])
+        # …and the link is still MADE — an escape that worked by disabling linkification
+        # would pass the test above while silently costing every id on the screen its link.
+        ok("…and the id inside the brackets is still linked",
+           "]#124[/link]" in fleet_tui.linkify("merge the release PR [PR#124] now", CTX),
+           fleet_tui.linkify("merge the release PR [PR#124] now", CTX))
+        ok("…with the literal bracket kept, escaped rather than eaten",
+           "\\[PR" in fleet_tui.linkify("merge the release PR [PR#124] now", CTX),
+           fleet_tui.linkify("merge the release PR [PR#124] now", CTX))
+
+        ok("an added-date becomes an age the reader does not have to compute",
+           fleet_tui.ask_age(
+               time.strftime("%Y-%m-%d", time.localtime(time.time() - 3 * 86400))) == "3d",
+           fleet_tui.ask_age(
+               time.strftime("%Y-%m-%d", time.localtime(time.time() - 3 * 86400))))
+        ok("…and a stamp that is not a date yields nothing rather than a guess",
+           fleet_tui.ask_age("last tuesday") == "" and fleet_tui.ask_age("") == "")
 
     # ── a lane's open PR, beside its ticket ──────────────────────────────────────────────
     # Driven against Lane.pr_markup directly rather than restarting the app three times. The

@@ -47,6 +47,11 @@ off, undoable in-session), and the per-lane tuning knobs in a lane's GITIGNORED
 project rather than to this machine. Every value it can write comes from a fixed vocabulary,
 because agent-tune.sh later types those strings into a live agent's pane.
 
+ENTER ON A 4ME ROW opens that ask IN FULL, for the same reason: the list is a column and clips
+at sixty characters, so the rest of the question was unreachable. The dialog also renders the
+ask's bracket TRAILERS — ticket, who raised it, when, what it unblocks — as labelled fields,
+marks it when its ticket is one the standing goal names, and hides those trailers from the row.
+
 ENTER ON AN AGENT ROW opens the detail overlay: that lane's status IN FULL — the row's column
 clips it to sixty characters, and this is the surface with room for the whole thing — its
 branch and distance from the base (local and origin, unfetched), what its session is running
@@ -66,9 +71,9 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
-from _agent_facts import (ASK, ASK_KINDS, ask_kind, branch_for, clip,  # noqa: E402
-                          fleet_goal, fleet_goal_path, fmt_age, fmt_ago,
-                          refresh_open_prs, status_text)
+from _agent_facts import (ASK, ASK_KINDS, ask_detail, ask_kind,  # noqa: E402
+                          ask_trailers, branch_for, clip, fleet_goal, fleet_goal_path,
+                          fmt_age, fmt_ago, refresh_open_prs, status_text)
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
@@ -131,6 +136,16 @@ _TICKET = re.compile(r"\b([A-Z]{2,5}-\d+)\b")
 _PR = re.compile(r"#(\d+)\b")
 
 
+def esc(s):
+    """Escape EVERY bracket, not just the tag-shaped ones `rich.markup.escape` catches.
+
+    Used for free text this file renders into markup — an ask's deferral stamp, a trailer
+    value — where the content is prose a human typed and any `[` in it is a literal. See
+    `linkify` for the failure this prevents.
+    """
+    return (s or "").replace("[", "\\[")
+
+
 def linkify(text, ctx):
     """Make every ticket id and PR number in a string clickable, wherever it appears.
 
@@ -138,12 +153,23 @@ def linkify(text, ctx):
     was dead text — and those are where most of them are. Textual emits OSC-8 for `[link=…]`,
     so this is the same mechanism the table used, applied to the whole line.
 
-    Call this AFTER escape(): escaping turns `[` into `\\[`, and the markup inserted here has
-    to survive that. Neither an id nor a `#123` contains a bracket, so the order is safe.
+    PASS IT RAW — it escapes the text itself, and it has to be the one that does.
+
+    This used to be called as `linkify(escape(text))`, on the reasoning that "neither an id nor
+    a `#123` contains a bracket, so the order is safe". The claim was about the ID and the
+    hazard was in the TEXT AROUND IT. `rich.markup.escape` only escapes a `[` that already
+    looks like a tag, so `[PR#124]` — capital P, not tag-shaped — came through untouched; this
+    function then inserted a link INSIDE it, and the renderer read `[PR…]` as an opening tag
+    with a stray `[/link]` after it and raised MarkupError. A fleet ask, a lane status or a
+    goal line mentioning a bracketed PR was enough to take the whole TUI down.
+
+    So every `[` is escaped here, unconditionally, and the links are inserted afterwards —
+    the one ordering in which no input can be mistaken for markup.
 
     A base URL is only ever LEARNED, never assembled from a guess about the workspace — a
     hyperlink that 404s is worse than plain text, because it looks authoritative.
     """
+    text = (text or "").replace("[", "\\[")
     base, repo = ctx.get("linear_base"), ctx.get("repo")
     if base:
         text = _TICKET.sub(
@@ -171,6 +197,60 @@ def linear_uri(url):
     """
     m = _LINEAR_URL.match(url or "")
     return "linear://%s/issue/%s" % (m.group(1), m.group(2)) if m else url
+
+
+_ASK_TICKET_PR = re.compile(r"^(?:PR)?#(\d+)$")
+_ASK_TICKET_ID = re.compile(r"^[A-Z]{2,5}-\d+$")
+
+
+def ask_ticket_url(tid, ctx):
+    """The URL an ask's `[TICKET]` trailer resolves to, or "" when it cannot be derived.
+
+    Same rule as linkify's, and for the same reason: a base URL is LEARNED from the fleet, never
+    assembled from a guess about the workspace. No base learned ⇒ the detail view shows the id
+    as plain text, which is honest, rather than a link that 404s while looking authoritative.
+    """
+    tid = (tid or "").strip()
+    base, repo = (ctx or {}).get("linear_base"), (ctx or {}).get("repo")
+    m = _ASK_TICKET_PR.match(tid)
+    if m:
+        return "%s/pull/%s" % (repo, m.group(1)) if repo else ""
+    if _ASK_TICKET_ID.match(tid) and base:
+        return linear_uri("%s/issue/%s" % (base, tid))
+    return ""
+
+
+def ask_age(added):
+    """"3d" for an `[added:YYYY-MM-DD]` stamp, or "" — the same shape `fmt_age` gives a lane.
+
+    A DATE IS NOT AN AGE. "added 2026-08-10" makes the reader do the subtraction against a
+    today they have to recall, which is exactly the arithmetic that let items sit for weeks
+    looking recent. Both are shown: the date is the fact, the age is what it means.
+
+    An unparseable stamp yields "" rather than a guess — the lead writes this file by hand.
+    """
+    try:
+        then = time.mktime(time.strptime((added or "").strip(), "%Y-%m-%d"))
+    except (ValueError, OverflowError):
+        return ""
+    return fmt_age(max(0, time.time() - then))
+
+
+def goal_mentions(tid, goal, chain):
+    """Is this ask's ticket named anywhere in the standing goal — objective or chain?
+
+    A WHOLE-ID match, not a substring: `SRV-1` must not light up because the chain names
+    `SRV-11`, which is a different ticket and very often a different lane. The goal file is
+    prose, so the id is found by the same word-boundary regex that linkifies it.
+    """
+    tid = (tid or "").strip()
+    if not tid:
+        return False
+    body = "\n".join([goal or ""] + list(chain or []))
+    pr = _ASK_TICKET_PR.match(tid)
+    if pr:
+        return any(m.group(1) == pr.group(1) for m in _PR.finditer(body))
+    return any(m.group(1) == tid for m in _TICKET.finditer(body))
 
 
 def _repo_url(path):
@@ -738,7 +818,7 @@ class Lane(ListItem):
         links = r.get("issue_links") or []
         ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
                        else linkify(i, self.ctx)
-                       for i, u in links) or linkify(escape(r.get("issue") or "—"), self.ctx)
+                       for i, u in links) or linkify(r.get("issue") or "—", self.ctx)
         # ≠ MEANS "THE BRANCH AND THE FILE DISAGREE, AND THIS IS THE BRANCH'S ANSWER". The id
         # shown is machine truth either way; the marker is there because the other source has
         # gone stale and someone should fix it — silently preferring the branch would hide the
@@ -761,7 +841,7 @@ class Lane(ListItem):
         yield Static(self.status_markup(), classes="lane-status")
         for raw in self.row.get("raw_asks") or []:
             icon, text = ask_kind(raw)
-            yield Static(f"{icon} {linkify(escape(clip(text)), self.ctx)}",
+            yield Static(f"{icon} {linkify(clip(text), self.ctx)}",
                          classes="lane-ask")
 
     def status_markup(self):
@@ -789,7 +869,7 @@ class Lane(ListItem):
         status = self.row.get("status") or ""
         age = fmt_age(self.row.get("status_age"))
         ago = fmt_ago(self.row.get("last_active"))
-        head = (f"[i]{linkify(escape(status), self.ctx)}[/]" if status
+        head = (f"[i]{linkify(status, self.ctx)}[/]" if status
                 else "[dim i]— no status —[/]")
         if status and age:
             head += f" [dim]({escape(age)} old)[/]"
@@ -835,12 +915,19 @@ class Ask(ListItem):
 
     def compose(self):
         icon, text = ask_kind(self.raw)
+        # THE TRAILERS COME OFF HERE, not at the source. `self.raw` stays the file's bytes
+        # because `x` deletes by exact line match and the detail overlay reads the whole
+        # thing — this row is one line in a column, so it shows the question and the
+        # deferral stamp, and leaves provenance to the surface with room for it.
+        text, _trailers = ask_trailers(text)
         yield Static("[dim]%2d[/]  %s %s" % (self.n, icon,
-                                             linkify(escape(clip(text)), self.ctx)))
+                                             linkify(clip(text), self.ctx)))
 
 
 DETAIL_HINT = ("[dim]j/k move · enter edits the highlighted knob · a applies the live knobs "
                "to the running agent · o opens the ticket · esc closes[/]")
+
+ASK_HINT = "[dim]o opens the ticket · esc closes[/]"
 
 
 class CfgRow(ListItem):
@@ -868,6 +955,21 @@ class Detail(Vertical):
     A PANEL, LIKE THE LEGEND — not a screen. The fleet panel behind it stays live and keeps
     ticking, which is the point: the numbers you are about to act on and the fleet you are
     acting on are visible at once.
+    """
+
+
+class AskDetail(Vertical):
+    """The overlay Enter opens on a 4ME row: the ask IN FULL, and what is known about it.
+
+    A SIBLING OF `Detail`, NOT A COPY. It shares that dialog's layer, its `-show` toggle, its
+    blank-line-between-sections rhythm, its scrolling text box and its refresh-on-the-tick —
+    the conventions are the same because the reader's job is the same. What differs is the
+    subject: a lane has git state and knobs, an ask has provenance and a question.
+
+    IT EXISTS BECAUSE THE LIST CLIPS AT SIXTY CHARACTERS. That cut happens in `Ask.compose`,
+    the same way a lane's status is cut for its column, so the only way to see the whole ask
+    was to open the file. This is the surface with room for it — the exact problem
+    `status_text()` solves for a lane, solved once more for the list beside it.
     """
 
 
@@ -948,6 +1050,37 @@ class FleetTUI(App):
     #detail-input.-show { display: block; }
     #detail-msg { height: auto; color: $text-muted; }
 
+    /* The 4ME overlay. Every rule here is the agent dialog's, restated for a different id
+       rather than shared through a class — the two are the same KIND of surface and are
+       meant to stay that way, so when one grows a convention the other is next to it in the
+       file. Narrower margins: an ask is prose, and prose wants a column, not a full screen. */
+    #ask-detail {
+        layer: overlay;
+        display: none;
+        margin: 2 5;
+        padding: 1 2;
+        height: auto;
+        max-height: 100%;
+        border: heavy $accent;
+        background: $panel;
+    }
+    #ask-detail.-show { display: block; }
+    #ask-detail > Static, #ask-detail > VerticalScroll { margin-bottom: 1; }
+    /* THE WHOLE ASK, WRAPPED AND SCROLLING. `width: 100%` is what wraps it to the dialog
+       instead of running off the edge, and it is re-measured on resize so widening the
+       terminal reflows the text. Taller ceiling than the lane dialog's status box because
+       this text IS the dialog rather than one section of four. */
+    #ask-detail-box {
+        height: auto;
+        max-height: 14;
+        width: 100%;
+        background: transparent;
+        scrollbar-size-vertical: 1;
+    }
+    #ask-detail-text { height: auto; width: 100%; }
+    #ask-detail-fields { height: auto; width: 100%; }
+    #ask-detail-msg { height: auto; color: $text-muted; }
+
     /* THE FOCUSED PANEL HAS TO BE UNMISTAKABLE. Both panels carrying the same quiet border
        left the reader guessing which one `x` was about to act on — and `x` deletes. So the
        unfocused panel is dimmed to a plain grey hairline and the focused one takes a heavy
@@ -1015,6 +1148,7 @@ class FleetTUI(App):
         self.full = None           # id of the panel currently fullscreened, or None
         self.fit_mode = "agents"   # which list `=` is currently fitting: "agents" or "4ME"
         self.detail = None         # the open overlay's assembled data, or None
+        self.ask = None            # the open 4ME overlay's {raw, n}, or None
         self.editing = None        # the cfg entry currently being edited, or None
         self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
         self.refreshing = False    # a request is in flight right now
@@ -1041,6 +1175,15 @@ class FleetTUI(App):
             yield ListView(id="detail-cfg")
             yield Input(id="detail-input")
             yield Static("", id="detail-msg")
+        with AskDetail(id="ask-detail"):
+            yield Static("", id="ask-detail-head")
+            # THE ASK ITSELF, in its own scroll box for the reason the lane's status has one:
+            # these lines are written to be read, some of them run long, and a dialog that
+            # grew without limit would push its own labelled fields off the bottom.
+            with VerticalScroll(id="ask-detail-box"):
+                yield Static("", id="ask-detail-text")
+            yield Static("", id="ask-detail-fields")
+            yield Static("", id="ask-detail-msg")
         yield Footer()
 
     def on_mount(self):
@@ -1137,6 +1280,7 @@ class FleetTUI(App):
         self.refreshing = False
         self.update_head()
         self.refresh_detail()
+        self.refresh_ask()
 
         rows = data["lanes"] + data["subs"]
         lanes = self.query_one("#lanes", ListView)
@@ -1178,7 +1322,7 @@ class FleetTUI(App):
         goal = (self.data.get("goal") or "").strip()
         w = self.query_one("#goal", Static)
         markup = "  [b yellow]🎯 GOAL[/]  [b]%s[/]" % linkify(
-            escape(goal), self.data.get("ctx") or {}) if goal else ""
+            goal, self.data.get("ctx") or {}) if goal else ""
         if str(w.content) != markup:
             w.update(markup)
         w.set_class(bool(goal), "-show")
@@ -1226,8 +1370,11 @@ class FleetTUI(App):
         covering. Letting them through would resize or DELETE something the user cannot see
         while they are reading a different thing entirely, so the overlay swallows them
         rather than acting at a distance.
+
+        The 4ME overlay counts too, and `x` is the reason it has to: it deletes the very ask
+        the dialog is showing, from a list the dialog is covering.
         """
-        return self.detail is not None
+        return self.detail is not None or self.ask is not None
 
     def _focused_list(self):
         for wid in ("#lanes", "#fleet"):
@@ -1237,23 +1384,40 @@ class FleetTUI(App):
         return self.query_one("#lanes", ListView)
 
     def action_cursor_down(self):
+        if self._ask_scroll("down"):
+            return
         self._cursor_list().action_cursor_down()
 
     def action_cursor_up(self):
+        if self._ask_scroll("up"):
+            return
         self._cursor_list().action_cursor_up()
+
+    def _ask_scroll(self, direction):
+        """j/k SCROLL the 4ME overlay rather than moving a cursor — it holds no list.
+
+        Returns True when it handled the key. Without this the keys would fall through to
+        `_cursor_list`, which hands them to the lane dialog's config list: a widget that is
+        not on screen, whose cursor silently re-aims the editor the user opens next.
+        """
+        if self.ask is None:
+            return False
+        box = self.query_one("#ask-detail-box", VerticalScroll)
+        box.scroll_down() if direction == "down" else box.scroll_up()
+        return True
 
     def _cursor_list(self):
         """j/k move the list the reader is actually looking at — the overlay's, when it is up.
         Moving the hidden lane cursor instead would silently re-aim `x` and `enter`."""
-        return (self.query_one("#detail-cfg", ListView) if self._overlay_owns_keys()
+        return (self.query_one("#detail-cfg", ListView) if self.detail is not None
                 else self._focused_list())
 
     # ── the agent detail overlay ─────────────────────────────────────────────────────────
     def action_enter(self):
         """One key, dispatched by what is on screen — never two meanings at once.
 
-        Inside the overlay it edits the highlighted knob. On an agent row it opens the
-        overlay. Anywhere else — the 4ME panel, chiefly — it keeps doing what it always did.
+        Inside the overlay it edits the highlighted knob. On an agent row it opens the lane
+        overlay; on a 4ME row, the ask overlay. Anywhere else it opens the ticket.
         """
         w = self._focused_list()
         self._enter(w.id, w.highlighted_child)
@@ -1272,10 +1436,19 @@ class FleetTUI(App):
         if list_id == "detail-cfg":
             self.edit_start()
             return
-        if self.detail is not None:
-            return                 # the overlay is up; the lists behind it are not the target
+        if self.detail is not None or self.ask is not None:
+            return                 # an overlay is up; the lists behind it are not the target
         if list_id == "lanes" and isinstance(item, Lane):
             self.open_detail(item.row)
+            return
+        # A 4ME ROW IS A CARD ABOUT AN ASK, exactly as a lane row is a card about a lane, so
+        # enter opens it. It used to fall through to `action_open_ticket`, which read the
+        # LANES list no matter which panel was focused — so pressing enter here inspected
+        # whichever lane happened to be highlighted and reported "no ticket on this lane"
+        # about a row the user was not looking at. The ticket still opens, from `o`, which is
+        # now aimed at the focused panel like every other key.
+        if list_id == "fleet" and isinstance(item, Ask):
+            self.open_ask(item)
             return
         self.action_open_ticket()
 
@@ -1396,7 +1569,7 @@ class FleetTUI(App):
         status = data.get("status") or ""
         age = fmt_age(data.get("status_age"))
         ago = fmt_ago(data.get("last_active"))
-        body = (linkify(escape(status), self.data.get("ctx") or {}) if status
+        body = (linkify(status, self.data.get("ctx") or {}) if status
                 else "[dim i]— no status —[/]")
         marks = []
         if status and age:
@@ -1432,6 +1605,153 @@ class FleetTUI(App):
         inp.value = ""
         self.query_one("#detail").remove_class("-show")
         self.query_one("#lanes", ListView).focus()
+
+    # ── the 4ME overlay ──────────────────────────────────────────────────────────────────
+    # No worker and no `loading…` frame, unlike the lane dialog: everything here comes from
+    # one already-open text file, so there is no subprocess to keep off the UI thread and
+    # nothing slow enough to be worth a two-stage paint.
+
+    def open_ask(self, item):
+        """Open the overlay on a 4ME row, keyed by the row's RAW line.
+
+        The key is the line's bytes rather than its position, because the list renumbers
+        whenever anything above it is cleared — an index captured at open would quietly come
+        to mean a different ask.
+        """
+        self.ask = {"raw": item.raw, "n": item.n}
+        self.query_one("#ask-detail").add_class("-show")
+        self.query_one("#ask-detail-msg", Static).update(ASK_HINT)
+        self.show_ask()
+
+    def refresh_ask(self):
+        """Repaint the open 4ME overlay on the same tick the panel behind it refreshes.
+
+        Same contract as `refresh_detail`, and it matters here for a reason of its own: the
+        lead edits this file WHILE the user is reading it. A dialog frozen at the moment
+        enter was pressed would go on showing an ask that has since been reworded.
+        """
+        if self.ask is not None:
+            self.show_ask()
+
+    def show_ask(self):
+        """Paint the overlay from the FILE, not from the row that opened it.
+
+        THE ROW IS NOT THE SOURCE. `Ask.compose` clips to sixty characters for its column,
+        exactly as `status_line()` does for a lane's — so a dialog built from what the list
+        displayed would reproduce the truncation it exists to undo. It re-reads the ask file
+        and re-finds this line, which is the same move `status_text()` makes.
+
+        A line that has vanished from the file keeps its last known text, marked as gone. It
+        is not an error: the lead clearing an item is ordinary, and blanking the dialog under
+        someone mid-read would destroy the thing they opened it to see.
+        """
+        if self.ask is None:
+            return
+        raw = self._reaim_ask(_ask_lines(self.data.get("fleet_path") or ""))
+        gone = raw is None
+        if raw is not None:
+            self.ask["raw"] = raw          # follow the edit, so the next tick re-finds it
+        else:
+            raw = self.ask["raw"]
+        d = ask_detail(raw)
+        ctx = self.data.get("ctx") or {}
+        for wid, markup in (("#ask-detail-head", self.ask_head_markup(d, gone)),
+                            ("#ask-detail-text", self.ask_text_markup(d, ctx)),
+                            ("#ask-detail-fields", self.ask_fields_markup(d, ctx))):
+            w = self.query_one(wid, Static)
+            if str(w.content) != markup:      # changed-only, like every other repaint here
+                w.update(markup)
+
+    def _reaim_ask(self, lines):
+        """Find the open ask again in a file that has changed under it, or None if it is gone.
+
+        THE LEAD REWORDS THESE LINES WHILE THEY ARE BEING READ, so the raw text cannot be the
+        identity — matching on it alone would report a freshly-clarified ask as deleted, which
+        is the opposite of what happened. Identity is, in order:
+
+          1. the exact line, when it is still there — no ambiguity to resolve;
+          2. the TICKET, which is what the ask is *about* and survives any rewording. Only
+             when exactly one line carries it: two asks about one ticket make this a guess,
+             and guessing is how a dialog ends up showing a row the user is not looking at;
+          3. failing both, position — but only for a ticketless ask, and only if the line
+             still at that position is of the same KIND. A `review:` where a `product:` was is
+             a different item that happens to have inherited the slot.
+
+        Anything less certain than these is reported as gone rather than resolved, for the
+        reason the `o` fix exists: acting confidently on the wrong item is worse than saying
+        nothing.
+        """
+        raw = self.ask["raw"]
+        if raw in lines:
+            return raw
+        d = ask_detail(raw)
+        tid = dict(d["trailers"]).get("ticket", "")
+        if tid:
+            same = [ln for ln in lines
+                    if dict(ask_detail(ln)["trailers"]).get("ticket", "") == tid]
+            return same[0] if len(same) == 1 else None
+        i = self.ask["n"] - 1
+        if 0 <= i < len(lines) and ask_detail(lines[i])["kind"] == d["kind"]:
+            return lines[i]
+        return None
+
+    def ask_head_markup(self, d, gone=False):
+        kind = d["kind"] or "todo"
+        head = "[b]4ME[/] [dim]#%s[/]   %s [b]%s[/]" % (self.ask["n"], d["icon"], escape(kind))
+        if gone:
+            head += "   [yellow](cleared from the list)[/]"
+        return head
+
+    def ask_text_markup(self, d, ctx):
+        """The ask IN FULL — unclipped, wrapped by the box, ids clickable."""
+        text = d["text"] or ""
+        return ("[i]%s[/]" % linkify(text, ctx)) if text else "[dim i]— empty —[/]"
+
+    def ask_fields_markup(self, d, ctx):
+        """The trailers as LABELLED fields, one per line.
+
+        Every value wears its label for the reason the lane dialog's do: a bare date beside a
+        bare agent name is two facts the reader has to guess the type of. Absent fields are
+        omitted rather than shown empty — this dialog says what is known, and a column of
+        `—` would make an ask with no provenance look like a broken one.
+        """
+        t = dict(d["trailers"])
+        rows = []
+        tid = t.get("ticket", "")
+        if tid:
+            url = ask_ticket_url(tid, ctx)
+            val = "[link='%s']%s[/link]" % (url, escape(tid)) if url else escape(tid)
+            goal, chain = self.data.get("goal") or "", self.data.get("goal_chain") or []
+            # THE GOAL MARKER. An ask whose ticket the standing goal names is not one item
+            # among many — it is gating the thing the whole fleet is pointed at, and that is
+            # the single most useful fact this dialog can put in front of the lead.
+            if goal_mentions(tid, goal, chain):
+                val += "   [b yellow]🎯 on the goal chain[/]"
+            rows.append(("ticket", val))
+        if t.get("from"):
+            rows.append(("raised by", esc(t["from"])))
+        if t.get("added"):
+            age = ask_age(t["added"])
+            rows.append(("added", escape(t["added"])
+                         + ("   [dim](%s ago)[/]" % escape(age) if age else "")))
+        if d["deferral"]:
+            rows.append(("deferred", "[yellow]%s[/]" % esc(d["deferral"])))
+        if t.get("unblocks"):
+            rows.append(("unblocks", linkify(t["unblocks"], ctx)))
+        # UNKNOWN TRAILERS RENDER AS-IS, under no label. The format will grow past this
+        # reader, and an extension the dialog refused to draw would be a fact the lead wrote
+        # down and never saw again.
+        for key, value in d["trailers"]:
+            if not key:
+                rows.append(("", "[dim]%s[/]" % esc(value)))
+        if not rows:
+            return "[dim i]— no metadata on this ask —[/]"
+        return "\n".join("[dim]%-10s[/] %s" % (label, value) for label, value in rows)
+
+    def close_ask(self):
+        self.ask = None
+        self.query_one("#ask-detail").remove_class("-show")
+        self.query_one("#fleet", ListView).focus()
 
     def edit_start(self):
         """Open the field on the highlighted knob, pre-filled with its current value."""
@@ -1545,11 +1865,36 @@ class FleetTUI(App):
         self.query_one("#detail-msg", Static).update(msg)
 
     def action_open_ticket(self):
-        item = self.query_one("#lanes", ListView).highlighted_child
-        links = (getattr(item, "row", {}) or {}).get("issue_links") or []
-        if not links:
-            self.notify("no ticket on this lane", severity="warning")
-            return
+        """Open the ticket of whatever the user is actually pointing at.
+
+        IT USED TO READ `#lanes` UNCONDITIONALLY, whichever panel had focus. On a 4ME row that
+        made `o` — and, through the fall-through, enter — report on a lane the user was not
+        looking at: "no ticket on this lane" about someone else's row, or worse, silently
+        opening an unrelated ticket. Every other key here acts on the focused panel; this one
+        now does too, and an ask resolves its id from its `[TICKET]` trailer.
+        """
+        # While the 4ME overlay is up the focused widget is not a list at all, so the ask it
+        # is showing is the subject — not whatever the cursor was left on underneath it.
+        if self.ask is not None:
+            item, is_ask = None, True
+            tid = dict(ask_detail(self.ask["raw"])["trailers"]).get("ticket", "")
+        else:
+            item = self._focused_list().highlighted_child
+            is_ask = isinstance(item, Ask)
+            tid = dict(ask_detail(item.raw)["trailers"]).get("ticket", "") if is_ask else ""
+
+        if is_ask:
+            if not tid:
+                self.notify("no ticket on this ask", severity="warning")
+                return
+            url = ask_ticket_url(tid, self.data.get("ctx") or {})
+            links = [(tid, url)]
+        else:
+            links = (getattr(item, "row", {}) or {}).get("issue_links") or []
+            if not links:
+                self.notify("no ticket on this lane", severity="warning")
+                return
+
         _id, url = links[0]
         if not url:
             self.notify(f"{_id} has no URL recorded", severity="warning")
@@ -1607,7 +1952,8 @@ class FleetTUI(App):
         # problem this legend exists for.
         keys = "\n".join("  %-6s %s" % (k, d) for k, d in (
             ("enter", "on an agent row: its git state and config, editable"),
-            ("o", "open this lane's ticket"),
+            ("", "on a 4ME row: the ask in full, with its ticket and provenance"),
+            ("o", "open the ticket of the row you are on — lane or ask"),
             ("a", "in the detail view: apply the live knobs to the running agent"),
         ))
         return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
@@ -1796,6 +2142,8 @@ class FleetTUI(App):
             self.edit_cancel()
         elif self.detail is not None:
             self.close_detail()
+        elif self.ask is not None:
+            self.close_ask()
         elif legend.has_class("-show"):
             legend.remove_class("-show")
         elif self.full:
