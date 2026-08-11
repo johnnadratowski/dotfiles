@@ -499,7 +499,14 @@ render in the LEAD's window, not yours** — that is the case this exists for: a
 prompt arrived there with no way to tell which of five agents raised it. The same is true of a
 notification or a relayed summary.
 
-AskUserQuestion specifically:
+AS OF 2026-08-11 YOU DO NOT PUT A QUESTION TO THE USER AT ALL — every one of them routes
+through the lead. Do not raise an AskUserQuestion card for John; send the lead a message
+carrying the DECISION, the OPTIONS, WHAT EACH ONE WOULD MEAN, and YOUR RECOMMENDATION. It
+asks in its own words and hands you the answer. Four lanes each asking in their own idiom is
+four interfaces to one person; one translator is what keeps a question answerable at a glance.
+
+AskUserQuestion specifically — for anything that still renders to a human, including a card
+the lead surfaces on your behalf:
 
 - **\`question\`** starts with \`$label ($name) · <ISSUE-ID>:\` and then asks. **Every question
   in a multi-question prompt gets it**, not just the first: they render as separate cards and

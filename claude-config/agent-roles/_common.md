@@ -19,10 +19,10 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **Blocked on a person? Tell the LEAD** — one `SendMessage` naming the decision, the moment
   you block. Never write `.claude/needs-input` yourself; the lead owns it (2026-08-04). You
   cannot clear a flag you raise: the go-quiet order means you never learn the answer landed.
-- **Every question to a human names you first.** Your AskUserQuestion renders in the **lead's**
-  window, not yours, so `question` opens with `<label> (<name>) · <ISSUE>:` — **every** question
-  in a multi-question prompt, since each is a separate card. `header` stays **descriptive**
-  (~12 chars: what the question is about); your name is already in the text. Same prefix on
-  any message asking for a decision.
+- **You never put a question to the human directly.** ALL of them route through the LEAD
+  (2026-08-11): `SendMessage` it the decision, the options, what each would MEAN, and your
+  recommendation — it translates, asks, and hands you the answer. Anything that still renders
+  to a human names you first (`<label> (<name>) · <ISSUE>:`), since it appears in the lead's
+  window, not yours.
 
 Detail: `~/.claude/agent-roles/reference/fleet.md`.

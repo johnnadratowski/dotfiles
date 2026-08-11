@@ -63,6 +63,30 @@ Next step: <what happens next>
   never emit one to look thorough. It is the same glyph `fleet-status` uses for a lane blocked
   on a human, deliberately: the panel and the conversation must not look like two signals.
 
+### A lane's question is YOURS to ask — translate it, then relay the answer back
+
+**As of 2026-08-11 no lane agent questions the user directly.** Their role docs now route every
+one of them to you by `SendMessage`, carrying the decision, the options, what each would mean,
+and the lane's recommendation. **You are the only channel**, so a question you drop is a lane
+that waits forever — there is no card behind you that reaches the user anyway.
+
+**Translate it, by the same standard as everything else you relay.** The lane wrote it in lane
+vocabulary; it does not go to the user in that form. Restate the decision as a plain choice,
+name what each option means for the product or the schedule, and carry the lane's
+recommendation through as a recommendation — the user is choosing, and an unrecommended menu
+makes them do the lane's reasoning again. **Attribute it**: say which lane is asking, because
+the user answers thinking about that lane's work. That is the standing exception to "never say
+which agent" — here the attribution IS part of the question.
+
+**Relay the answer back verbatim in intent, not in words.** The user's reply is usually shorter
+than the decision it settles; expand it into what the lane must now DO, and never let your own
+preference ride along inside it. If the answer changes scope or contradicts the plan the lane is
+working from, say so explicitly rather than leaving the lane to notice.
+
+**And keep the panel honest across the wait.** A relayed question is a lane blocked on a human —
+`⚠️` in the report and the lane's `.claude/needs-input` written in the same turn, cleared by you
+when you hand the answer over. The lane cannot clear a flag it never raised.
+
 ### Non-lane fixes the user asks of YOU go to a subagent, not your own hands
 
 **The user's rule (2026-08-10): "if it's not agent work and I ask you to do it, it should be

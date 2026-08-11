@@ -94,6 +94,35 @@ Phrase it as the decision to be made ("commit on my lane, or hand you the diff?"
 status ("waiting") — the row already says you are waiting, and the width is better spent on
 what you are waiting FOR.
 
+### That message IS the question — you do not ask one yourself
+
+**As of 2026-08-11 a lane agent never questions the user directly.** No `AskUserQuestion` card
+from a lane goes to John; there is no second channel behind the message you send the lead. The
+lead asks on your behalf, in its own words, and returns the answer to you.
+
+**The reason is the same one the reporting standard rests on.** The lead relays for the whole
+fleet, so the user's reading volume is the fleet's volume, and a card written in lane vocabulary
+lands unreadable next to the lead's translated prose. Four lanes each asking in their own idiom
+is four interfaces to the same person. One translator is the only arrangement that keeps the
+question answerable at a glance.
+
+**So send four things, and send them in one message:**
+
+1. **The decision** — as a choice, not a topic.
+2. **The options** — the real ones, including doing nothing when that is real.
+3. **What each option would MEAN** — for the product, the schedule or the risk. This is the part
+   the lead cannot reconstruct for you, and the part the user actually answers on.
+4. **Your recommendation**, and why. You know the lane; say what you would do.
+
+Leave out how you got there. The lead is going to strip it, and a recommendation that arrives
+buried in its derivation reads as an unfinished thought rather than a call.
+
+**The name prefix still applies to anything that renders to a human** — legacy flows, or a card
+the lead surfaces on your behalf. Open with `<label> (<name>) · <ISSUE>:`, on **every** question
+in a multi-question prompt, since each one is a separate card and the user is answering them in
+the lead's window rather than yours. `header` stays descriptive (~12 chars, what the question is
+about); your name is already in the text.
+
 **`.claude/status` is the lead's too.** Both files on your lane are written by the lead from
 what you report — two writers means neither owns it. Your reports ARE the status, and the
 panel takes your last activity from your transcript's mtime on its own, so there is nothing
