@@ -302,12 +302,27 @@ def status_line(cwd):
 
     Prose is not wanted here. Sixty characters of shorthand that a reader can scan down a
     column beats a sentence that pushes the next lane off the screen.
+
+    THE CLIP IS THE COLUMN'S CONSTRAINT, NOT THE RECORD'S. A surface with room for the whole
+    line must read status_text() instead — widening downstream is impossible, because by the
+    time this value reaches the JSON the rest of the sentence no longer exists.
     """
-    for ln in _walk_up(cwd, ".claude", "status").splitlines():
-        ln = ln.strip()
-        if ln and not ln.startswith("#"):
-            return clip(ln)
+    for ln in status_text(cwd).splitlines():
+        return clip(ln)
     return ""
+
+
+def status_text(cwd):
+    """The lane's status file UNCLIPPED — every content line, comments and blanks dropped.
+
+    The counterpart to status_line: same file, same filtering, no 60-char cap and no
+    first-line-only. Two functions rather than one with a flag, because the cap belongs to
+    the CALLER's layout, and the caller that has a whole dialog to spend must not have to
+    remember to opt out of a limit that was never about the data.
+    """
+    return "\n".join(
+        ln.strip() for ln in _walk_up(cwd, ".claude", "status").splitlines()
+        if ln.strip() and not ln.strip().startswith("#"))
 
 
 # WHEN A STATUS STOPS SPEAKING FOR THE PRESENT. The status file has no refresher: a human

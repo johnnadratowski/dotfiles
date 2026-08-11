@@ -28,6 +28,14 @@ What it locks in — each is a way this view could lie or lose work:
   - a value outside the allowed vocabulary is refused before it is written, because these
     strings are later typed into a live agent's pane
   - the overlay tells the user whether an edit reached the running agent or waits for a spawn
+  - …and it shows the agent's update IN FULL — the row's 60-char clip is the column's
+    constraint, and the dialog goes back to the file rather than trying to widen bytes that
+    no longer exist
+  - the overlay RE-READS ITSELF on the same tick the panel does, so `r` and a resize reflow it
+    instead of leaving a snapshot of the moment enter was pressed
+  - nothing unlabelled sits where a number is expected: a tmux pane id (`%182`) beside
+    `effort=xhigh` was read as a percentage, so every pane id wears its label and the one real
+    percentage on that line is the LIST view's gauge, labelled `context`
 """
 
 import asyncio
@@ -601,13 +609,27 @@ async def main():
                     'WORKFLOW_TODO_NS="jn"        # unrelated, must survive every edit\n'
                     'WORKFLOW_LANE_EFFORT="medium"\n')
 
+        # The lane's REAL status file. The row above is fed a pre-clipped copy through the
+        # snapshot, exactly as fleet-status.sh delivers it; the overlay must go back to the
+        # file instead, so the fixture is deliberately longer than the 60-char column cap and
+        # its distinguishing words live PAST the cap.
+        status_file = os.path.join(cfg_dir, "status")
+        long_status = ("SRV-11 rebased onto master and the migration re-run; still waiting on "
+                       "the operator CLI decision before the final commit lands")
+        with open(status_file, "w") as f:
+            f.write("# a comment, which is not the status\n" + long_status + "\n")
+
         # The live session is STUBBED. Reading it for real means capturing a tmux pane, which
         # on this machine would reach into the actual running fleet — a test that touches the
         # thing it is meant to be independent of. The parse it would have fed is covered
         # below, against fixture bytes.
+        #
+        # THE PANE ID IS `%182` ON PURPOSE — the exact value that was reported as "182%". A
+        # tmux pane id is a `%` followed by digits, so printed bare after `effort=medium` it
+        # reads as a percentage of something, next to a field whose values are words.
         live = {"on": True}
         fleet_tui.live_tuning = lambda name: (
-            {"pane": "%42", "model": "Opus", "effort": "xhigh"} if live["on"] else None)
+            {"pane": "%182", "model": "Opus", "effort": "xhigh"} if live["on"] else None)
         applied = []
         fleet_tui.apply_now = lambda sh, name: (
             applied.append((sh, name)) or "  %-12s PASS     effort=xhigh✓" % name)
@@ -663,6 +685,81 @@ async def main():
            by_key["WORKFLOW_TEST_MODEL"]["scope"] == "spawn")
         ok("the two scopes are visible on the rows themselves, not only in the data",
            "live agent" in text and "next spawn" in text, text)
+
+        # ── the status, IN FULL ──────────────────────────────────────────────────────────
+        # The row's copy arrives from the snapshot already cut to 60 characters, so nothing
+        # downstream could ever widen it — the words were gone before the TUI saw them. The
+        # overlay has a whole dialog, so it reads the file.
+        # Matched from AFTER the ticket id: linkify has turned that id into a hyperlink by
+        # now, exactly as it does on the row, so the assertion reads around it rather than
+        # through it — the same convention the ask tests above use.
+        ok("the overlay shows the agent's update IN FULL, not the row's 60-char clip",
+           long_status.split(" ", 1)[1] in text, text)
+        ok("…including the words past the cap, with no ellipsis where the column cut it",
+           "operator CLI decision" in text
+           and fleet_tui.clip(long_status) not in text, text)
+        ok("…without the status file's comment lines", "not the status" not in text, text)
+        ok("…labelled, and wearing the two clocks the row carries",
+           "[dim]status[/]" in text and "active 2m ago" in text, text)
+
+        # ── the effort line is never a percentage ────────────────────────────────────────
+        # `%182` beside `effort=xhigh` was read as "182%" — a percentage on a line whose only
+        # values are words, which sends the reader hunting a context bug that is not there.
+        # Asserted STRUCTURALLY, not as the string "182%" — which never appears literally,
+        # so a test looking for it could not fail for the defect it is named after. The
+        # defect is an UNLABELLED `%182` sitting where a number is expected; so the rule is
+        # that every pane id on this line wears its label.
+        head_markup = app.detail_head_markup((app.detail or {}).get("data") or {})
+        bare = [m.group(0) for m in fleet_tui.re.finditer(r"%\d+", head_markup)
+                if not head_markup[:m.start()].endswith("pane ")]
+        ok("the pane id is never printed bare beside effort, where it reads as a percent",
+           not bare, (bare, head_markup))
+        ok("…it is labelled as a pane", "pane %182" in text, text)
+        ok("…and the only percentage on that line is labelled context",
+           "[dim]context[/]" in text and "71%" in text, text)
+        # The gauge itself is the LIST view's fixed one, not a second implementation: the
+        # 216% bug lived in the denominator, and a surface that re-derives its own percentage
+        # re-earns that bug the day someone tunes it.
+        broken = dict((app.detail or {}).get("data") or {}, context_pct=216)
+        ok("…and an out-of-range value is an admission here too, not a confident number",
+           "216%" not in app.detail_head_markup(broken)
+           and ">100%" in app.detail_head_markup(broken),
+           app.detail_head_markup(broken))
+        unknown = dict(broken, context_pct=None)
+        ok("…while an unknown context is a dash rather than a guess",
+           "context[/] [dim]—[/]" in app.detail_head_markup(unknown),
+           app.detail_head_markup(unknown))
+
+        # ── the sections are separated, like everything else in this view ────────────────
+        # Head, status, git and config are four different subjects. Run together they read as
+        # one paragraph and the reader has to parse sentences to find the seams; the rest of
+        # the view already spends a row per item for exactly this reason.
+        gaps = {w.id: w.styles.margin.bottom
+                for w in app.query_one("#detail").children if w.id}
+        ok("every section of the overlay is followed by a blank line",
+           all(gaps.get(i) == 1 for i in
+               ("detail-head", "detail-status-box", "detail-git", "detail-cfg")), gaps)
+
+        # ── the overlay is a LIVE view, not a snapshot of the moment enter was pressed ────
+        # It used to be filled once and never re-read, so `r` reloaded the fleet underneath a
+        # dialog that went on showing what was true when it opened — which is why widening
+        # the terminal and reloading never expanded anything.
+        with open(status_file, "w") as f:
+            f.write("rewritten while the overlay is open\n")
+        volatile["pct"] = 88
+        await pilot.press("r")
+        for _ in range(6):
+            await pilot.pause()
+        ok("r re-reads the open overlay rather than only the panel behind it",
+           "rewritten while the overlay is open" in detail_text(), detail_text())
+        ok("…the stale text is gone, not merely appended to",
+           long_status.split(" ", 1)[1] not in detail_text(), detail_text())
+        ok("…and the numbers on the row it came from move with it",
+           "88%" in detail_text(), detail_text())
+        ok("…without closing the overlay or losing the config list",
+           app.detail is not None and len(cfg_items()) > 0)
+        with open(status_file, "w") as f:
+            f.write(long_status + "\n")
 
         # ── the overlay swallows the keys that act on what it is covering ─────────────────
         # `x` deletes from the lead's to-do file, and `=`/`+` resize panels the overlay hides.
@@ -853,6 +950,33 @@ async def main():
             fh.write("9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c\n")
         ok("…and returns empty on a detached HEAD rather than a fake branch name",
            _agent_facts.branch_for(wt) == "", _agent_facts.branch_for(wt))
+
+    # ── the status, at both of its two lengths ───────────────────────────────────────────
+    # ONE FILE, TWO READERS, and the difference is the CALLER's layout rather than the data's:
+    # a column gets sixty characters, a dialog gets the file. They must still agree about what
+    # counts as a status line, which is why they share the filtering.
+    with tempfile.TemporaryDirectory() as td:
+        os.makedirs(os.path.join(td, ".claude"))
+        sf = os.path.join(td, ".claude", "status")
+        first = ("SRV-11 rebased and the migration re-run, still waiting on the operator CLI "
+                 "decision")
+        with open(sf, "w") as fh:
+            fh.write("# not a status\n\n" + first + "\nand a second line\n")
+        ok("the column reader clips to the cap and marks the cut",
+           _agent_facts.status_line(td) == _agent_facts.clip(first)
+           and _agent_facts.status_line(td).endswith("…"),
+           _agent_facts.status_line(td))
+        ok("the dialog reader returns the file's own bytes, uncut",
+           _agent_facts.status_text(td) == first + "\nand a second line",
+           _agent_facts.status_text(td))
+        ok("…dropping comments and blanks, exactly as the column reader does",
+           "not a status" not in _agent_facts.status_text(td),
+           _agent_facts.status_text(td))
+        with open(sf, "w") as fh:
+            fh.write("# only comments here\n")
+        ok("a status file with nothing in it yields empty on BOTH readers — never a comment",
+           (_agent_facts.status_line(td), _agent_facts.status_text(td)) == ("", ""),
+           (_agent_facts.status_line(td), _agent_facts.status_text(td)))
 
     # ── the context gauge: the DENOMINATOR is the model's, and it is never guessed ────────
     # A lead running a 1M-context model against a hardcoded 200k denominator read 216%, which

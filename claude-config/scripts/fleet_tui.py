@@ -29,10 +29,13 @@ off, undoable in-session), and the per-lane tuning knobs in a lane's GITIGNORED
 project rather than to this machine. Every value it can write comes from a fixed vocabulary,
 because agent-tune.sh later types those strings into a live agent's pane.
 
-ENTER ON AN AGENT ROW opens the detail overlay: that lane's branch and its distance from the
-base (local and origin, unfetched), what its session is running right now, and the config
-knobs, editable in place. The overlay is the only part of this view that shells out, and it
-does so on a worker thread — the five-second tick must never grow a subprocess.
+ENTER ON AN AGENT ROW opens the detail overlay: that lane's status IN FULL — the row's column
+clips it to sixty characters, and this is the surface with room for the whole thing — its
+branch and distance from the base (local and origin, unfetched), what its session is running
+right now, and the config knobs, editable in place. It re-reads itself on the same tick the
+panel does, so it is a live view rather than a snapshot of the moment Enter was pressed. The
+overlay is the only part of this view that shells out, and it does so on a worker thread — the
+five-second tick must never grow a subprocess while no overlay is open.
 """
 
 import json
@@ -45,12 +48,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_KINDS, ask_kind, branch_for, clip,  # noqa: E402
-                          fmt_age, fmt_ago, refresh_open_prs)
+                          fmt_age, fmt_ago, refresh_open_prs, status_text)
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
-from textual.containers import Vertical  # noqa: E402
+from textual.containers import Vertical, VerticalScroll  # noqa: E402
 from textual.widgets import Footer, Input, ListItem, ListView, Static  # noqa: E402
 from textual.worker import get_current_worker  # noqa: E402
 
@@ -440,12 +443,21 @@ def detail_data(row):
     cfg = read_shell_config(os.path.join(path, ".claude", "workflow.config"))
     cfg.update(read_shell_config(os.path.join(path, ".claude", "workflow.config.local")))
     base = cfg.get("WORKFLOW_PR_TARGET_BRANCH") or "master"
+    # THE UNCLIPPED STATUS, READ FROM THE FILE — not row["status"], which fleet-status.sh has
+    # already cut to 60 characters for its column. That cut is why the overlay looked
+    # truncated no matter how wide the terminal got: the missing words were gone before the
+    # TUI ever saw them, so no amount of reflow could bring them back. The row's copy is the
+    # fallback for a row with no path (a subagent), where there is no file to read.
     return {
         "name": name,
         "label": row.get("label") or "",
         "kind": row.get("kind") or "lane",
         "path": path,
         "state": row.get("state") or "?",
+        "status": (status_text(path) if path else "") or (row.get("status") or ""),
+        "status_age": row.get("status_age"),
+        "last_active": row.get("last_active"),
+        "context_pct": row.get("context_pct"),
         "git": git_state(path, base) if path else None,
         "live": live_tuning(name),
         "cfg": config_rows(path, name),
@@ -600,6 +612,27 @@ def fit_note(mode, shown, total):
     return "fit %s · %d of %d visible, the rest scroll" % (mode, shown, total)
 
 
+def context_markup(pct, state=None):
+    """(text, colour) for a context gauge. ONE implementation, wherever a gauge is drawn.
+
+    OVER 100% IS AN ADMISSION, NOT A NUMBER. A gauge read 216% for a lane on a 1M-token model
+    because the denominator defaulted to 200k. That denominator is fixed, but the visible
+    absurdity was luck: the same class of error reads a believable 80% at half the occupancy.
+    Anything out of range is rendered as out of range, so the next wrong denominator is caught
+    by the panel rather than by a reader who happened to look.
+
+    A SECOND COPY OF THESE RULES IS THE FAILURE MODE THIS FUNCTION EXISTS TO PREVENT. The fix
+    above lives in window_for(); a surface that re-derives its own percentage re-earns the bug
+    the day someone tunes it, and re-earns it silently, because both surfaces render a number
+    either way.
+    """
+    if pct is None or state == "down":
+        return "—", "dim"
+    if pct > 100:
+        return ">100%", "b red"
+    return "%d%%" % pct, ("red" if pct >= 90 else "yellow" if pct >= 80 else "dim")
+
+
 class Lane(ListItem):
     """One lane: the identity row, its status, then its asks. Selectable as a unit."""
 
@@ -638,19 +671,7 @@ class Lane(ListItem):
         state = r.get("state", "?")
         icon = LANE_ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
         icolor = "b yellow" if r.get("raw_asks") else STATE_STYLE.get(state, "white")
-        pct = r.get("context_pct")
-        # OVER 100% IS AN ADMISSION, NOT A NUMBER. A gauge read 216% for a lane on a 1M-token
-        # model because the denominator defaulted to 200k. That denominator is fixed, but the
-        # visible absurdity was luck: the same class of error reads a believable 80% at half
-        # the occupancy. Anything out of range is rendered as out of range, so the next wrong
-        # denominator is caught by the panel rather than by a reader who happened to look.
-        if pct is None or state == "down":
-            pcs, pcolor = "—", "dim"
-        elif pct > 100:
-            pcs, pcolor = ">100%", "b red"
-        else:
-            pcs = "%d%%" % pct
-            pcolor = "red" if pct >= 90 else "yellow" if pct >= 80 else "dim"
+        pcs, pcolor = context_markup(r.get("context_pct"), state)
         up = "—" if state == "down" else (r.get("uptime") or "—")
         # The recorded URL wins over the learned base — it is what the tracker actually
         # returned, slug and all. linkify() is the fallback for ids that have none.
@@ -838,6 +859,23 @@ class FleetTUI(App):
         background: $panel;
     }
     #detail.-show { display: block; }
+    /* ONE BLANK LINE BETWEEN SECTIONS. Head, status, git and config are four different
+       subjects, and run together they read as one paragraph of facts with no seams — the
+       eye has to parse the sentences to find the boundaries. The rest of the view already
+       spends a row per item for exactly this reason (`ListItem { padding: 0 0 1 0 }`), so
+       this is the dialog rejoining the rhythm rather than inventing one. */
+    #detail > Static, #detail > ListView, #detail > VerticalScroll { margin-bottom: 1; }
+    /* Auto up to a ceiling, then scrolls — a long update must not push the knobs off the
+       bottom. `width: 100%` is what makes the text WRAP to the dialog rather than run off
+       its edge, and it is re-measured on every resize, so widening the terminal reflows it. */
+    #detail-status-box {
+        height: auto;
+        max-height: 10;
+        width: 100%;
+        background: transparent;
+        scrollbar-size-vertical: 1;
+    }
+    #detail-status { height: auto; width: 100%; }
     #detail-cfg { height: auto; max-height: 14; background: transparent; }
     #detail-cfg > ListItem { padding: 0; }
     #detail-input { display: none; margin: 0; }
@@ -921,6 +959,11 @@ class FleetTUI(App):
         yield Static(self.legend_markup(), id="legend")
         with Detail(id="detail"):
             yield Static("", id="detail-head")
+            # The status gets its own SCROLL BOX rather than growing the dialog without
+            # limit: an update can be a paragraph, and a dialog that pushes its own config
+            # list off the bottom of the screen has traded one unreadable thing for another.
+            with VerticalScroll(id="detail-status-box"):
+                yield Static("", id="detail-status")
             yield Static("", id="detail-git")
             yield ListView(id="detail-cfg")
             yield Input(id="detail-input")
@@ -987,6 +1030,7 @@ class FleetTUI(App):
         sig = self.structure_sig(data)
         self.data = data
         self.update_head()
+        self.refresh_detail()
 
         rows = data["lanes"] + data["subs"]
         lanes = self.query_one("#lanes", ListView)
@@ -1116,9 +1160,40 @@ class FleetTUI(App):
         self.query_one("#detail").add_class("-show")
         self.query_one("#detail-head", Static).update(
             "[b]%s[/]  [dim]loading…[/]" % escape(row.get("name") or "?"))
+        self.query_one("#detail-status", Static).update("")
         self.query_one("#detail-git", Static).update("")
         self.query_one("#detail-msg", Static).update(DETAIL_HINT)
         self.query_one("#detail-cfg", ListView).clear()
+        self.run_worker(lambda: self._load_detail(row), thread=True, group="detail")
+
+    def refresh_detail(self):
+        """Re-read the open overlay on the same tick the panel behind it refreshes.
+
+        THE OVERLAY USED TO BE A SNAPSHOT taken the instant it opened, and nothing ever
+        re-took it — so `r` reloaded the fleet underneath a dialog that went on showing what
+        was true when Enter was pressed. Its status aged, its git numbers stopped moving, and
+        a terminal resized behind it never re-laid out its text.
+
+        Skipped while an edit is open: the input carries text the user has not committed, and
+        the message beside it may be a validation error about that text. Neither survives a
+        repaint, and neither is the tick's to discard.
+
+        This does put git reads and a tmux capture on the five-second tick — but ONLY while
+        the overlay is open, on the same worker thread they already used, and for a dialog the
+        user is looking at right now. The rule the module states is about the panel's steady
+        state, which is unchanged: close the overlay and the tick shells out to nothing again.
+        """
+        if self.detail is None or self.editing:
+            return
+        name = (self.detail.get("row") or {}).get("name")
+        # Re-aim at the row from THIS snapshot, not the one captured at open: status age and
+        # context% live on the row, so refreshing against the stale copy would repaint the
+        # same frozen numbers and look exactly like the bug it is meant to fix.
+        fresh = next((r for r in self.data["lanes"] + self.data["subs"]
+                      if r.get("name") == name), None)
+        if fresh is not None:
+            self.detail["row"] = fresh
+        row = self.detail["row"]
         self.run_worker(lambda: self._load_detail(row), thread=True, group="detail")
 
     def _load_detail(self, row):
@@ -1131,9 +1206,18 @@ class FleetTUI(App):
         if self.detail is None:
             return                 # closed while the worker was still reading
         self.detail["data"] = data
-        self.query_one("#detail-head", Static).update(self.detail_head_markup(data))
-        self.query_one("#detail-git", Static).update(self.detail_git_markup(data))
+        # Written only when the markup actually differs, for the same reason the lane rows are:
+        # a refresh that repaints identical text is itself a visible flicker, and this now runs
+        # on the five-second tick rather than only when the overlay opens.
+        for wid, markup in (("#detail-head", self.detail_head_markup(data)),
+                            ("#detail-status", self.detail_status_markup(data)),
+                            ("#detail-git", self.detail_git_markup(data))):
+            w = self.query_one(wid, Static)
+            if str(w.content) != markup:
+                w.update(markup)
         cfg = self.query_one("#detail-cfg", ListView)
+        if keep is None:
+            keep = cfg.index
         cfg.clear()
         for e in data["cfg"]:
             cfg.append(CfgRow(e))
@@ -1141,20 +1225,58 @@ class FleetTUI(App):
             cfg.index = keep
         if msg is not None:
             self.query_one("#detail-msg", Static).update(msg)
-        cfg.focus()
+        if not self.editing:
+            # NEVER steal focus back from an open editor. A tick-driven refresh lands while the
+            # user may be mid-typing in the value field, and moving focus there would eat the
+            # keystroke that followed it.
+            cfg.focus()
 
     def detail_head_markup(self, data):
         live = data.get("live")
+        # EVERY VALUE ON THIS LINE WEARS ITS OWN LABEL, and the tmux pane id wears one twice
+        # over. `%182` printed bare after `effort=medium` was read as "182%" — a percentage
+        # beside a field whose values are words, which sent a reader looking for a context
+        # bug that did not exist. A pane id is not a number about the agent, so it says
+        # `pane`, and it is separated from the knobs rather than trailing them.
+        pcs, pcolor = context_markup(data.get("context_pct"), data.get("state"))
+        ctx = "[dim]context[/] [%s]%s[/]" % (pcolor, pcs)
         # The live line is OMITTED, not filled with a guess, when the pane cannot be read —
         # a lane with no agent in it still has git state and config worth looking at.
         if live:
-            line = ("  [dim]running[/] model=[b]%s[/] effort=[b]%s[/] [dim]%s[/]"
-                    % (escape(live["model"]), escape(live["effort"]), live["pane"]))
+            line = ("  [dim]running[/] model=[b]%s[/] effort=[b]%s[/]  ·  %s  ·  "
+                    "[dim]pane %s[/]"
+                    % (escape(live["model"]), escape(live["effort"]), ctx,
+                       escape(live["pane"])))
         else:
-            line = "  [dim]no live session in this lane — config and git only[/]"
+            line = ("  [dim]no live session in this lane — config and git only[/]  ·  %s"
+                    % ctx)
         return ("[b]%s[/] [dim]%s[/]  [dim]%s[/]\n%s"
                 % (escape(data["name"]), escape(data["label"]),
                    escape(data["path"]), line))
+
+    def detail_status_markup(self, data):
+        """The agent's update IN FULL — the reason this dialog is worth opening.
+
+        The lane row shows sixty characters because it is one line in a column. Here there is
+        a whole dialog, so the text is the file's, unclipped and wrapped, and it scrolls if it
+        outgrows the box rather than being cut. Both clocks come with it, for the reason they
+        do on the row: the text says WHAT, `(4d old)` says how old the claim is, and
+        `active 2m ago` says whether the agent has done anything since.
+        """
+        status = data.get("status") or ""
+        age = fmt_age(data.get("status_age"))
+        ago = fmt_ago(data.get("last_active"))
+        body = (linkify(escape(status), self.data.get("ctx") or {}) if status
+                else "[dim i]— no status —[/]")
+        marks = []
+        if status and age:
+            marks.append("%s old" % escape(age))
+        if ago:
+            marks.append("active %s ago" % escape(ago))
+        head = "[dim]status[/]"
+        if marks:
+            head += "  [dim](%s)[/]" % " · ".join(marks)
+        return "%s\n[i]%s[/]" % (head, body)
 
     def detail_git_markup(self, data):
         g = data.get("git")
