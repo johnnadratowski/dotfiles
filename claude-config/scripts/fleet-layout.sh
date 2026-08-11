@@ -115,6 +115,35 @@ _role_of() {
   fleet_resolve_role "$1"
 }
 
+# _is_lane_agent <agent-name> — true only for a DURABLE LANE resident (`feature-2`), false for
+# every task-scoped subagent a lead spawns. THE gate for the restructuring verbs: a lane agent
+# owns a window, a subagent belongs stacked under the pane that spawned it (`subagents` owns
+# that placement, and these verbs must not compete for it).
+#
+# WHY THE RESOLVED ROLE IS NOT ENOUGH — this is the whole point of the helper.
+# `fleet_resolve_role` DEFAULTS TO `feature` for any name it does not recognise, and a lead's
+# subagent is named for its TASK ("goal-machinery", "lesson-and-layout"), which no pattern
+# matches. So every one of them answered "feature" and every verb below read it as a lane.
+# Observed 2026-08-11: two of the lead's subagents were broken out into windows of their own,
+# named for their tasks, instead of staying panes under their spawner. The role-name filters
+# these verbs already carried could not have caught it — the misclassification happens upstream
+# of them, and `reviewer`/`tester` (the named subagents the filters were written against) are
+# the only subagents the default does NOT swallow.
+#
+# So gate on the NAME'S SHAPE, which is structural rather than conventional: a lane's trailing
+# number is what derives its worktree, its branch and its port block, so a durable lane always
+# has one and a task-named subagent never does. Same discriminator `fleet_lane_display_name`
+# adopted after the same misclassification handed a tester a lane's label.
+#
+# The role test stays as the second half: it is what a per-agent `~/.claude/agents/<name>.role`
+# override acts through (via `_role_of`), and what keeps `rev-2` / `test-1` — right shape, wrong
+# population — out. `team-lead` is deliberately NOT a lane here; the one verb that wants the
+# lead's own window (`ensure_agent_windows`) asks for it explicitly.
+_is_lane_agent() {
+  case "$1" in *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9]) ;; *) return 1 ;; esac
+  [ "$(_role_of "$1")" = "feature" ]
+}
+
 # _type_tag <agent-name> — " (rev)" / " (test)" / " (plan)" for a NON-LANE agent, empty for a
 # lane. Includes the leading space, so callers concatenate without deciding anything.
 #
@@ -513,10 +542,12 @@ EOF
 
 # ---------------------------------------------------------------------------- layouts
 
-_feature_agents() {   # names of live feature agents, ordered f1, f2, … by fleet_agent_id
-  local name _tok _cwd role
-  while IFS="$TAB" read -r name _tok _cwd role; do
-    [ "$role" = "feature" ] && printf '%s\t%s\n' "$(fleet_agent_id "$name")" "$name"
+_feature_agents() {   # names of live LANE agents, ordered f1, f2, … by fleet_agent_id
+  local name _tok _cwd _role
+  while IFS="$TAB" read -r name _tok _cwd _role; do
+    # `_is_lane_agent`, not the row's role column: the column is `feature` for every
+    # task-named subagent too. See the helper.
+    _is_lane_agent "$name" && printf '%s\t%s\n' "$(fleet_agent_id "$name")" "$name"
   done <<EOF
 $(live_agents)
 EOF
@@ -581,7 +612,7 @@ balance_cells() {
   [ -n "$FL_ATTR" ] || _snapshot_attr
   while IFS="$TAB" read -r name claude comps; do
     [ -n "$name" ] && [ -n "$comps" ] || continue
-    [ "$(_role_of "$name")" = "feature" ] || continue
+    _is_lane_agent "$name" || continue
     first="${comps%% *}"
     _balance_cell "$claude" "$first"
   done <<EOF
@@ -881,7 +912,7 @@ layout_single() {
   agents="$(live_agents)"; panes="$(_pane_rows)"
   while IFS="$TAB" read -r name token comps; do
     [ -n "$name" ] || continue
-    [ "$(_role_of "$name")" = "feature" ] || continue
+    _is_lane_agent "$name" || continue
     win_of="$(printf '%s\n' "$panes" | awk -F"$TAB" -v p="$token" '$1==p{print $3; exit}')"
     others=0
     while IFS="$TAB" read -r o_name o_tok _c _r; do
@@ -1533,7 +1564,11 @@ ensure_agent_windows() {
   local agents; agents="$(live_agents)"
   while IFS="$TAB" read -r name token comps; do
     [ -n "$token" ] || continue
-    case "$(_role_of "$name")" in feature|coordinator|lead|team-lead) ;; *) continue ;; esac
+    # LANE AGENTS AND THE LEAD. The old test was on the resolved role alone, which is `feature`
+    # for a task-named subagent too — so a reviewer or a task agent got its own companion column
+    # and then its own window, the exact arrangement the paragraph above says must not happen.
+    _is_lane_agent "$name" ||
+      case "$(_role_of "$name")" in coordinator|lead|team-lead) ;; *) continue ;; esac
     win="$(_win_of "$token")"; [ -n "$win" ] || continue   # a registry token whose pane is gone
     others=0
     while IFS="$TAB" read -r o_name o_tok _c _r; do
