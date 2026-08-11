@@ -17,6 +17,12 @@ WHAT IT DOES NOT DO: it invents no facts. Every lane field comes from `fleet-sta
 --json`, so the TUI and the table cannot disagree about who is up — and the table stays the
 fallback for anywhere textual cannot run (a hook, a CI check, a pipe).
 
+EVERY ROW CARRIES ONE FACT NOBODY MAINTAINS. The status line is written by the lead, so it is
+only ever as current as the lead's memory — every lane's froze for four days once, beside
+numbers that kept moving. So the row also shows when that agent last wrote its transcript
+(`active 2m ago`), which needs nobody: the text says WHAT the lane is doing and the mtime
+says WHETHER THAT IS STILL CURRENT.
+
 WHAT IT WRITES, and nothing else. Deletions from the lead's own ask files (ticking an item
 off, undoable in-session), and the per-lane tuning knobs in a lane's GITIGNORED
 `.claude/workflow.config.local` — never the committed `workflow.config`, which belongs to the
@@ -39,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_KINDS, ask_kind, branch_for, clip,  # noqa: E402
-                          fmt_age, refresh_open_prs)
+                          fmt_age, fmt_ago, refresh_open_prs)
 
 from rich.markup import escape  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
@@ -678,7 +684,8 @@ class Lane(ListItem):
                          classes="lane-ask")
 
     def status_markup(self):
-        """The lane's status, WEARING ITS AGE once the line is too old to mean "now".
+        """The lane's status, WEARING ITS AGE once the line is too old to mean "now", and the
+        agent's own last sign of life beside it.
 
         This is the one line on the row that nothing refreshes — a human writes it — so it is
         the one line that can freeze while every number beside it keeps moving. That is what
@@ -686,15 +693,28 @@ class Lane(ListItem):
         hyperlink, so a four-day-old "PR #130 open; awaiting your merge" rendered exactly like
         PR data fetched a second ago, beside a correct uptime and a correct context%.
 
-        The suffix is dim and sits OUTSIDE the italic: it is a fact about the line, not part
-        of the claim, and it must not read as something the lead wrote.
+        TWO CLOCKS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. `(4d old)` is when the LEAD last
+        wrote this claim; `active 2m ago` is when the AGENT last did anything, taken from the
+        mtime of the transcript it stamps by working — nobody maintains it, which is exactly
+        why it is trustworthy in a way the status text is not. So the text says WHAT the lane
+        is doing and the mtime says WHETHER THAT IS STILL CURRENT, and neither substitutes for
+        the other: a busy lane can wear a status from Friday, and a status written this minute
+        can describe a lane that died an hour ago.
+
+        Both suffixes are dim and sit OUTSIDE the italic: they are facts about the line, not
+        part of the claim, and must not read as something the lead wrote. The activity suffix
+        shows even with no status at all — that is the row where it is the ONLY thing known.
         """
         status = self.row.get("status") or ""
-        if not status:
-            return "[dim i]— no status —[/]"
         age = fmt_age(self.row.get("status_age"))
-        return (f"[i]{linkify(escape(status), self.ctx)}[/]"
-                + (f" [dim]({escape(age)} old)[/]" if age else ""))
+        ago = fmt_ago(self.row.get("last_active"))
+        head = (f"[i]{linkify(escape(status), self.ctx)}[/]" if status
+                else "[dim i]— no status —[/]")
+        if status and age:
+            head += f" [dim]({escape(age)} old)[/]"
+        if ago:
+            head += f" [dim]· active {escape(ago)} ago[/]"
+        return head
 
     def refresh_volatile(self, row):
         """Update everything that is CONFINED TO A LINE, in place — never a rebuild.

@@ -12,6 +12,9 @@
 #   - a lane with no live registration reads `down`, and shows no stale context/uptime
 #   - a dead pid does not count as live
 #   - the status line is the LEAD-WRITTEN .claude/status, never the agent's own transcript
+#   - …and beside it, when the AGENT was last active — a transcript mtime nobody maintains,
+#     which is what says whether the lead's line still speaks for the present. On a pane too
+#     narrow for both, the prose is shortened and the clock is kept whole
 #   - status and asks are hard-capped at 60 chars, so one verbose entry cannot own the pane
 #   - current-work yields the id only, never the resume prose that follows it
 #   - emoji-width padding keeps the columns aligned
@@ -170,6 +173,38 @@ print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 3600)))')" \
 hasnt "an hour-old status is NOT marked" "old" "$(row chas)"
 rm -f "$LANES/chas/.claude/status"
 
+# ── the OTHER clock: when the agent itself was last active ───────────────────────────────
+# The age above says when the LEAD last wrote the claim. It cannot say whether the lane is
+# still there — which is the half that made the frozen statuses dangerous. This one nobody
+# maintains: it is the mtime of the transcript the agent stamps by working, so it is right
+# whether or not anyone remembered anything. Both are shown, because a busy lane under a
+# Friday status and a fresh status over a dead lane are different problems.
+touch -t "$(python3 -c '
+import time
+print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 3*3600)))')" \
+      "$FAKEHOME/.claude/projects/$(printf '%s' "$LANES/alpha" | sed 's/[^A-Za-z0-9]/-/g')/session.jsonl"
+has "a lane wears its agent's last activity"        "active 3h ago"          "$(row alpha)"
+has "…beside the status rather than instead of it"  "PR #124 staged, parked" "$(row alpha)"
+# A lane with NO status is exactly where this is the only thing known about it, so it must
+# still render — a second line that exists only when the lead wrote one would go dark on the
+# rows that need it most.
+eq "a lane with no status but a live transcript still reports activity" "1" \
+   "$(row alpha | grep -c 'active 3h ago')"
+transcript chas "$T/t.jsonl"
+has "…and shows it with no status line at all" "active" "$(row chas)"
+rm -rf "$FAKEHOME/.claude/projects/$(printf '%s' "$LANES/chas" | sed 's/[^A-Za-z0-9]/-/g')"
+hasnt "a lane whose transcript cannot be found claims no activity" "active" "$(row chas)"
+
+# ON A NARROW PANE THE PROSE GIVES WAY, NOT THE CLOCK. Truncation runs from the right, so the
+# naive join drops the one part of this line nobody maintains and leaves the human-written
+# sentence looking authoritative with nothing to date it — the exact failure the field exists
+# to end. The status is shortened instead and the clock survives whole.
+status alpha "$(python3 -c 'print("y"*95)')"      # clipped to 60, wider than a 72-col pane
+narrow="$(COLUMNS=72 run | grep -F -A2 ' alpha ' | grep -F 'active')"
+has  "a narrow pane keeps the activity clock whole" "· active 3h ago" "$narrow"
+has  "…and shortens the lead's prose to make room"  "yyy…"            "$narrow"
+status alpha "PR #124 staged, parked"
+
 # ── needs-input renders under the status ─────────────────────────────────────────────────
 printf 'park FEAT-6 or rerun once #111 lands?\n' > "$LANES/alpha/.claude/needs-input"
 has "needs-input is shown"                   "park FEAT-6"   "$(row alpha)"
@@ -229,6 +264,9 @@ has "the header counts subagents separately"            "1 subagent"  "$(run | h
 sub="$(run | grep -F 'rev-a')"
 hasnt "a subagent does NOT borrow its spawner's issue"  "FEAT-42"                "$sub"
 hasnt "a subagent does NOT borrow its spawner's status" "PR #124 staged, parked" "$sub"
+# Its cwd sidecar resolves to the SPAWNER's transcript, so a cwd-derived activity time would
+# report the lead's keystrokes as the reviewer's. Only a session-exact path may answer here.
+hasnt "a subagent does NOT borrow its spawner's activity" "active"                "$sub"
 rm -f "$FAKEHOME/.claude/running-agents/rev-a.$$" "$FAKEHOME/.claude/agents/rev-a.cwd"
 
 # ── 4ME, the fleet-level list ────────────────────────────────────────────────────────────
@@ -250,9 +288,12 @@ import json,sys
 rows=[json.loads(l) for l in sys.stdin if l.strip()]
 d={r["name"]:r for r in rows}
 print(len(rows), d["alpha"]["state"], d["delta"]["state"], d["alpha"]["issue"],
-      d["alpha"]["context_pct"], d["delta"]["context_pct"])')"
+      d["alpha"]["context_pct"], d["delta"]["context_pct"],
+      # Seconds, unformatted — JSON consumers want the number and each renderer picks its own
+      # wording. ~3h for the lane whose transcript was aged above; None where there is none.
+      10000 < d["alpha"]["last_active"] < 11600, d["delta"]["last_active"])')"
 eq "--json emits one object per lane with the same facts" \
-   "5 busy down FEAT-42 2 None" "$j"
+   "5 busy down FEAT-42 2 None True None" "$j"
 
 # ── refusals ─────────────────────────────────────────────────────────────────────────────
 out="$(HOME="$FAKEHOME" bash "$SCRIPT" --once --lanes-dir "$T/nope" 2>&1)"; rc=$?

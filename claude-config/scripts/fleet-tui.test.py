@@ -11,6 +11,9 @@ What it locks in — each is a way this view could lie or lose work:
   - a lane renders its status and its asks, and the asks are TYPED by their kind token
   - a status the lead stopped maintaining wears its age instead of passing for the present,
     and the age is re-read from the FILE on every tick rather than fixed at startup
+  - …and the row carries the OTHER clock beside it — when the agent itself was last active,
+    from a transcript mtime nobody has to maintain — resolved the same way agent-fanout.sh
+    resolves it, so the two surfaces cannot name different sessions for the same agent
   - `x` removes the ask from the FILE, not merely from the screen
   - `u` puts it back — an accidental keypress on the user's to-do list must be recoverable
   - an unchanged snapshot does not rebuild the lists, so the cursor survives a refresh
@@ -92,6 +95,10 @@ async def main():
         # every tick whether or not anyone rewrites the line, which is the whole point: a
         # status nobody maintains has to become visibly older, not silently stay "now".
         "status_age": 60,
+        # Seconds since the AGENT last wrote its transcript — the fact nobody maintains, and
+        # the one the status line structurally cannot supply. Volatile for the same reason
+        # status_age is: it grows every tick until the agent does something.
+        "last_active": 120,
         # A PR list is volatile too: it disappears the moment the PR merges. It rides the
         # head line rather than a shape change, so it has to survive the no-rebuild path.
         "prs": [(133, "https://gh/x/pull/133", False)],
@@ -110,6 +117,7 @@ async def main():
             "issue_links": [("DX-6", "https://example.invalid/DX-6")],
             "status": volatile["status"],
             "status_age": volatile["status_age"],
+            "last_active": volatile["last_active"],
             "open_prs": volatile["prs"],
             "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
         }
@@ -240,6 +248,29 @@ async def main():
         ok("…and an absent age is not an old one either",
            fleet_tui.fmt_age(None) == "")
         volatile["status_age"] = 60
+
+        # THE OTHER CLOCK. The status text is only ever as current as the lead's memory —
+        # that is what let every lane's line freeze for four days. The transcript mtime needs
+        # nobody, so the row carries both: what the lane is doing, and when it last did
+        # anything. They must be separable on screen, and the activity one must survive the
+        # no-rebuild path exactly like uptime does.
+        ok("the row says when the agent was last active",
+           "active 2m ago" in screen_text(app), screen_text(app))
+        ok("…as a fact about the row, dim and outside the lead's italic",
+           "[dim]· active 2m ago[/]" in screen_text(app), screen_text(app))
+        volatile["last_active"] = 3 * 3600
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a lane gone quiet for hours says so, without a rebuild",
+           "active 3h ago" in screen_text(app) and lanes.children[0] is before,
+           screen_text(app))
+        # The two clocks are INDEPENDENT: a fresh status on a silent agent and a stale status
+        # on a busy one are different problems, so neither field may imply the other.
+        ok("a fresh status and a silent agent are shown as the different facts they are",
+           "old)" not in screen_text(app) and "active 3h ago" in screen_text(app),
+           screen_text(app))
+        volatile["last_active"] = 120
 
         # THE STALE-PR REGRESSION. The PR merges, so the snapshot stops carrying it. Nothing
         # about the row's SHAPE changed, so this goes down the no-rebuild path — which is
@@ -999,6 +1030,71 @@ async def main():
        fleet_tui.parse_status_text(nbsp))
     ok("…and a pane with no status line yields ? rather than a guess",
        fleet_tui.parse_status_text("just some scrollback") == ("?", "?"))
+
+    # ── "last active", and where the transcript it measures comes from ──────────────────
+    # The resolution has to agree with agent-fanout.sh's, because both claim to name THE
+    # transcript of a given agent; if they disagree, one of them is describing a different
+    # session and nothing on screen says which.
+    with tempfile.TemporaryDirectory() as td:
+        home = os.path.join(td, "home")
+        agents = os.path.join(home, ".claude", "agents")
+        projects = os.path.join(home, ".claude", "projects")
+        os.makedirs(agents)
+        cwd = os.path.join(td, "lanes", "feature-9")
+        pdir = os.path.join(projects, _agent_facts.re.sub(r"[^A-Za-z0-9]", "-", cwd))
+        os.makedirs(pdir)
+        exact = os.path.join(pdir, "exact.jsonl")
+        newest = os.path.join(pdir, "newest.jsonl")
+        for p in (exact, newest):
+            open(p, "w").close()
+        os.utime(exact, (1, 1))          # older, so "newest file" would NOT pick it
+
+        real_expand = os.path.expanduser
+        _agent_facts.os.path.expanduser = lambda p: p.replace("~", home, 1)
+        try:
+            with open(os.path.join(agents, "feature-9.transcript"), "w") as fh:
+                fh.write(exact + "\n")
+            ok("the recorded transcript sidecar wins — a cwd can host several sessions",
+               _agent_facts.agent_transcript("feature-9", cwd) == exact,
+               _agent_facts.agent_transcript("feature-9", cwd))
+
+            # A sidecar naming a file that is gone is not an answer; the cwd still is.
+            with open(os.path.join(agents, "feature-9.transcript"), "w") as fh:
+                fh.write(os.path.join(pdir, "vanished.jsonl") + "\n")
+            ok("…a sidecar pointing at a missing file falls through to the cwd",
+               _agent_facts.agent_transcript("feature-9", cwd) == newest,
+               _agent_facts.agent_transcript("feature-9", cwd))
+
+            # The recorded cwd is the second key, and it must beat the caller's — that is the
+            # case where the caller has no cwd at all.
+            os.remove(os.path.join(agents, "feature-9.transcript"))
+            with open(os.path.join(agents, "feature-9.cwd"), "w") as fh:
+                fh.write(cwd + "\n")
+            ok("…then the recorded cwd, so an agent with no path passed still resolves",
+               _agent_facts.agent_transcript("feature-9", "") == newest,
+               _agent_facts.agent_transcript("feature-9", ""))
+
+            ok("an agent with no sidecars and no cwd resolves to nothing, not a guess",
+               _agent_facts.agent_transcript("never-booted", "") == "")
+        finally:
+            _agent_facts.os.path.expanduser = real_expand
+
+        now = time.time()
+        os.utime(newest, (now - 300, now - 300))
+        secs = _agent_facts.last_active(newest)
+        ok("last_active measures the transcript's mtime, in seconds",
+           secs is not None and 295 <= secs <= 305, secs)
+        ok("…and an unresolvable transcript yields None rather than 0 — 'unknown' is not 'now'",
+           _agent_facts.last_active("") is None
+           and _agent_facts.last_active(os.path.join(td, "nope.jsonl")) is None)
+
+    # fmt_ago is NEVER empty for a known value, unlike fmt_age: the field's whole purpose is
+    # that it is always there, so silence must mean "no transcript" and nothing else.
+    ok("recent activity is coarse but never silent",
+       (fleet_tui.fmt_ago(0), fleet_tui.fmt_ago(59), fleet_tui.fmt_ago(420),
+        fleet_tui.fmt_ago(3 * 3600), fleet_tui.fmt_ago(4 * 86400))
+       == ("<1m", "<1m", "7m", "3h", "4d"))
+    ok("…and only an unknown value is silent", fleet_tui.fmt_ago(None) == "")
 
     ok("lane numbers match agent-tune's mapping, so the override shown is the one it reads",
        (fleet_tui.lane_num_of("team-lead"), fleet_tui.lane_num_of("feature-3"),

@@ -452,6 +452,77 @@ def transcript_for(cwd):
         return ""
 
 
+def agent_transcript(name, cwd=""):
+    """This agent's live transcript, resolved WITHOUT tmux and without the harness.
+
+    Same precedence agent-fanout.sh's _ctx_transcript uses, so the two surfaces cannot
+    disagree about which file belongs to an agent:
+
+      1. the recorded `~/.claude/agents/<name>.transcript` sidecar — the exact file the
+         session hook wrote for THAT agent, so a cwd hosting several sessions is unambiguous
+      2. the recorded `~/.claude/agents/<name>.cwd` sidecar → newest file in its project dir
+      3. the caller's own cwd → newest file in its project dir
+
+    A sidecar is written once per session, so after a restart it can point at a file the
+    agent has stopped writing. That only ever UNDER-reports activity, and the caller's
+    session-exact path (fleet-status.sh's parent_session_for) takes precedence over this
+    whenever it has one — so the stale case cannot make a dead lane look alive.
+    """
+    if not isinstance(name, str) or not name:
+        return transcript_for(cwd)
+    base = os.path.expanduser("~/.claude/agents")
+    try:
+        with open(os.path.join(base, name + ".transcript")) as fh:
+            p = fh.read().strip()
+        if p and os.path.isfile(p):
+            return p
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(base, name + ".cwd")) as fh:
+            rec = fh.read().strip()
+    except OSError:
+        rec = ""
+    return transcript_for(rec) or transcript_for(cwd)
+
+
+def last_active(path):
+    """Seconds since the agent last wrote to `path`, or None when there is no transcript.
+
+    THE ANSWER `.claude/status` CANNOT GIVE. The status line says what a lane is doing; only
+    a human writes it, so it says nothing about whether the lane is still there — which is
+    how every lane's status came to sit frozen for four days beside numbers that kept moving.
+    A transcript's mtime needs nobody to maintain it: the agent stamps it by working.
+
+    The two facts are complementary and BOTH are shown — status age is "when was this claim
+    last written", this is "when did the agent last do anything". A fresh-looking status on a
+    silent agent, and a stale status on a busy one, are different problems.
+    """
+    if not path:
+        return None
+    try:
+        return max(0, int(time.time() - os.path.getmtime(path)))
+    except OSError:
+        return None
+
+
+def fmt_ago(secs):
+    """How long ago, at the coarseness a reader acts on — "<1m", "7m", "3h", "4d".
+
+    Unlike fmt_age this NEVER returns "" for a known value: the point of the field is that it
+    is always present, so silence means "no transcript", never "recent enough not to mention".
+    """
+    if secs is None:
+        return ""
+    if secs < 60:
+        return "<1m"
+    if secs < 3600:
+        return "%dm" % (secs // 60)
+    if secs < 86400:
+        return "%dh" % (secs // 3600)
+    return "%dd" % (secs // 86400)
+
+
 def _tail(path, nbytes=TAIL):
     try:
         size = os.path.getsize(path)

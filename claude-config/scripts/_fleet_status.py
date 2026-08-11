@@ -15,8 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, ask_kind, clip, context_for, fmt_age, fmt_secs, needs_input, needs_input_items,
-    open_prs_for, status_age, status_line, tickets_for,
+    ASK, agent_transcript, ask_kind, clip, context_for, fmt_age, fmt_ago, fmt_secs,
+    last_active, needs_input, needs_input_items, open_prs_for, status_age, status_line,
+    tickets_for,
 )
 
 
@@ -145,9 +146,13 @@ def rows():
         # subagent row carries only what is unambiguously its own — name, state, uptime — and
         # the columns that cannot be attributed are left empty.
         if kind == "subagent":
+            # last_active is per-TRANSCRIPT, so it is the one per-agent fact a subagent row
+            # could carry — but only from a session-exact path. Falling back to the cwd would
+            # report its spawner's activity, which is the same misattribution as the rest.
             yield {"name": name, "path": path, "state": state, "uptime": fmt_uptime(up),
                    "kind": kind, "label": label, "tokens": None, "context_pct": None,
-                   "issue": "", "needs_input": "", "status": "", "status_age": None}
+                   "issue": "", "needs_input": "", "status": "", "status_age": None,
+                   "last_active": last_active(tpath) if tpath else None}
             continue
 
         used, win = context_for(path, tpath or None)
@@ -193,6 +198,11 @@ def rows():
             # lets every surface say so instead. Seconds, unformatted: JSON consumers want
             # the number, and each renderer decides its own threshold wording.
             "status_age": status_age(path),
+            # WHETHER THE LANE IS STILL THERE, which the status line structurally cannot say:
+            # a human writes that file, so it ages exactly as fast as the coordinator forgets
+            # it. This one nobody has to maintain — it is the mtime of the transcript the
+            # agent stamps by working. Seconds, unformatted, same contract as status_age.
+            "last_active": last_active(tpath or agent_transcript(name, path)),
         }
 
 
@@ -295,12 +305,28 @@ def main():
         # above. The ⚠ asks nest UNDER it: an ask without its context reads as an interruption
         # rather than a next step. (This order is the user's; the reverse was tried and put the
         # question above the thing it was about.)
-        if r["status"]:
-            # The age rides WITH the line rather than replacing it, and only once the line is
-            # old enough to be lying. A four-day-old "PR #130 open; awaiting your merge" is
-            # indistinguishable from today's until something says how old it is.
-            age = fmt_age(r.get("status_age"))
-            out = wrap(r["status"] + (" (%s old)" % age if age else ""), 6)
+        #
+        # It carries TWO clocks, and they answer different questions. `(4d old)` is how long
+        # ago the LEAD wrote this claim; `active 2m ago` is how long ago the AGENT last did
+        # anything. Neither implies the other: a lane can be working hard under a status
+        # nobody has updated since Friday, and a lane can wear a status written this minute
+        # having died an hour ago. Keeping both is what lets the reader tell those apart.
+        age = fmt_age(r.get("status_age"))
+        ago = fmt_ago(r.get("last_active"))
+        if r["status"] or ago:
+            body = r["status"] + (" (%s old)" % age if age else "") if r["status"] else ""
+            tail = " · active %s ago" % ago if ago else ""
+            # NARROW PANE: THE PROSE GIVES WAY, NOT THE CLOCK. wrap() truncates from the
+            # right, so on a pane too narrow for both the tail is what disappeared — and the
+            # tail is the only part of this line nobody has to maintain. Losing it leaves a
+            # sentence that looks authoritative with nothing left to say how old it is, which
+            # is the exact failure the field was added to end. So the status is shortened to
+            # make room and the clock is kept whole.
+            room = cols - 6 - 1
+            if body and tail and dwidth(body) + dwidth(tail) > room:
+                keep = room - dwidth(tail) - 1
+                body = body[:keep] + "…" if keep > 0 else ""
+            out = wrap(body + tail if body else tail.lstrip(" ·"), 6)
             if out:
                 sys.stdout.write(out + "\n")
         # One typed glyph per ask. The lane's label, name and ticket are already on the row
