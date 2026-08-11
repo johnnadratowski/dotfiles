@@ -2,6 +2,13 @@
 
 ## Changelog
 
+- **1.9.1** — **The gate prompt is channel-conditional.** Solo or as the team lead, ask the
+  two axes with `AskUserQuestion` as before. A **lane agent in a team** now sends them to the
+  lead instead (standing rule, 2026-08-11): its card never reaches the user, so raising one
+  here was a gate that silently never resolved. The gate, both axes, and the human-as-terminal-
+  reviewer rule are unchanged — and the Monocle send itself is untouched, since the engine is
+  the human's own review surface rather than a question.
+
 - **1.9.0** — (DX-jn-cc-005) "Contract for the gates": Q2 is now **Two reviewers / One
   reviewer / None** — spawns of `.claude/agents/reviewer.md` (mode-1 contract, fix
   rounds resume the same named reviewer) — replacing Both/Only-peer/Only-subagent.

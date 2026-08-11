@@ -197,6 +197,16 @@ wrong: it let picking Monocle silently drop agent review (and let "skip" drop ev
 The two axes are orthogonal — **choosing a human-review method must NEVER drop agent
 review, and declining agent review must NEVER drop the Monocle human review:**
 
+> **Who you ask depends on the session; the gate does not.** Solo, or as the team lead, ask
+> the user directly as written — the card renders in their view. **As a lane agent in a team
+> you never put a question to the user** (standing rule, 2026-08-11): no `AskUserQuestion`
+> card from a lane reaches John, so one raised here is a gate that never resolves. Send the
+> **lead** one `SendMessage` carrying both axes — what is being reviewed, the Q1/Q2 options,
+> what each would mean for the work, and your recommendation — and it asks, then hands the
+> answers back. Both axes still get answered, and the human is still the terminal reviewer.
+> This is about the *prompt* only: the Monocle review itself is unaffected, since the engine
+> is the human's own review surface and a lane sends its artifacts there exactly as below.
+
 > **Q1 — Human review (header "Monocle"): _Monocle, or not._**
 > **Monocle** = `/monocle-review <plan|diff> <ID>` (this skill sends the context artifacts,
 > groups + annotates the diff, blocks on `get_feedback`). **No Monocle** = the user reviews
@@ -221,7 +231,7 @@ review, and declining agent review must NEVER drop the Monocle human review:**
 > spawn under the same name is for the NEXT issue (that's the per-issue context clear).
 
 Ask **both questions in a single `AskUserQuestion` call** (the tool takes multiple
-questions). The answers **compose independently** — any of *Monocle + Two*, *No Monocle +
+questions) — or, as a lane agent, in a single message to the lead, per the note above. The answers **compose independently** — any of *Monocle + Two*, *No Monocle +
 One*, *Monocle + None*, etc. Monocle is the **human**-review engine; the reviewer spawns
 are **agent** corroboration that runs before the human's terminal sign-off — **one is
 never a substitute for the other.** Whatever the answers, **the human is the terminal
