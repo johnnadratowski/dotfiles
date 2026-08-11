@@ -23,6 +23,17 @@ numbers that kept moving. So the row also shows when that agent last wrote its t
 (`active 2m ago`), which needs nobody: the text says WHAT the lane is doing and the mtime
 says WHETHER THAT IS STILL CURRENT.
 
+THE HEADER SAYS WHEN IT LAST HEARD ANYTHING (`refreshed 14:32:07`). Every number on this
+screen can sit unchanged for a perfectly good reason, so a view that has STOPPED refreshing
+looks exactly like a fleet with nothing to say, and the reader is left pressing a key unable
+to tell whether it does anything. The stamp moving is the answer; past three ticks with
+nothing arriving it stops being a stamp and says NOT REFRESHING, in yellow, on a clock of its
+own — the state "no data is coming" cannot be drawn by the arrival of data.
+
+`r` IS NOT THE TICK. The timer is allowed to serve a three-minute-old PR list, because the
+render must never wait on the network. A keypress is a person saying they do not believe what
+they are reading, so `r` re-fetches that too, before the snapshot, and pays the round trip.
+
 WHAT IT WRITES, and nothing else. Deletions from the lead's own ask files (ticking an item
 off, undoable in-session), and the per-lane tuning knobs in a lane's GITIGNORED
 `.claude/workflow.config.local` — never the committed `workflow.config`, which belongs to the
@@ -43,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
@@ -612,6 +624,41 @@ def fit_note(mode, shown, total):
     return "fit %s · %d of %d visible, the rest scroll" % (mode, shown, total)
 
 
+def _now():
+    """Wall clock, as one seam. Named so a test can hold it still — every assertion about the
+    refresh indicator is an assertion about a clock, and a test that reads the real one can
+    only check that SOMETHING is printed."""
+    return time.time()
+
+
+def refresh_markup(refreshed_at, refreshing, interval, now=None):
+    """The refresh indicator: when the panel last actually LANDED data, and whether it is
+    still trying.
+
+    IT EXISTS TO MAKE A BROKEN REFRESH DIFFERENT FROM A QUIET FLEET. Every number here can sit
+    unchanged for a legitimate reason — nobody typed, no lane moved — so a view that has
+    stopped refreshing looks exactly like one with nothing to say, and the user is left
+    pressing a key that may or may not be doing anything. A timestamp that moves is the proof
+    the key worked; a timestamp that does not move is the bug, visible.
+
+    Three states, because they need three different responses: in flight (wait), landed
+    (believe it), and OVERDUE — past three ticks with nothing arriving, which is not staleness
+    but a broken view, and is the one that shouts.
+    """
+    now = _now() if now is None else now
+    stamp = ("" if refreshed_at is None
+             else time.strftime("%H:%M:%S", time.localtime(refreshed_at)))
+    if refreshed_at is None:
+        return "[dim]refreshing…[/]" if refreshing else "[dim]no data yet[/]"
+    if refreshing:
+        return "[dim]refreshing… (last %s)[/]" % stamp
+    # Three ticks, floored at 30s: one missed tick is a slow `gh`, three is a view that has
+    # stopped. The floor keeps a fast --interval from crying wolf on ordinary jitter.
+    if now - refreshed_at > max(3 * interval, 30):
+        return "[b yellow]NOT REFRESHING — last %s[/]" % stamp
+    return "[dim]refreshed %s[/]" % stamp
+
+
 def context_markup(pct, state=None):
     """(text, colour) for a context gauge. ONE implementation, wherever a gauge is drawn.
 
@@ -950,6 +997,8 @@ class FleetTUI(App):
         self.fit_mode = "agents"   # which list `=` is currently fitting: "agents" or "4ME"
         self.detail = None         # the open overlay's assembled data, or None
         self.editing = None        # the cfg entry currently being edited, or None
+        self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
+        self.refreshing = False    # a request is in flight right now
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
@@ -976,18 +1025,49 @@ class FleetTUI(App):
         self._fit_lanes()
         self.reload()
         self.set_interval(self.interval, self.reload)
+        # A SECOND TIMER, FOR THE INDICATOR ALONE. The header is otherwise repainted only when
+        # data arrives — so "nothing has arrived for a minute", the single state the indicator
+        # exists to report, is the one state that could never draw itself. This tick owns no
+        # data and shells out to nothing; update_head writes only when the markup changes, so
+        # on a healthy fleet it is a string comparison once a second and no repaint at all.
+        self.set_interval(1.0, self.update_head)
 
     # ── data ─────────────────────────────────────────────────────────────────────────────
     def action_reload(self):
-        self.reload()
+        """`r` — an EXPLICIT refresh, which is not the same event as the timer's.
+
+        The tick is the fleet's own heartbeat and is allowed to serve a three-minute-old PR
+        list. A keypress is a person saying "I do not believe what I am reading", and the one
+        field that would have answered them from cache is the one that costs a network call.
+        So `r` forces it, and pays the round trip.
+        """
+        self.load(force=True)
 
     def reload(self):
         self.load()
 
-    def load(self):
-        self.run_worker(self._load, thread=True, exclusive=True, group="load")
+    def load(self, force=False):
+        # The stamp turns over the moment the request is MADE, not when it lands: a refresh
+        # that never returns is exactly the failure this indicator exists to show, and it can
+        # only show it by first admitting that a refresh is in flight.
+        self.refreshing = True
+        self.update_head()
+        self.run_worker(lambda: self._load(force), thread=True, exclusive=True, group="load")
 
-    def _load(self):
+    def _load(self, force=False):
+        # A FORCED refresh re-fetches the PRs BEFORE the snapshot reads them, so the number on
+        # screen when the key finishes is the number the key asked for. The tick keeps the
+        # opposite order (below) on purpose — there the render must never wait on the network.
+        # The repo directory comes from the PREVIOUS snapshot rather than a guess; on the very
+        # first load there is none, and the after-the-fact refresh already covers that case.
+        if force:
+            prev = next((r.get("path") for r in
+                         (self.data.get("lanes") or []) if r.get("path")), "")
+            if prev:
+                try:
+                    refresh_open_prs(prev, max_age=0)
+                except Exception:
+                    pass
         data = snapshot()
         if not get_current_worker().is_cancelled:
             self.call_from_thread(self.apply, data)
@@ -1000,7 +1080,7 @@ class FleetTUI(App):
         # nothing at all.
         lanes = data.get("lanes") or []
         path = next((r.get("path") for r in lanes if r.get("path")), "")
-        if path:
+        if path and not force:      # a forced load already fetched, above
             try:
                 refresh_open_prs(path)
             except Exception:
@@ -1029,6 +1109,8 @@ class FleetTUI(App):
         """
         sig = self.structure_sig(data)
         self.data = data
+        self.refreshed_at = _now()
+        self.refreshing = False
         self.update_head()
         self.refresh_detail()
 
@@ -1064,8 +1146,15 @@ class FleetTUI(App):
 
     def update_head(self):
         d = self.data
+        # The indicator rides along even on the error path — an error IS a refresh result, and
+        # the question "is this view still alive" is exactly the one the reader has when the
+        # header has gone red.
+        mark = refresh_markup(self.refreshed_at, self.refreshing, self.interval)
         if d.get("error"):
-            self.query_one("#head", Static).update(f"[red]{escape(d['error'])}[/]")
+            head, markup = (self.query_one("#head", Static),
+                            f"  [red]{escape(d['error'])}[/]  ·  {mark}")
+            if str(head.content) != markup:
+                head.update(markup)
             return
         lanes = d["lanes"]
         live = sum(1 for r in lanes if r.get("state") != "down")
@@ -1076,6 +1165,7 @@ class FleetTUI(App):
             bits.append(f"{len(d['subs'])} sub")
         if n_ask:
             bits.append(f"[b yellow]{ASK} {n_ask} needs you[/]")
+        bits.append(mark)
         # Written only when changed, for the same reason the lane lines are: an unconditional
         # update() on a timer repaints, and a repaint of the header is as visible as any other.
         head, markup = self.query_one("#head", Static), "  " + "  ·  ".join(bits)

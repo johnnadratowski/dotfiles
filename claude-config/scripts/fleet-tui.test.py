@@ -36,6 +36,11 @@ What it locks in — each is a way this view could lie or lose work:
   - nothing unlabelled sits where a number is expected: a tmux pane id (`%182`) beside
     `effort=xhigh` was read as a percentage, so every pane id wears its label and the one real
     percentage on that line is the LIST view's gauge, labelled `context`
+  - `r` REACHES THE DATA SOURCE — asserted on the key, not on the method under it, because a
+    key that does nothing is exactly what a user cannot distinguish from a quiet fleet
+  - …and forces the one fact behind a cache (the PR list), which the timer still serves cached
+  - …and the header carries a `refreshed HH:MM:SS` that moves when data LANDS, goes loud when
+    three ticks bring nothing, and has its own clock so that state can draw itself at all
 """
 
 import asyncio
@@ -116,7 +121,12 @@ async def main():
     # that lane is there at all — a fleet can be empty, and the panel still has to be a panel.
     roster = {"extra": 0, "base": True}
 
+    # Every call to the data source, counted. `r` had never been tested as a KEY — only
+    # app.load() was, which cannot fail the way the user suspected it was failing.
+    calls = {"snapshot": 0, "prs": []}
+
     def fake_snapshot():
+        calls["snapshot"] += 1
         base = {
             "name": "feature-1", "path": lane, "state": "idle",
             "uptime": volatile["uptime"],
@@ -143,6 +153,15 @@ async def main():
         }
 
     fleet_tui.snapshot = fake_snapshot
+    # The PR fetch is a `gh` subprocess. Recorded rather than run — and the max_age it is
+    # called WITH is the fact under test, since that argument is the whole difference between
+    # an explicit refresh and a tick.
+    fleet_tui.refresh_open_prs = lambda path, max_age=None: calls["prs"].append(max_age)
+
+    # The clock, held still. Every assertion about a refresh indicator is an assertion about a
+    # clock; reading the real one could only check that SOMETHING was printed.
+    clock = {"t": 1_700_000_000.0}
+    fleet_tui._now = lambda: clock["t"]
 
     app = fleet_tui.FleetTUI(interval=3600)     # no timer refresh; the tests drive it
     async with app.run_test() as pilot:
@@ -256,6 +275,92 @@ async def main():
         ok("…and an absent age is not an old one either",
            fleet_tui.fmt_age(None) == "")
         volatile["status_age"] = 60
+
+        # ── the refresh indicator, and whether `r` refreshes at all ──────────────────────
+        # THE KEY ITSELF WAS NEVER TESTED. Every refresh assertion above calls app.load()
+        # directly, which cannot fail the way a user suspects a key is failing — and with
+        # nothing on screen moving when a fleet is quiet, a working `r` and a dead one look
+        # identical. So: the key reaches the data source, and the screen says it did.
+        n0, t0 = calls["snapshot"], clock["t"]
+        head_before = str(app.query_one("#head", Static).content)
+        clock["t"] += 5
+        app.query_one("#lanes", ListView).focus()
+        await pilot.press("r")
+        for _ in range(4):
+            await pilot.pause()
+        ok("r actually re-reads the data source — the KEY, not just the method under it",
+           calls["snapshot"] == n0 + 1, (n0, calls["snapshot"]))
+        head_after = str(app.query_one("#head", Static).content)
+        ok("…and the panel says so with a timestamp that MOVED",
+           "refreshed " in head_after and head_after != head_before,
+           (head_before, head_after))
+        ok("…which is the time the data landed, not the time the key was pressed",
+           time.strftime("%H:%M:%S", time.localtime(t0 + 5)) in head_after, head_after)
+
+        # THE ONE FACT `r` COULD NOT REFRESH. The PR list comes from a `gh` call behind a
+        # three-minute cache, so an explicit refresh used to return the cached answer — which
+        # is exactly the field a user pressing `r` is most often asking about.
+        ok("an explicit r forces the PR fetch past its cache age",
+           calls["prs"][-1:] == [0], calls["prs"])
+        calls["prs"].clear()
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        ok("…while the timer keeps the cache, so the tick never waits on the network",
+           0 not in calls["prs"], calls["prs"])
+
+        # The three states, at the level they are decided. A view that has stopped refreshing
+        # is NOT staleness — it is a broken view, and it is the whole reason the indicator is
+        # on screen, so it must not whisper in the same dim grey as a healthy stamp.
+        landed = fleet_tui.refresh_markup(t0, False, 5, now=t0 + 1)
+        ok("a fresh landing is a quiet timestamp", landed.startswith("[dim]refreshed "), landed)
+        inflight = fleet_tui.refresh_markup(t0, True, 5, now=t0 + 1)
+        ok("…a request in flight says so, while still naming the last one it landed",
+           "refreshing…" in inflight and "last " in inflight, inflight)
+        dead = fleet_tui.refresh_markup(t0, False, 20, now=t0 + 3 * 20 + 1)
+        ok("…and three ticks with nothing arriving is a LOUD failure, not a dim one",
+           "NOT REFRESHING" in dead and "[b yellow]" in dead, dead)
+        ok("…but a single slow tick is not accused of anything",
+           fleet_tui.refresh_markup(t0, False, 20, now=t0 + 21).startswith("[dim]"),
+           fleet_tui.refresh_markup(t0, False, 20, now=t0 + 21))
+        # The floor, which is what actually decides at the default five-second interval:
+        # three ticks there is fifteen seconds, and accusing the view of being dead every
+        # time `gh` takes a moment would train the reader to ignore the one loud thing here.
+        ok("…and a fast interval does not cry wolf on ordinary jitter",
+           fleet_tui.refresh_markup(t0, False, 5, now=t0 + 29).startswith("[dim]"),
+           fleet_tui.refresh_markup(t0, False, 5, now=t0 + 29))
+        ok("…though it still gives up eventually",
+           "NOT REFRESHING" in fleet_tui.refresh_markup(t0, False, 5, now=t0 + 31),
+           fleet_tui.refresh_markup(t0, False, 5, now=t0 + 31))
+        ok("before anything has landed the panel admits it, rather than showing a fake time",
+           fleet_tui.refresh_markup(None, False, 5, now=t0) == "[dim]no data yet[/]")
+
+        # …AND IT NEEDS ITS OWN TIMER TO SAY SO. The header is otherwise repainted only when
+        # data arrives, so without a clock of its own the one state this indicator exists to
+        # report — nothing is arriving — is the one state it could never draw. Asserted on the
+        # registered timer rather than by sleeping, which would make the suite slow and flaky.
+        ticks = {(getattr(t, "_callback", None), getattr(t, "_interval", None))
+                 for t in getattr(app, "_timers", ())}
+        ok("the indicator has a clock of its own, independent of the data tick",
+           (app.update_head, 1.0) in ticks and (app.reload, app.interval) in ticks, ticks)
+
+        # The indicator has to REPAINT ITSELF, not wait for data — the state it exists to
+        # report is precisely the state in which no data is coming.
+        # The app under test runs a 3600s interval so no timer fires mid-test; the threshold
+        # is three of those, so the interval is what has to move for this to be reachable.
+        app.interval, n_before = 20, calls["snapshot"]
+        clock["t"] += 3600
+        app.update_head()
+        ok("the stale marker appears without any snapshot arriving to draw it",
+           "NOT REFRESHING" in str(app.query_one("#head", Static).content)
+           and calls["snapshot"] == n_before,
+           (str(app.query_one("#head", Static).content), n_before, calls["snapshot"]))
+        app.interval = 3600
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        ok("…and clears the moment one does",
+           "NOT REFRESHING" not in str(app.query_one("#head", Static).content))
 
         # THE OTHER CLOCK. The status text is only ever as current as the lead's memory —
         # that is what let every lane's line freeze for four days. The transcript mtime needs
