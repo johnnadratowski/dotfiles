@@ -50,5 +50,8 @@ that has not happened yet is a note, not a blocker. And when the user simplifies
 
 ---
 
-**Skill Version**: 1.0.0
+**Skill Version**: 1.1.0
 **Category**: Design, Review
+
+_Want collaboration instead? [`/brainstorm`](../brainstorm/SKILL.md) — same subject, collaborative
+posture: it builds on the idea before it tests it._
