@@ -11,6 +11,8 @@ can personally act on, ranked by what each unblocks.** This is the forward-looki
 /whats-next <kind> [<kind> …]     # only these kinds
 /whats-next quick                 # only items doable in ~5 minutes
 /whats-next 5                     # override the count (still capped at 7)
+/whats-next for <TICKET|PR>       # only what gates THAT item (see "For a ticket")
+/whats-next by age                # ordering override (see "Orderings")
 ```
 
 **Kinds** match the 4ME tags plus two practical extras:
@@ -24,8 +26,36 @@ can personally act on, ranked by what each unblocks.** This is the forward-looki
 | `plan` | a plan gate or scope question |
 | `quick` | anything above estimated ≤ ~5 minutes of the user's time |
 | `waiting` | items blocked on a third party (Patrick, CI, a vendor) — EXCLUDED by default; this kind opts them in |
+| `deep` | ONE meaty design question instead of three unblocks — for an hour, not five minutes |
 
 Kinds compose (`/whats-next review ship` = union). An unknown kind is reported, not guessed.
+
+## For a ticket — `/whats-next for DX-18`
+
+Scope inverts: instead of "what can the user do across the fleet", answer **"what stands
+between THIS item and done, and which of those the user can move."** The target can be a
+Linear id, a PR number, or a thing named the user's way ("the yield work") — resolve it by
+re-reading the source (the issue, its plan doc, the PR, the lane's state), never from memory.
+
+- List **every** live blocker in dependency order — decisions, reviews, third-party waits,
+  gated steps — and mark each as **yours** (the user can act) or **not yours** (an agent's, or
+  a third party's, with who).
+- The count cap does not apply here: completeness beats brevity when the scope is one item.
+- End with the single next action that moves it, even when that action is not the user's —
+  "nothing is yours until the plan review lands" is a valid and useful answer.
+
+## Orderings
+
+Default is unblock-rank (below). The user may name another; keep the filter, change the sort:
+
+| ordering | sort |
+|---|---|
+| `by age` | oldest ask first — surfaces what has been waiting longest |
+| `by size` | smallest user-effort first — clear the cheap ones |
+| `by lane` | grouped by which lane each item frees |
+
+When a non-default ordering is used, still mark the item the default ranking would have put
+first (e.g. "← biggest unblock"), so choosing a different lens never hides the priority call.
 
 ## Step 1 — Gather live candidates, never from memory
 
@@ -84,7 +114,7 @@ When two items tie, prefer the one that frees a whole lane over the one that fre
 
 ---
 
-**Skill Version**: 1.0.0
+**Skill Version**: 1.1.0
 **Category**: Reporting / Fleet
 
 _Companions: `/catchup` (backward-looking sibling), the 4ME list
