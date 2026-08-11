@@ -943,3 +943,28 @@ all quote the thing they govern, at a density no ordinary document reaches. So:
 **The same error in a second costume, from the same review.** A function documented "never throws" genuinely had the try/catch. But nothing called it directly — every caller went through a wrapper that did the setup work OUTSIDE any handler, so the contract held on a function no caller reached, and a malformed input threw from the wrapper. **Verify a contract on the function the CALLERS reach, not the one that advertises it.** Both failures are one thing: the check was sound and was of the wrong object. Soundness is not the property you need; aboutness is.
 
 **Why this class survives careful review.** Neither mistake looks like an absence. There is a test, and it passes; there is a try/catch, and it works. Nothing is missing, so nothing prompts the question — the only way in is to name the object the check is OF and compare it to the object the question is ABOUT. Related: the filter lesson (a filter that makes a check look more precise is the likeliest place it stops seeing the defect) and the operation-vs-state lesson (a delta is a property of the operation; idempotence is a property of the state). Same family, third and fourth instances.
+
+## An anti-vacuity assertion must be made PER ENUMERATED SOURCE, not on the total (2026-08-10)
+
+A sweep that looks nowhere reports the same reassuring nothing as one that looked everywhere, so
+an enumerating check has to assert it found something. That rule was already written down. **It
+was then applied to the aggregate, which does not deliver it.**
+
+The guard walked three suite roots (40 + 41 + 4 files) and asserted `files.length > 10` on the
+flattened list. Any single root could vanish — `walk()` returns `[]` for a missing directory —
+and the total still cleared the floor. A reviewer proved it by renaming one root: **green, with
+41 files unchecked, including the file holding the original defect.**
+
+**The assertion belongs on each source that can independently break, and its failure should NAME
+the source.** A per-root `it.each` that reds as "resolves suite files under `<root>` (found 0)"
+tells you which glob died; a global floor tells you nothing and usually stays green.
+
+**The general form: a floor over N sources is satisfied by the N−1 that still work.** Any check
+aggregating independent inputs — file globs, config sections, per-service health, per-shard
+counts — has this shape, and the aggregate is exactly where the failure hides.
+
+**Why it recurred inside its own fix, which is the part worth remembering.** This guard was
+written *because* three separate checks had each been correct about what they examined while
+their domain excluded the next defect. The guard fixed that for the addresses and reproduced it
+for the roots. Writing a check against a defect class does not exempt the check from the class —
+and the exemption feels strongest right after you have just written the lesson down.
