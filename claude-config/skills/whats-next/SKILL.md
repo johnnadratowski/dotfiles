@@ -73,6 +73,22 @@ user already answered, or that a lane resolved since, is repaired in the panel f
 shown. Third-party-blocked items stay out unless `waiting` was asked for: the list is things
 *the user* can move, not things the user must wait on.
 
+## Deferrals — "not now" is recorded, not just heard
+
+When the user pushes an offered item off ("later", "not until X", "skip that one"), the
+deferral is **written into the source list in the same turn**, not merely remembered:
+
+- **Fleet-level asks**: move the line to the **bottom** of `needs-input-fleet` and append
+  `(deferred <date>[ — until <condition>])`. The file's order now IS the priority memory.
+- **Lane-owned asks**: tell the owning lane to move it to the bottom of its queue, with the
+  same stamp.
+- A deferral with a condition ("until its blockers merge") **re-surfaces on its own** when the
+  condition is met — offer it again then, and say why it is back.
+- Deferred items sink to the bottom of the default ranking but are never hidden: they still
+  appear under `by age` (stamped), and `/whats-next for <ticket>` still lists them as blockers.
+- **Verification is unconditional**: every offered item is re-checked as still open at ask
+  time; a resolved item is removed from the source list, never re-offered.
+
 ## Step 2 — Rank
 
 Same priority as catchup's queue, because it answers the same question from the other side:
@@ -114,7 +130,7 @@ When two items tie, prefer the one that frees a whole lane over the one that fre
 
 ---
 
-**Skill Version**: 1.1.0
+**Skill Version**: 1.2.0
 **Category**: Reporting / Fleet
 
 _Companions: `/catchup` (backward-looking sibling), the 4ME list
