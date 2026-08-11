@@ -1116,3 +1116,79 @@ diligent — here it escalated a resolved trap as time-critical and came close t
 settled scope. Compare "A watcher's completion event names a SHA, not 'the PR'" above: same
 shape, opposite direction. There the dated observation was believed about an object that had
 moved on; here the dated *gap* was.
+
+## A per-branch audit cannot see a harm that lives in the operator's NEXT action (2026-08-11)
+
+**The instance.** An operator-facing recovery command went through two reviewers. Both certified
+every branch money-safe, and both were **right** — no branch of that code could double-move
+funds. Two blockers survived anyway, and neither was in a branch. The first: a correct refusal
+left the operator with an obvious next move — a sibling command that carries no equivalent guard
+and *would* double-move the funds. The second: a refusal message said "unknown outcome" on a
+state whose outcome is in fact certain, so the human's next act was to go looking for an answer
+they already had. The code was safe; the workflow it produced was not.
+
+**Why a branch lens cannot reach it.** A per-branch audit asks, for each path, *is what this path
+does correct?* Both harms live one step past the end of every path — in what a **correct** output
+causes a human to do. That region is not a branch, has no line number, and does not appear in the
+diff, so a review methodology organised around the code is structurally incapable of visiting it,
+no matter how careful. Two reviewers agreeing here is one verification, not two: same lens, same
+blind spot.
+
+**The rule.** On any operator-facing change, assign one reviewer the workflow lens explicitly:
+**after each refusal, error and message, what does the human do next, and is THAT safe?** Enumerate
+the sibling commands the operator reaches for when this one says no, and check whether they carry
+the same guard. Treat a refusal as an instruction to a person, not as an exit code — its wording
+is part of the safety surface, and a message that misdescribes a certain state is a defect even
+when the guard it explains is correct.
+
+**Corollary from the same rounds: a verdict function over an enum must be TOTAL.** The same command
+enumerated six of seven statuses and fell through on the seventh — which was the status the command
+exists to handle. This is the recurring shape of the omission, not an edge case: the missing arm is
+usually the *main* one, because the enumerated arms get written while you are thinking about
+exceptions. Assert exhaustiveness mechanically (a `never`-typed default, an explicit `default:
+throw`) rather than reading the list and counting agreement with your mental model.
+
+**Related.** "Verification must be able to fail for the risk THE CHANGE introduces" is the same
+error at gate level — evidence with no power against the actual risk. "The detached-HEAD class:
+NAME the forbidden git operations" is its enumeration half: a category resolved by the reader
+covers what the reader was already thinking about, which is exactly how the seventh status and the
+sibling command both went unnamed.
+
+## When the implementation PRODUCES the falsifier, sweep the CLASS in the same round (2026-08-11)
+
+**The instance.** A plan made two claims that were true when written and false by the time the
+work landed — because the implementation itself produced the artifact that falsified them. A
+`pnpm dedupe` collapsed the very version conflict two code comments described as live. Nothing
+about the claims decayed; the change under review destroyed their subject. A reviewer caught the
+first. **The fix for the first instance contained the second, ten lines up** — same file, same
+category of state, same round, and it still needed a separate catch.
+
+**Why it is missable.** The claim was verified, recently, by the right person. What changed is
+not the claim's evidence but its *world*, and the thing that changed the world is the diff you are
+reviewing — so the falsifier arrives inside the artifact you are least likely to read as evidence
+about prose. Lockfiles, generated files, re-resolved dependency trees and build outputs all read
+as byproducts.
+
+**The rule.** When a finding's falsifier is an **implementation-produced artifact**, do not fix
+that one instance. Enumerate every claim in the change that depends on that category of state and
+check each, same round, unasked. **The first round that CAN see it is the only round that will** —
+after this round the lockfile is just the lockfile, and no later reviewer has a reason to re-derive
+which sentences depended on it.
+
+**Second half, and it is where instance two came from: hold the replacement claim to the same
+evidence bar.** Both surviving fixes were *measured*, not reworded. A merely-more-careful sentence
+is how the second instance was written in the first place — the author had already caught one, so
+the rewrite felt informed. Compare "An APPROVED plan still carries unverified claims" and "The
+HEDGE is what gets dropped when a hedged claim is restated": a correction is a new claim and
+inherits none of the original's verification.
+
+**Bonus shape, worth copying.** The reviewer stated its finding as **two falsifiable predictions
+with an offer to withdraw** — checkable by the person best placed to check them. It converged in
+one round instead of the usual assert/deny exchange, and it is compatible with "never retract a
+finding on assertion alone": a prediction names in advance what evidence would settle it, so the
+retraction is earned rather than conceded.
+
+**Provenance note, which is the reason this is a mechanical default and not advice.** The author
+had written up this exact pattern the same morning and then did it twice. Same as the anti-vacuity
+lesson recurring inside its own fix: writing a rule down does not exempt you from it, and the
+feeling of exemption is strongest right after you write it.
