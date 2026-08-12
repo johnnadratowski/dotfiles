@@ -65,7 +65,11 @@ One anchor per target (`<target>-review`), so each derives its own.
    and ask. Report upfront: N commits, M files.
 3. **Spawn the reviewer** — Agent tool, `subagent_type: reviewer`, **mode 2
    (range/bundle)**: the range `$ANCHOR..$TARGET`, the pin SHA (`git rev-parse $TARGET`),
-   and any context the caller supplied.
+   any context the caller supplied, **and a mandatory `Spawned by: <your agent name>` line**
+   — the lead writes `team-lead`, a lane agent writes its lane name. A reviewer knows only the
+   name it was given, never its creator's, so a spawn without that line sends its verdict to
+   the lead while you wait for it. The reviewer echoes the line in its verdict header, which is
+   what makes a misroute visible.
 
    > **Placement — leave `run_in_background` at its default (background).** A reviewer is
    > task-scoped, so it belongs **in the current window**, stacked under the pane that spawned

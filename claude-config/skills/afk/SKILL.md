@@ -140,7 +140,11 @@ Repeat up to `--max-rounds`:
    inherits this session's model — that is the default for `_A`; use the values you resolved
    and journaled at start-up via `_config.sh`, never a fresh read of `workflow.config`) with the definition's
    **mode-1 contract**: the issue id, `type: diff`, the commit SHA/range, the pin SHA,
-   and any business decisions not yet in the files.
+   any business decisions not yet in the files, **and a mandatory `Spawned by: <your agent
+   name>` line** — a reviewer knows only the name it was given, never its creator's, so
+   without it the verdict is addressed to the lead while this run waits on it. The reviewer
+   echoes that line in its verdict header; a header naming someone other than you is a
+   misroute, not a verdict.
 2. **Collect both verdicts.** A spawn returns its verdict as its result (or errors —
    respawn once under the same handle; a second consecutive error on the same round is a
    Stop condition). No liveness-watching, no failover pool: the Agent tool always

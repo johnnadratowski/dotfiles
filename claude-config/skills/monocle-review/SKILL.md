@@ -228,7 +228,12 @@ review, and declining agent review must NEVER drop the Monocle human review:**
 > dispatched together — both must go GREEN · **One reviewer** = a single spawn (`rev-a`)
 > · **None**. Spawn prompt = the definition's **mode-1 contract**: issue id, review type
 > (plan/diff), target (SHA / range / `working` with the diff inline; uncommitted plan
-> docs inline), business decisions not yet in the files, and the pin SHA. **Model —
+> docs inline), business decisions not yet in the files, the pin SHA, **and a mandatory
+> `Spawned by: <your agent name>` line** — the lead writes `team-lead`, a lane agent writes its
+> lane name. A reviewer knows only the name it was given, never its creator's, so a spawn
+> without that line produces a verdict addressed to the lead while the author waits; the
+> reviewer echoes the line in its verdict header, so a misroute is visible at a glance.
+> **Model —
 > MODEL-DIVERSE:** `rev-a` runs `WORKFLOW_REVIEW_MODEL_A` (**empty by default ⇒ inherits this
 > session's model**), `rev-b` runs `WORKFLOW_REVIEW_MODEL_B` (**pinned `sonnet`**) — that pin is
 > the whole mechanism making the two reviewers audit on **different** models. A **single**
