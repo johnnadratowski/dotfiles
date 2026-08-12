@@ -72,7 +72,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
-from _agent_facts import (ASK, ASK_KINDS, ask_detail, ask_kind,  # noqa: E402
+from _agent_facts import (ASK, ASK_GENERAL, ASK_KINDS, ask_detail, ask_kind,  # noqa: E402
                           ask_trailers, branch_for, branch_ticket_for, clip, fleet_goal,
                           fleet_goal_path, fmt_age, fmt_ago, refresh_open_prs, status_text,
                           tickets_for)
@@ -996,6 +996,65 @@ def ask_row_markup(n, raw, ctx=None):
     return "[dim]%2d[/]  %s %s" % (n, icon, linkify(clip(text), ctx or {}))
 
 
+# ── the 4ME category filter ──────────────────────────────────────────────────────────────
+# `todo` COVERS THE UNTYPED ROWS TOO, and that is not a shortcut. ASK_KINDS already defines
+# `todo` as "explicit general action — same as untyped, spelled out": an untyped ask, a
+# `todo:` ask and a `✅ …RESOLVED` line all parse to the same ✅ and mean the same thing to a
+# reader. The Enter dialog has always labelled an untyped ask `todo`, so filtering under that
+# name keeps ONE vocabulary on screen — a second word for the same category ("general") would
+# be a distinction only this filter believed in.
+#
+# The filter's spelling of ALL is "", which is why the untyped rows cannot simply be "" here.
+FILTER_ALL = ""
+FILTER_TODO = "todo"
+
+
+def ask_kind_of(raw):
+    """The kind token of one ask line, or "" when it carries none. Pure."""
+    return (ask_detail(raw) or {}).get("kind", "")
+
+
+def filter_asks(raws, kind=FILTER_ALL):
+    """[(n, raw)] for the rows a filter shows — NUMBERED AS THEY ARE IN THE FILE.
+
+    THE NUMBER IS AN ADDRESS, NOT A POSITION. The user says "4me 3" to the lead and the lead
+    reads line 3 of the file; `x` deletes by exact line match but the eye picks the row by its
+    number. Renumbering a filtered list would make `4me 3` mean a different ask depending on a
+    filter the lead cannot see — so the numbers keep their gaps, and a gap is also the honest
+    signal that rows are hidden.
+    """
+    pairs = list(enumerate(raws or [], 1))
+    if not kind:
+        return pairs
+    want = {"", FILTER_TODO} if kind == FILTER_TODO else {kind}
+    return [(n, r) for n, r in pairs if ask_kind_of(r) in want]
+
+
+def ask_kinds_present(raws):
+    """The filter's cycle, in ASK_KINDS' declared order.
+
+    ONLY KINDS ACTUALLY PRESENT. A cycle that steps through empty categories makes the user
+    press a key repeatedly to reach nothing, and every press repaints the panel. An untyped
+    row puts `todo` in the cycle, since that is the category it belongs to.
+    """
+    kinds = {ask_kind_of(r) for r in (raws or [])}
+    if "" in kinds:
+        kinds.add(FILTER_TODO)
+    return [k for k in ASK_KINDS if k in kinds]
+
+
+def filter_label(kind):
+    """What the panel title says about the active filter. Empty for ALL — an unfiltered list
+    is the ordinary state and must not spend title width announcing itself.
+
+    An UNKNOWN kind still renders, under the neutral icon: the lead writes this file by hand
+    and may type a kind this build has never heard of, and a filter that crashed (or silently
+    showed everything) on one would be worse than one that says what it is showing."""
+    if not kind:
+        return ""
+    return " [%s %s]" % (ASK_KINDS.get(kind, ASK_GENERAL), kind)
+
+
 class Lane(ListItem):
     """One lane: the identity row, its status, then its asks. Selectable as a unit."""
 
@@ -1256,6 +1315,11 @@ class FleetTUI(App):
         Binding("x", "clear_ask", "clear ask"),
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
+        # `c` CYCLES THE 4ME CATEGORY FILTER. Chosen because every other letter on this screen
+        # was taken (q r o a x u f j k) and `c` is the initial of the thing it filters. It
+        # never DELETES — a filtered-out ask is hidden, and the panel title says so, because a
+        # list that silently shows a subset is indistinguishable from a list that shrank.
+        Binding("c", "cycle_category", "category"),
         Binding("question_mark", "legend", "legend"),
         # `=` USED TO BE an unshifted alias for `+`. It is the coarse version of the same
         # gesture now — one press shows a whole list instead of one more row of one — and a
@@ -1281,6 +1345,7 @@ class FleetTUI(App):
         self.fit_mode = "agents"   # which list `=` is currently fitting: "agents" or "4ME"
         self.detail = None         # the open overlay's assembled data, or None
         self.ask = None            # the open 4ME overlay's {raw, n}, or None
+        self.ask_filter = ""       # 4ME category filter: "" = every kind, else a kind name
         self.editing = None        # the cfg entry currently being edited, or None
         self._fitted_want = None   # rows the cards wanted at the last fit, clamp aside
         self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
@@ -1441,9 +1506,10 @@ class FleetTUI(App):
         fleet = self.query_one("#fleet", ListView)
         keepf = fleet.index
         fleet.clear()
-        for i, raw in enumerate(data["fleet"], 1):
+        shown = filter_asks(data["fleet"], self.ask_filter)
+        for i, raw in shown:
             fleet.append(Ask(i, raw, data.get("fleet_path", ""), ctx))
-        if keepf is not None and 0 <= keepf < len(data["fleet"]):
+        if keepf is not None and 0 <= keepf < len(shown):
             fleet.index = keepf
 
         # The roster just changed shape — an agent came or went, or one grew an ask — which is
@@ -1496,7 +1562,13 @@ class FleetTUI(App):
             head.update(markup)
         # 4ME, and the count is part of the label: the user refers to these rows by number
         # ("4me 1"), so the panel says how many numbers there are.
-        title = f"4ME  ({len(d['fleet'])})"
+        # WITH A FILTER UP THE COUNT IS `shown/total`, never `shown` alone: the count is what
+        # tells the user whether the list is everything, and a bare "3" on a filtered panel
+        # says the fleet has three asks when it has eleven.
+        shown = len(filter_asks(d["fleet"], self.ask_filter))
+        total = len(d["fleet"])
+        count = f"{shown}" if not self.ask_filter else f"{shown}/{total}"
+        title = f"4ME  ({count}){filter_label(self.ask_filter)}"
         fleet = self.query_one("#fleet")
         if fleet.border_title != title:
             fleet.border_title = title
@@ -2095,6 +2167,7 @@ class FleetTUI(App):
             ("product", "a product or scoping call"),
             ("triage", "a tracker question — is this an issue, whose, what priority"),
             ("ship", "a merge / deploy / publish gate"),
+            ("fleet", "the machinery itself — hooks, scripts, skills, lane tooling"),
             ("todo", "a general action item"),
         ))
         states = "\n".join("  %s  %s" % (i, d) for i, d in (
@@ -2113,9 +2186,44 @@ class FleetTUI(App):
             ("", "on a 4ME row: the ask in full, with its ticket and provenance"),
             ("o", "open the ticket of the row you are on — lane or ask"),
             ("a", "in the detail view: apply the live knobs to the running agent"),
+            ("c", "cycle the 4ME category filter — all, then each kind present. The row"),
+            ("", "numbers keep their gaps, because a number is an address, not a position"),
         ))
         return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
                 "\n%s\n\n[dim]? or esc to close[/]" % (states, kinds, keys))
+
+    def action_cycle_category(self):
+        """All → each category PRESENT in the file → All.
+
+        Only kinds that exist are in the cycle, so the key never steps onto an empty view.
+        A filter is a VIEW: nothing is written, nothing is deleted, and `x`/`u` keep acting on
+        the row under the cursor exactly as before.
+
+        The overlay swallows it for the same reason it swallows `=`/`x` — re-filtering the
+        list behind a dialog moves rows the user cannot see, and the ask they are reading
+        could be one of the ones that vanishes.
+        """
+        if self._overlay_owns_keys():
+            return
+        cycle = ask_kinds_present(self.data.get("fleet") or [])
+        if not cycle:
+            self.notify("4ME is empty — nothing to filter", severity="warning")
+            return
+        order = [FILTER_ALL] + cycle
+        try:
+            nxt = order[(order.index(self.ask_filter) + 1) % len(order)]
+        except ValueError:
+            # The active filter's last row was just cleared, so its kind is gone from the
+            # cycle. Fall back to ALL rather than raising — the alternative is a key that
+            # dies on the one press that most needs to work (an empty filtered panel).
+            nxt = FILTER_ALL
+        self.ask_filter = nxt
+        # Force the rebuild: `structure_sig` is deliberately about the DATA, and the data did
+        # not change — the view did. Clearing the signature is how the view says so without
+        # teaching the signature about screen state it has no business knowing.
+        self.sig = None
+        self.apply(self.data)
+        self.notify("4ME: %s" % (nxt or "all categories"))
 
     def action_legend(self):
         self.query_one("#legend").toggle_class("-show")

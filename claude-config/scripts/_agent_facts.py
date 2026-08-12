@@ -417,6 +417,7 @@ ASK_KINDS = {
     "product": "💬",   # a product / business / scoping call only the user can make
     "triage":  "🏷️",   # a tracker question — is this an issue, whose is it, what priority
     "ship":    "🚀",   # a merge, deploy or publish gate
+    "fleet":   "🔧",   # the machinery itself — hooks, scripts, skills, the lanes' own tooling
     "todo":    "✅",   # explicit general action — same as untyped, spelled out
 }
 ASK_GENERAL = "✅"
@@ -430,11 +431,19 @@ _ASK_KIND = re.compile(r"^([a-z]+)\s*:\s*")
 
 
 def ask_kind(line):
-    """(icon, text) for one ask line, with any `<kind>:` token consumed."""
+    """(icon, text) for one ask line, with any `<kind>:` token consumed.
+
+    A LINE ALREADY OPENING WITH THE GENERAL TICK KEEPS ONE TICK. The lead writes a resolved
+    item as `✅ MON-10 B3 RESOLVED …`, and since that line carries no kind token it also gets
+    the general icon — so every resolved row rendered `✅ ✅ MON-10 …`. The doubled glyph reads
+    as a second marker with a meaning to work out, and there is none.
+    """
     line = (line or "").strip()
     m = _ASK_KIND.match(line)
     if m and m.group(1) in ASK_KINDS:
         return ASK_KINDS[m.group(1)], line[m.end():].strip()
+    if line.startswith(ASK_GENERAL):
+        return ASK_GENERAL, line[len(ASK_GENERAL):].strip()
     return ASK_GENERAL, line
 
 
@@ -516,6 +525,10 @@ def ask_detail(line):
     m = _ASK_KIND.match(raw)
     if m and m.group(1) in ASK_KINDS:
         kind, icon, body = m.group(1), ASK_KINDS[m.group(1)], raw[m.end():].strip()
+    elif raw.startswith(ASK_GENERAL):
+        # Same de-duplication as ask_kind: the tick a resolved line is written with IS the
+        # icon, so the dialog shows the prose without it rather than printing it twice.
+        kind, icon, body = "", ASK_GENERAL, raw[len(ASK_GENERAL):].strip()
     else:
         kind, icon, body = "", ASK_GENERAL, raw
     body, trailers = ask_trailers(body)   # trailers sit AFTER the stamp, so they come off first

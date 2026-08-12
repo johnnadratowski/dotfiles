@@ -1444,6 +1444,111 @@ async def main():
         ok("…and a stamp that is not a date yields nothing rather than a guess",
            fleet_tui.ask_age("last tuesday") == "" and fleet_tui.ask_age("") == "")
 
+        # ── the 4ME category filter (`c`) ────────────────────────────────────────────────
+        # The property that matters is not "the right rows are shown" — it is that a row's
+        # NUMBER does not move when they are. A human reading a filtered panel says "4me 3"
+        # and the lead reads line 3 of the file; renumbering would make those two different
+        # asks, silently, depending on a filter the lead cannot see.
+        with open(fleet_path, "w") as f:
+            f.write("product: a scoping call\n"
+                    "fleet: the machinery\n"
+                    "ship: merge #124\n"
+                    "fleet: more machinery\n"
+                    "✅ RESOLVED — done last week\n")
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+
+        def fleet_title():
+            return str(app.query_one("#fleet").border_title)
+
+        def fleet_numbers():
+            return [w.n for w in app.query_one("#fleet").children
+                    if isinstance(w, fleet_tui.Ask)]
+
+        ok("unfiltered, every row is there and the title is a bare count",
+           fleet_numbers() == [1, 2, 3, 4, 5] and fleet_title() == "4ME  (5)",
+           "%s / %s" % (fleet_numbers(), fleet_title()))
+
+        await pilot.press("c")
+        await pilot.pause()
+        ok("c filters to the first kind PRESENT, in the kinds' declared order",
+           app.ask_filter == "product" and fleet_numbers() == [1], app.ask_filter)
+        ok("…and the title says which, with its icon and shown/total",
+           fleet_title() == "4ME  (1/5) [💬 product]", fleet_title())
+
+        await pilot.press("c")
+        await pilot.pause()
+        ok("the next press moves to the next kind present, skipping the absent ones",
+           app.ask_filter == "ship" and fleet_numbers() == [3], app.ask_filter)
+
+        await pilot.press("c")
+        await pilot.pause()
+        ok("THE NUMBERS KEEP THEIR GAPS — a number is an address, not a position",
+           app.ask_filter == "fleet" and fleet_numbers() == [2, 4],
+           "%s %s" % (app.ask_filter, fleet_numbers()))
+
+        await pilot.press("c")
+        await pilot.pause()
+        ok("an untyped / resolved row is reachable under `todo`, not stranded",
+           app.ask_filter == "todo" and fleet_numbers() == [5],
+           "%s %s" % (app.ask_filter, fleet_numbers()))
+
+        await pilot.press("c")
+        await pilot.pause()
+        ok("the cycle returns to ALL rather than settling on a subset",
+           app.ask_filter == "" and fleet_numbers() == [1, 2, 3, 4, 5]
+           and fleet_title() == "4ME  (5)", "%s / %s" % (app.ask_filter, fleet_title()))
+
+        # A FILTER IS A VIEW. `x` deletes by exact line match, so it must delete the row the
+        # cursor is ON — not the row that would sit at that position unfiltered.
+        await pilot.press("c")
+        await pilot.press("c")
+        await pilot.press("c")           # → fleet: rows 2 and 4
+        await pilot.pause()
+        app.query_one("#fleet").focus()
+        app.query_one("#fleet").index = 0
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.pause()
+        body = open(fleet_path).read()
+        ok("x under a filter clears the row the cursor is on, not the one at that position",
+           "fleet: the machinery\n" not in body and "product: a scoping call" in body, body)
+        await pilot.press("u")
+        await pilot.pause()
+        ok("…and undo puts it back",
+           "fleet: the machinery\n" in open(fleet_path).read(), open(fleet_path).read())
+
+        # A resolved line renders ONE tick. It is written with a ✅ and carries no kind, so
+        # both the written glyph and the general icon used to land on the same row.
+        ok("a resolved row is not double-ticked",
+           fleet_tui.ask_row_markup(1, "✅ RESOLVED — done") .count("✅") == 1,
+           fleet_tui.ask_row_markup(1, "✅ RESOLVED — done"))
+        ok("a fleet: ask wears the machinery glyph",
+           "🔧" in fleet_tui.ask_row_markup(1, "fleet: the machinery"),
+           fleet_tui.ask_row_markup(1, "fleet: the machinery"))
+        # The lead writes this file by hand: an unknown kind must render, never crash.
+        # An unrecognised kind is NOT dropped and NOT a crash: it renders under the neutral
+        # glyph with its token intact (so the reader can see the lead typed something this
+        # build does not know), and it is reachable — as a general item, which is what an
+        # unclassifiable ask is. The alternative, a row that exists in the file and appears
+        # under no filter at all, is the one outcome a filter must never produce.
+        UNK = ["wobble: who knows"]
+        ok("an unknown kind renders neutrally, keeping its token",
+           fleet_tui.ask_row_markup(1, UNK[0]).count("✅") == 1
+           and "wobble:" in fleet_tui.ask_row_markup(1, UNK[0]),
+           fleet_tui.ask_row_markup(1, UNK[0]))
+        ok("…and is reachable rather than stranded outside every filter",
+           fleet_tui.ask_kinds_present(UNK) == ["todo"]
+           and fleet_tui.filter_asks(UNK, "todo") == [(1, UNK[0])],
+           "%s %s" % (fleet_tui.ask_kinds_present(UNK), fleet_tui.filter_asks(UNK, "todo")))
+
+        app.ask_filter = ""
+        app.sig = None
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+
     # ── a lane's open PR, beside its ticket ──────────────────────────────────────────────
     # Driven against pr_markup directly rather than restarting the app three times. The
     # two cases that could LIE are the ones worth locking: a PR shown for a lane that has
