@@ -522,6 +522,122 @@ async def main():
         await pilot.pause()
         ok("…and shrinks back when that agent goes away", panel_rows() == fitted)
 
+        # ── THE WRAP REGRESSION: a counted row is not a drawn row ────────────────────────
+        # `=` broke without a single test reddening, because every fixture here was WIDER
+        # than its content. Live, the fleet runs in a 72-column tmux pane, and the status
+        # line grew two dim suffixes — `(4d old)` and `· active 2m ago` — on top of text
+        # already clipped at sixty. Every lane then drew four rows where the arithmetic
+        # counted three: the panel came out six rows short of a five-lane fleet and `=` said
+        # "all 5 visible" over a list that scrolled.
+        #
+        # So the assertion is COUNTED-VS-MEASURED at a width narrow enough to wrap. It is
+        # not a restatement of the arithmetic: content_rows() is what Textual laid out, and
+        # nothing under test contributes to it.
+        # The fixture is the live shape: a status at the source's own 60-character clip, in a
+        # pane narrower than that plus its suffixes.
+        short_status = volatile["status"]
+        volatile["status"] = "SRV-11 rebased onto master; gates green; awaiting a merge"
+        await pilot.resize_terminal(66, 24)
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        narrow_w = app._width()
+        counted = fleet_tui.fit_height(app._rows(), narrow_w, app.data.get("ctx"))
+        ok("in a pane too narrow for the status line, the fit counts the WRAPPED rows",
+           counted == content_rows() + fleet_tui.PANEL_BORDER,
+           "counted %d, drawn %d (+border), width %d"
+           % (counted, content_rows(), narrow_w))
+        ok("…and that is strictly more than the unwrapped count — the fixture really wraps",
+           counted > fleet_tui.PANEL_BORDER
+           + sum(fleet_tui.ITEM_ROWS + len(r.get("raw_asks") or [])
+                 for r in app._rows()),
+           counted)
+        ok("…and the panel drawn is that wrapped fit, clamped only by 4ME's floor",
+           panel_rows() == min(counted, panels.size.height - fleet_tui.FLEET_MIN),
+           "panel %d, counted %d, avail %d"
+           % (panel_rows(), counted, panels.size.height))
+
+        # THE STATUS IS NOW PART OF THE HEIGHT, and it is not part of the rebuild signature —
+        # it moves on ticks nobody wants a rebuild for. So a status that grows past its
+        # column has to move the panel down the NO-REBUILD path, or the panel keeps a height
+        # that was right for the shorter line.
+        before_item = lanes.children[0]
+        grew_from = panel_rows()
+        volatile["status"] = (volatile["status"] + " — and then some, past the column's end "
+                              "and well into a second wrapped line")
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("a status that grows past its column grows the panel, without a rebuild",
+           panel_rows() > grew_from and lanes.children[0] is before_item,
+           "panel %d, was %d" % (panel_rows(), grew_from))
+        ok("…and the grown panel still matches what was drawn",
+           panel_rows() == content_rows() + fleet_tui.PANEL_BORDER,
+           "panel %d, content %d" % (panel_rows(), content_rows()))
+
+        # The width the counting uses is the panel's OUTER width, which a scrollbar cannot
+        # move. Sizing off the content width would let a short fit summon a scrollbar, the
+        # scrollbar narrow the text, the narrower text want more rows — a loop that settles
+        # at a different height depending on which frame you look at.
+        ok("the fit's width is the outer one, so a scrollbar cannot feed back into it",
+           narrow_w == app.query_one("#lanes").outer_size.width
+           and fleet_tui.text_width(narrow_w)
+           == narrow_w - fleet_tui.PANEL_BORDER - fleet_tui.PANEL_PAD,
+           narrow_w)
+        ok("…and a CLIPPED list is counted two columns narrower still, per panel chrome",
+           fleet_tui.text_width(narrow_w, fleet_tui.CLIPPED_RESERVE)
+           == fleet_tui.text_width(narrow_w) - fleet_tui.SCROLLBAR
+           - fleet_tui.CURSOR_GUTTER,
+           fleet_tui.text_width(narrow_w, fleet_tui.CLIPPED_RESERVE))
+
+        # A wrapped list that does NOT fit must be reported as partly shown. This is the
+        # half the user actually saw: `=` claiming a fit over a list it had just clipped.
+        roster["extra"] = 5
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        note = app._fit_note(app._fit_lanes())
+        ok("= does not claim a fit for wrapped rows it had to clip",
+           "the rest scroll" in note
+           and fleet_tui.visible_items(
+               [fleet_tui.lane_rows(r, narrow_w, app.data.get("ctx"),
+                                    fleet_tui.CLIPPED_RESERVE)
+                for r in app._rows()],
+               panel_rows() - fleet_tui.PANEL_BORDER) < len(app._rows()),
+           note)
+        volatile["status"] = short_status
+        roster["extra"] = 0
+        await pilot.resize_terminal(80, 24)
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        ok("…and a pane wide enough for every line is back to three rows a card",
+           panel_rows() == fitted, "%d vs %d" % (panel_rows(), fitted))
+
+        # The row arithmetic on its own, away from any terminal: one line per line, until a
+        # line is too long for its column.
+        # No clocks on this row: the two dim suffixes are the very thing that made the
+        # status wrap, and a unit test of the arithmetic wants ONE variable in the line.
+        wide_row = {"name": "n", "label": "l", "state": "idle", "status": "short",
+                    "status_age": None, "last_active": None, "raw_asks": []}
+        ok("with no width known, a card counts its lines unwrapped",
+           fleet_tui.lane_rows(wide_row) == fleet_tui.ITEM_ROWS,
+           fleet_tui.lane_rows(wide_row))
+        # An unbreakable 200-character token has no word boundary to wrap at, so the row
+        # count it costs is plain division — an expectation this file can state without
+        # borrowing the wrapper under test.
+        col = fleet_tui.text_width(60) - fleet_tui.LANE_INDENT
+        ok("…and a status too long for the column costs the card the rows it overflows by",
+           fleet_tui.lane_rows(dict(wide_row, status="x" * 200), 60)
+           == fleet_tui.ITEM_ROWS - 1 + -(-200 // col),
+           (fleet_tui.lane_rows(dict(wide_row, status="x" * 200), 60), col))
+        ok("a 4ME item wraps by the same rule, and an int still counts the old way",
+           fleet_tui.asks_fit_height(2) == fleet_tui.PANEL_BORDER + 2 * fleet_tui.ASK_ROWS
+           and fleet_tui.asks_fit_height(["todo: " + "y" * 200], 40)
+           > fleet_tui.asks_fit_height(["todo: y"], 40),
+           (fleet_tui.asks_fit_height(["todo: " + "y" * 200], 40),
+            fleet_tui.asks_fit_height(["todo: y"], 40)))
+
         # A fleet with nothing in it. The panel must stay a titled box: a zero-height FLEET
         # header reads as a broken view, not as an empty one.
         roster["base"] = False
@@ -1329,25 +1445,19 @@ async def main():
            fleet_tui.ask_age("last tuesday") == "" and fleet_tui.ask_age("") == "")
 
     # ── a lane's open PR, beside its ticket ──────────────────────────────────────────────
-    # Driven against Lane.pr_markup directly rather than restarting the app three times. The
+    # Driven against pr_markup directly rather than restarting the app three times. The
     # two cases that could LIE are the ones worth locking: a PR shown for a lane that has
     # none, and a draft presented as if it were ready to merge.
+    #
+    # A row dict is the whole fixture: these builders are free functions over (row, ctx),
+    # which they have to be — the fit calls them to measure a card's wrapped height before
+    # any widget exists — so the Lane stand-in this block used to need is gone.
     lane_row = {"name": "feature-1", "label": "vii", "state": "idle", "kind": "lane"}
-    mk = fleet_tui.Lane.pr_markup
+    mk = fleet_tui.pr_markup
 
-    class _R:
-        """A Lane stand-in: these markup builders read only `row` and `ctx`, so driving them
-        directly beats restarting the app once per case."""
-
-        pr_markup = fleet_tui.Lane.pr_markup
-
-        def __init__(self, row):
-            self.row = row
-            self.ctx = {}
-
-    ready = mk(_R(dict(lane_row, open_prs=[(999, "https://gh/x/pull/999", False)])))
-    draft = mk(_R(dict(lane_row, open_prs=[(1000, "https://gh/x/pull/1000", True)])))
-    none_ = mk(_R(dict(lane_row)))
+    ready = mk(dict(lane_row, open_prs=[(999, "https://gh/x/pull/999", False)]))
+    draft = mk(dict(lane_row, open_prs=[(1000, "https://gh/x/pull/1000", True)]))
+    none_ = mk(dict(lane_row))
 
     ok("an open PR renders its number", "#999" in ready, ready)
     ok("…as a clickable https link — GitHub registers no custom scheme",
@@ -1359,8 +1469,8 @@ async def main():
 
     # MULTIPLE PRs, like the tickets beside them. Showing only the first is a lie that looks
     # like a fact — the reader cannot tell one-PR from first-of-two.
-    two = mk(_R(dict(lane_row, open_prs=[(1, "https://gh/x/pull/1", False),
-                                         (2, "https://gh/x/pull/2", True)])))
+    two = mk(dict(lane_row, open_prs=[(1, "https://gh/x/pull/1", False),
+                                      (2, "https://gh/x/pull/2", True)]))
     ok("a lane with two PRs renders both", "#1" in two and "#2…" in two, two)
     ok("…and only the draft is dimmed", two.index("b green") < two.index("dim"), two)
 
@@ -1449,12 +1559,12 @@ async def main():
 
     # The clamp. Even with the denominator fixed, a gauge that CAN print 216% will one day
     # print 80% wrong. Over 100% is rendered as an admission, not as a number.
-    over = fleet_tui.Lane.head_markup(_R(dict(lane_row, context_pct=216, issue_links=[])))
+    over = fleet_tui.head_markup(dict(lane_row, context_pct=216, issue_links=[]))
     ok("a percentage over 100 is not printed as a confident number", "216%" not in over, over)
     ok("…it says >100% instead", ">100%" in over, over)
     ok("…louder than a merely-full lane, since it means the gauge is broken",
        "[b red]" in over, over)
-    fine = fleet_tui.Lane.head_markup(_R(dict(lane_row, context_pct=45, issue_links=[])))
+    fine = fleet_tui.head_markup(dict(lane_row, context_pct=45, issue_links=[]))
     ok("a percentage in range is still printed plainly", " 45%" in fine, fine)
 
     # ── the PR list is never stickier than the cache it came from ────────────────────────
@@ -1567,11 +1677,11 @@ async def main():
         ok("a stale current-work loses to the branch", pairs == [("DX-16", "")], pairs)
         ok("…and the disagreement is reported, not swallowed", mismatch is True)
         ok("…so the row shows the branch's ticket with a ≠ marker",
-           "≠" in fleet_tui.Lane.head_markup(
-               _R(dict(lane_row, issue_links=pairs, ticket_mismatch=True))))
+           "≠" in fleet_tui.head_markup(
+               dict(lane_row, issue_links=pairs, ticket_mismatch=True)))
         ok("…and an agreeing row wears no marker",
-           "≠" not in fleet_tui.Lane.head_markup(
-               _R(dict(lane_row, issue_links=[("SRV-22", "")]))))
+           "≠" not in fleet_tui.head_markup(
+               dict(lane_row, issue_links=[("SRV-22", "")])))
 
     # ── the detail overlay's own data, against real files and a real repo ────────────────
     # The UI tests above drive the overlay; these drive the functions under it, where the

@@ -61,6 +61,7 @@ overlay is the only part of this view that shells out, and it does so on a worke
 five-second tick must never grow a subprocess while no overlay is open.
 """
 
+import io
 import json
 import os
 import re
@@ -75,7 +76,9 @@ from _agent_facts import (ASK, ASK_KINDS, ask_detail, ask_kind,  # noqa: E402
                           ask_trailers, branch_for, clip, fleet_goal, fleet_goal_path,
                           fmt_age, fmt_ago, refresh_open_prs, status_text)
 
+from rich.console import Console  # noqa: E402
 from rich.markup import escape  # noqa: E402
+from rich.text import Text  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
 from textual.containers import Vertical, VerticalScroll  # noqa: E402
@@ -664,29 +667,114 @@ def snapshot():
 # COUNTED, NOT MEASURED. A widget's real height only exists after a layout pass, so sizing
 # from the measurement means drawing the panel at the wrong height once per change to learn
 # the right one — and, once the panel is clamped, a scrollbar narrowing the content can change
-# the measurement that set the width, which is a loop. The price of counting is a terminal
-# narrow enough to wrap a status: that row is not counted, and the panel scrolls, exactly as it
-# did at every size before.
-ITEM_ROWS = 3
+# the measurement that set the width, which is a loop.
+#
+# BUT A COUNTED LINE STILL WRAPS. Counting one row per line was true only while every line fit
+# its column, and it stopped being true the moment the status grew two dim suffixes — `(4d
+# old)` and `· active 2m ago` add some twenty-five columns to a status already clipped at
+# sixty, which is wider than the 64 columns a lane row gets in a 72-column pane. Every lane
+# then drew four rows where the arithmetic counted three, so `=` sized the panel six rows
+# short of a five-lane fleet and reported "all 5 visible" over a list that scrolled.
+#
+# So the count is now WIDTH-AWARE: each line is wrapped by rich's own algorithm — the one
+# Static uses — at the width that line will actually get.
+#
+# THE WIDTH COMES FROM THE PANEL'S OUTER EDGE, never from its content box. The content box
+# loses two columns the moment a scrollbar appears, and a scrollbar appears when the fit came
+# out short — so sizing off it would let the fit change the width the fit was computed at,
+# which is the loop the paragraph above warns about. The outer width is set by the container
+# and is the same number whether the list overflows or not.
+#
+# TWO ANSWERS, BECAUSE THE PANEL IS IN ONE OF TWO STATES. A list that FITS has no scrollbar,
+# so its lines get the full column and the fit is exact — reserving a scrollbar there would
+# leave the panel a row taller than its content, i.e. dead space stolen from 4ME. A list that
+# was CLIPPED has one, plus the cursor's gutter on whichever row it sits on, so the note that
+# says how much of it landed reserves both: that number must undercount rather than promise a
+# row the reader has to scroll to reach. Neither reservation feeds back into the width.
+ITEM_ROWS = 3         # an UNWRAPPED card: head + status + the blank the ListItem rule leaves
 ASK_ROWS = 2          # a 4ME row is one line, plus the blank the same ListItem rule leaves
+ITEM_BLANK = 1        # that blank row, on its own — the part of ITEM_ROWS that cannot wrap
 PANEL_BORDER = 2      # the round border takes a row off the top and one off the bottom
 PANEL_MIN = 3         # border + a row: a fleet with nothing in it still shows a titled box
 FLEET_MIN = 4         # rows 4ME keeps however many lanes there are — its border + one ask
+PANEL_PAD = 2         # `#lanes, #fleet { padding: 0 1 }` — a column either side
+SCROLLBAR = 2         # taken only once the list overflows, which is when the note is drawn
+CURSOR_GUTTER = 2     # the highlighted row's `border-left: thick` + `padding-left: 1`
+LANE_INDENT = 4       # `.lane-status`, `.lane-ask` — `padding-left: 4`
+# What a CLIPPED list has taken off its lines that a fitting one has not. See above: the fit
+# reserves nothing, the "how much of it landed" note reserves this.
+CLIPPED_RESERVE = SCROLLBAR + CURSOR_GUTTER
+
+# Rich needs a console to wrap against. It renders nothing: only its wrapping is used, and
+# the width is passed per call, so this one instance is safe to share and cheap to keep.
+_WRAP_CONSOLE = Console(file=io.StringIO(), width=200, no_color=True)
 
 
-def fit_height(rows):
+def text_width(panel_width, reserve=0):
+    """Columns a row's lines get inside a panel `panel_width` columns wide, OUTER.
+
+    `reserve` is what the panel's state has already taken off them — nothing while the list
+    fits, CLIPPED_RESERVE once it does not.
+
+    Zero when the panel has not been laid out yet, which every caller reads as "no width is
+    known" and falls back to the unwrapped count — a first frame that is one row short is
+    corrected by the fit that follows it, and guessing a width would be wrong for longer.
+    """
+    if not panel_width:
+        return 0
+    return max(1, panel_width - PANEL_BORDER - PANEL_PAD - reserve)
+
+
+def wrapped_rows(markup, width):
+    """Rows `markup` occupies once wrapped to `width` columns — 1 when no width is known.
+
+    Wrapped by rich rather than by dividing the length: Static word-wraps, so a line of 65
+    characters in 64 columns can break at column 40 and a character count would still say
+    two. It is the row COUNT that has to match, and only the real algorithm gives it.
+    """
+    if width <= 0:
+        return 1
+    return max(1, len(Text.from_markup(markup).wrap(_WRAP_CONSOLE, width)))
+
+
+def lane_rows(row, width=0, ctx=None, reserve=0):
+    """Rows one agent card occupies: its head, its status, one per ask — each of them wrappable
+    — plus the blank the ListItem rule leaves under the item."""
+    body = text_width(width, reserve)
+    indented = max(1, body - LANE_INDENT) if body else 0
+    n = wrapped_rows(head_markup(row, ctx), body)
+    n += wrapped_rows(status_markup(row, ctx), indented)
+    for raw in row.get("raw_asks") or []:
+        n += wrapped_rows(lane_ask_markup(raw, ctx), indented)
+    return n + ITEM_BLANK
+
+
+def fit_height(rows, width=0, ctx=None, reserve=0):
     """Rows the FLEET panel needs to show every agent in `rows` without scrolling."""
-    return PANEL_BORDER + sum(ITEM_ROWS + len(r.get("raw_asks") or []) for r in rows)
+    return PANEL_BORDER + sum(lane_rows(r, width, ctx, reserve) for r in rows)
 
 
-def asks_fit_height(n):
-    """Rows the 4ME panel needs to show `n` items without scrolling.
+def ask_rows(n, raw, width=0, ctx=None, reserve=0):
+    """Rows one 4ME item occupies — its line, wrapped, plus the ListItem blank."""
+    return wrapped_rows(ask_row_markup(n, raw, ctx),
+                        text_width(width, reserve)) + ITEM_BLANK
+
+
+def asks_fit_height(asks, width=0, ctx=None, reserve=0):
+    """Rows the 4ME panel needs to show `asks` without scrolling.
+
+    `asks` is the list of raw lines, so the items can be wrapped at the panel's width the way
+    the lanes are. An int is still accepted for the caller that only knows a count, and gets
+    the old unwrapped arithmetic.
 
     Never below FLEET_MIN, which is the same floor every other path respects: an empty list
     is still a titled box, and a panel that vanished would read as a broken view rather than
     an empty one.
     """
-    return max(FLEET_MIN, PANEL_BORDER + n * ASK_ROWS)
+    if isinstance(asks, int):
+        return max(FLEET_MIN, PANEL_BORDER + asks * ASK_ROWS)
+    need = sum(ask_rows(i, raw, width, ctx, reserve) for i, raw in enumerate(asks, 1))
+    return max(FLEET_MIN, PANEL_BORDER + need)
 
 
 def visible_items(heights, room):
@@ -773,16 +861,16 @@ def context_markup(pct, state=None):
     return "%d%%" % pct, ("red" if pct >= 90 else "yellow" if pct >= 80 else "dim")
 
 
-class Lane(ListItem):
-    """One lane: the identity row, its status, then its asks. Selectable as a unit."""
+# ── what a lane row SAYS, as free functions ──────────────────────────────────────────────
+# They live outside the widget because the fit has to know how wide each line is BEFORE any
+# widget exists — a card's height is now the number of rows its lines wrap to, and a builder
+# reachable only through an instantiated ListItem would force the sizing path to construct
+# widgets in order to measure them. Lane keeps the methods as one-line delegates so every
+# call site reads unchanged.
 
-    def __init__(self, row, ctx=None):
-        super().__init__()
-        self.row = row
-        self.ctx = ctx or {}
 
-    def pr_markup(self):
-        """This lane's open PRs — its own column, beside the tickets.
+def pr_markup(row):
+    """This lane's open PRs — its own column, beside the tickets.
 
         A LIST like the tickets, because a lane can have more than one in flight and showing
         only the first is a lie that looks like a fact.
@@ -794,88 +882,128 @@ class Lane(ListItem):
         A draft is DIM and marked, never green — colour is the whole signal at a glance, and a
         draft rendered like a ready PR is the one way this field could mislead.
 
-        The URL stays https: GitHub registers no custom scheme, unlike Linear's `linear://`.
-        """
-        prs = self.row.get("open_prs") or []
-        if not prs:
-            return ""
-        out = []
-        for num, url, draft in prs:
-            label = "#%s%s" % (num, "…" if draft else "")
-            body = "[link='%s']%s[/link]" % (url, label) if url else label
-            out.append("[%s]%s[/]" % ("dim" if draft else "b green", body))
-        return "  " + " ".join(out)
+    The URL stays https: GitHub registers no custom scheme, unlike Linear's `linear://`.
+    """
+    prs = row.get("open_prs") or []
+    if not prs:
+        return ""
+    out = []
+    for num, url, draft in prs:
+        label = "#%s%s" % (num, "…" if draft else "")
+        body = "[link='%s']%s[/link]" % (url, label) if url else label
+        out.append("[%s]%s[/]" % ("dim" if draft else "b green", body))
+    return "  " + " ".join(out)
+
+
+def head_markup(r, ctx=None):
+    """The identity line: state, label, name, context gauge, uptime, tickets, PRs."""
+    ctx = ctx or {}
+    state = r.get("state", "?")
+    icon = LANE_ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
+    icolor = "b yellow" if r.get("raw_asks") else STATE_STYLE.get(state, "white")
+    pcs, pcolor = context_markup(r.get("context_pct"), state)
+    up = "—" if state == "down" else (r.get("uptime") or "—")
+    # The recorded URL wins over the learned base — it is what the tracker actually
+    # returned, slug and all. linkify() is the fallback for ids that have none.
+    links = r.get("issue_links") or []
+    ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
+                   else linkify(i, ctx)
+                   for i, u in links) or linkify(r.get("issue") or "—", ctx)
+    # ≠ MEANS "THE BRANCH AND THE FILE DISAGREE, AND THIS IS THE BRANCH'S ANSWER". The id
+    # shown is machine truth either way; the marker is there because the other source has
+    # gone stale and someone should fix it — silently preferring the branch would hide the
+    # one fact the reader can act on.
+    if r.get("ticket_mismatch"):
+        ids = "[b yellow]≠[/]" + ids
+    return (
+        f"[{icolor}]{icon}[/] "
+        f"[b]{escape(r.get('label') or ''):<4}[/]"
+        f"[dim]{escape(r['name']):<11}[/]"
+        f"[{STATE_STYLE.get(state, 'white')}]{state:<7}[/]"
+        f"[{pcolor}]{pcs:>5}[/]  "
+        f"[dim]{up:>6}[/]   "
+        f"[cyan]{ids}[/]"
+        f"{pr_markup(r)}"
+    )
+
+
+def status_markup(row, ctx=None):
+    """The lane's status, WEARING ITS AGE once the line is too old to mean "now", and the
+    agent's own last sign of life beside it.
+
+    This is the one line on the row that nothing refreshes — a human writes it — so it is
+    the one line that can freeze while every number beside it keeps moving. That is what
+    made it dangerous rather than merely stale: linkify turns any `#N` in it into a live
+    hyperlink, so a four-day-old "PR #130 open; awaiting your merge" rendered exactly like
+    PR data fetched a second ago, beside a correct uptime and a correct context%.
+
+    TWO CLOCKS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. `(4d old)` is when the LEAD last
+    wrote this claim; `active 2m ago` is when the AGENT last did anything, taken from the
+    mtime of the transcript it stamps by working — nobody maintains it, which is exactly
+    why it is trustworthy in a way the status text is not. So the text says WHAT the lane
+    is doing and the mtime says WHETHER THAT IS STILL CURRENT, and neither substitutes for
+    the other: a busy lane can wear a status from Friday, and a status written this minute
+    can describe a lane that died an hour ago.
+
+    Both suffixes are dim and sit OUTSIDE the italic: they are facts about the line, not
+    part of the claim, and must not read as something the lead wrote. The activity suffix
+    shows even with no status at all — that is the row where it is the ONLY thing known.
+
+    THE SUFFIXES ARE ALSO WHY THE FIT IS WIDTH-AWARE: together they add some twenty-five
+    columns to a status already clipped at sixty, so this line wraps in any pane narrower
+    than about ninety columns. See the row-height block above.
+    """
+    ctx = ctx or {}
+    status = row.get("status") or ""
+    age = fmt_age(row.get("status_age"))
+    ago = fmt_ago(row.get("last_active"))
+    head = (f"[i]{linkify(status, ctx)}[/]" if status
+            else "[dim i]— no status —[/]")
+    if status and age:
+        head += f" [dim]({escape(age)} old)[/]"
+    if ago:
+        head += f" [dim]· active {escape(ago)} ago[/]"
+    return head
+
+
+def lane_ask_markup(raw, ctx=None):
+    """One of a lane's own asks, as it appears under the lane's status."""
+    icon, text = ask_kind(raw)
+    return f"{icon} {linkify(clip(text), ctx or {})}"
+
+
+def ask_row_markup(n, raw, ctx=None):
+    """One 4ME row: its number, its kind icon, and the ask clipped to the column.
+
+    THE TRAILERS COME OFF HERE, not at the source. The caller keeps the file's bytes because
+    `x` deletes by exact line match and the detail overlay reads the whole thing — this row
+    is one line in a column, so it shows the question and the deferral stamp, and leaves
+    provenance to the surface with room for it.
+    """
+    icon, text = ask_kind(raw)
+    text, _trailers = ask_trailers(text)
+    return "[dim]%2d[/]  %s %s" % (n, icon, linkify(clip(text), ctx or {}))
+
+
+class Lane(ListItem):
+    """One lane: the identity row, its status, then its asks. Selectable as a unit."""
+
+    def __init__(self, row, ctx=None):
+        super().__init__()
+        self.row = row
+        self.ctx = ctx or {}
 
     def head_markup(self):
-        r = self.row
-        state = r.get("state", "?")
-        icon = LANE_ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
-        icolor = "b yellow" if r.get("raw_asks") else STATE_STYLE.get(state, "white")
-        pcs, pcolor = context_markup(r.get("context_pct"), state)
-        up = "—" if state == "down" else (r.get("uptime") or "—")
-        # The recorded URL wins over the learned base — it is what the tracker actually
-        # returned, slug and all. linkify() is the fallback for ids that have none.
-        links = r.get("issue_links") or []
-        ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
-                       else linkify(i, self.ctx)
-                       for i, u in links) or linkify(r.get("issue") or "—", self.ctx)
-        # ≠ MEANS "THE BRANCH AND THE FILE DISAGREE, AND THIS IS THE BRANCH'S ANSWER". The id
-        # shown is machine truth either way; the marker is there because the other source has
-        # gone stale and someone should fix it — silently preferring the branch would hide the
-        # one fact the reader can act on.
-        if r.get("ticket_mismatch"):
-            ids = "[b yellow]≠[/]" + ids
-        return (
-            f"[{icolor}]{icon}[/] "
-            f"[b]{escape(r.get('label') or ''):<4}[/]"
-            f"[dim]{escape(r['name']):<11}[/]"
-            f"[{STATE_STYLE.get(state, 'white')}]{state:<7}[/]"
-            f"[{pcolor}]{pcs:>5}[/]  "
-            f"[dim]{up:>6}[/]   "
-            f"[cyan]{ids}[/]"
-            f"{self.pr_markup()}"
-        )
+        return head_markup(self.row, self.ctx)
+
+    def status_markup(self):
+        return status_markup(self.row, self.ctx)
 
     def compose(self):
         yield Static(self.head_markup(), classes="lane-head")
         yield Static(self.status_markup(), classes="lane-status")
         for raw in self.row.get("raw_asks") or []:
-            icon, text = ask_kind(raw)
-            yield Static(f"{icon} {linkify(clip(text), self.ctx)}",
-                         classes="lane-ask")
-
-    def status_markup(self):
-        """The lane's status, WEARING ITS AGE once the line is too old to mean "now", and the
-        agent's own last sign of life beside it.
-
-        This is the one line on the row that nothing refreshes — a human writes it — so it is
-        the one line that can freeze while every number beside it keeps moving. That is what
-        made it dangerous rather than merely stale: linkify turns any `#N` in it into a live
-        hyperlink, so a four-day-old "PR #130 open; awaiting your merge" rendered exactly like
-        PR data fetched a second ago, beside a correct uptime and a correct context%.
-
-        TWO CLOCKS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. `(4d old)` is when the LEAD last
-        wrote this claim; `active 2m ago` is when the AGENT last did anything, taken from the
-        mtime of the transcript it stamps by working — nobody maintains it, which is exactly
-        why it is trustworthy in a way the status text is not. So the text says WHAT the lane
-        is doing and the mtime says WHETHER THAT IS STILL CURRENT, and neither substitutes for
-        the other: a busy lane can wear a status from Friday, and a status written this minute
-        can describe a lane that died an hour ago.
-
-        Both suffixes are dim and sit OUTSIDE the italic: they are facts about the line, not
-        part of the claim, and must not read as something the lead wrote. The activity suffix
-        shows even with no status at all — that is the row where it is the ONLY thing known.
-        """
-        status = self.row.get("status") or ""
-        age = fmt_age(self.row.get("status_age"))
-        ago = fmt_ago(self.row.get("last_active"))
-        head = (f"[i]{linkify(status, self.ctx)}[/]" if status
-                else "[dim i]— no status —[/]")
-        if status and age:
-            head += f" [dim]({escape(age)} old)[/]"
-        if ago:
-            head += f" [dim]· active {escape(ago)} ago[/]"
-        return head
+            yield Static(lane_ask_markup(raw, self.ctx), classes="lane-ask")
 
     def refresh_volatile(self, row):
         """Update everything that is CONFINED TO A LINE, in place — never a rebuild.
@@ -914,14 +1042,7 @@ class Ask(ListItem):
         self.ctx = ctx or {}
 
     def compose(self):
-        icon, text = ask_kind(self.raw)
-        # THE TRAILERS COME OFF HERE, not at the source. `self.raw` stays the file's bytes
-        # because `x` deletes by exact line match and the detail overlay reads the whole
-        # thing — this row is one line in a column, so it shows the question and the
-        # deferral stamp, and leaves provenance to the surface with room for it.
-        text, _trailers = ask_trailers(text)
-        yield Static("[dim]%2d[/]  %s %s" % (self.n, icon,
-                                             linkify(clip(text), self.ctx)))
+        yield Static(ask_row_markup(self.n, self.raw, self.ctx))
 
 
 DETAIL_HINT = ("[dim]j/k move · enter edits the highlighted knob · a applies the live knobs "
@@ -1150,6 +1271,7 @@ class FleetTUI(App):
         self.detail = None         # the open overlay's assembled data, or None
         self.ask = None            # the open 4ME overlay's {raw, n}, or None
         self.editing = None        # the cfg entry currently being edited, or None
+        self._fitted_want = None   # rows the cards wanted at the last fit, clamp aside
         self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
         self.refreshing = False    # a request is in flight right now
 
@@ -1288,6 +1410,12 @@ class FleetTUI(App):
             for item, r in zip(lanes.children, rows):
                 if isinstance(item, Lane):
                     item.refresh_volatile(r)
+            # A STATUS CAN NOW CHANGE A CARD'S HEIGHT, which it never could before the count
+            # became width-aware: a line that grows past its column takes a second row. The
+            # text is deliberately absent from the signature — it moves on ticks nobody wants
+            # a rebuild for — so the HEIGHT is what is compared instead. Unchanged on almost
+            # every tick, and when it does change the panel is the thing that has to move.
+            self._refit_if_taller()
             return
         self.sig = sig
 
@@ -1978,6 +2106,22 @@ class FleetTUI(App):
         except Exception:
             return 0
 
+    def _width(self):
+        """Columns a panel is wide, OUTER — border, padding, scrollbar and all.
+
+        Deliberately the outer width and not the content width. The content width shrinks by
+        two the moment a scrollbar appears, and a scrollbar appears when the fit is short —
+        so sizing off it would let the fit change the width the fit was computed at. The
+        outer width is set by the container and is the same number whether the list overflows
+        or not; text_width() takes the chrome off it with fixed reservations.
+
+        0 before the first layout pass, which the counting reads as "no width known".
+        """
+        try:
+            return self.query_one("#lanes").outer_size.width
+        except Exception:
+            return 0
+
     def _ceiling(self, want, avail=None):
         """The tallest the FLEET panel may be: the shared space less 4ME's floor.
 
@@ -1999,13 +2143,15 @@ class FleetTUI(App):
         which is the common case; `=` says as much rather than leaving a press that changes
         nothing to look like a key that does nothing.
         """
-        natural = fit_height(self._rows())
+        ctx = self.data.get("ctx") or {}
+        width = self._width()
+        natural = fit_height(self._rows(), width, ctx)
         if self.fit_mode != "4ME":
             return natural
         avail = self._avail(avail)
         if not avail:
             return natural
-        return min(natural, avail - asks_fit_height(len(self.data["fleet"])))
+        return min(natural, avail - asks_fit_height(self.data["fleet"], width, ctx))
 
     def _fit_lanes(self, avail=None):
         """Size the FLEET panel to the agents in it, and give 4ME whatever is left.
@@ -2016,8 +2162,11 @@ class FleetTUI(App):
         spare below it. The list is a handful of cards, so it can simply be as tall as it is.
 
         Called when the roster changes shape, when the terminal resizes, when the user nudges
-        the boundary and when `=` switches which list is being fitted — never on the refresh
-        tick, which is why a fleet that is merely working does not relayout every five seconds.
+        the boundary, when `=` switches which list is being fitted — and, on a refresh tick,
+        only when the cards have come to want a different number of rows than the last fit
+        gave them (_refit_if_taller), which a status growing past its column now can. A tick
+        that changes no height lays nothing out, which is why a fleet that is merely working
+        still does not move every five seconds.
 
         ONE SIZING PATH, TWO BASES. `=` does not size anything itself: it moves `fit_mode`,
         and _base_height answers differently, so a resize or a lane arriving re-derives the
@@ -2035,9 +2184,26 @@ class FleetTUI(App):
             return None            # a resize can land before compose does; on_mount fits again
         want = self._base_height(avail) + self.nudge
         height = max(PANEL_MIN, min(want, self._ceiling(want, avail)))
+        # What the cards ASKED for, kept beside the height actually written: the tick
+        # compares against it to decide whether anything needs laying out again, and the
+        # clamped height would answer a different question — a panel already at the ceiling
+        # stays there while its content keeps growing.
+        self._fitted_want = want
         lanes.styles.height = height
         fleet.styles.height = "1fr"
         return height
+
+    def _refit_if_taller(self):
+        """Re-fit when the rows the cards need has changed, and only then.
+
+        The cheap half of a refit is the arithmetic; the expensive half is writing a height
+        onto a widget, which lays the panel out again. So the height is computed on every
+        tick — six cards' worth of wrapping — and written only when it differs from the last
+        one written. A fleet whose statuses are not changing length pays nothing visible.
+        """
+        want = self._base_height() + self.nudge
+        if want != self._fitted_want:
+            self._fit_lanes()
 
     def _bump(self, d):
         """Move the boundary by a row, and remember it as an OFFSET from the fit — so a lane
@@ -2085,16 +2251,26 @@ class FleetTUI(App):
 
         Counted off the same row arithmetic as the fit itself rather than measured, for the
         reason the constants block gives: a widget's real height exists only after a layout
-        pass, and this runs before one.
+        pass, and this runs before one. The SAME arithmetic includes the wrapping — a note
+        counting unwrapped rows against a wrapped fit would go back to promising rows that
+        are not on screen, which is the failure this note exists to prevent.
         """
         avail = self._avail()
         if lanes_h is None or not avail:
             return "fit %s" % self.fit_mode
+        ctx = self.data.get("ctx") or {}
+        width = self._width()
+        # CLIPPED_RESERVE, not the fit's zero: this line is answered for the case where the
+        # list did NOT fit, and there the scrollbar is on screen and the cursor's gutter is
+        # on one of the rows. Counting them makes the answer conservative in the one
+        # direction that matters — it may say a row scrolls that in fact just fits, and will
+        # never say a row is visible that is not.
         if self.fit_mode == "4ME":
-            heights = [ASK_ROWS] * len(self.data["fleet"])
+            heights = [ask_rows(i, raw, width, ctx, CLIPPED_RESERVE)
+                       for i, raw in enumerate(self.data["fleet"], 1)]
             room = avail - lanes_h - PANEL_BORDER
         else:
-            heights = [ITEM_ROWS + len(r.get("raw_asks") or []) for r in self._rows()]
+            heights = [lane_rows(r, width, ctx, CLIPPED_RESERVE) for r in self._rows()]
             room = lanes_h - PANEL_BORDER
         return fit_note(self.fit_mode, visible_items(heights, room), len(heights))
 
