@@ -59,7 +59,8 @@ The **task** is the work the user set up before invoking this (the current branc
 
 > **Plan authoring + review gate first:** author the plan via the
 > `.claude/agents/planner.md` subagent (`model` = `WORKFLOW_PLAN_MODEL`; empty ⇒
-> inherit) — it writes to the gitignored staging file `.claude/plans/<ID>.md`, and under
+> inherit — resolved by sourcing `_config.sh`, per the journal step below, never by reading
+> `workflow.config`) — it writes to the gitignored staging file `.claude/plans/<ID>.md`, and under
 > `/afk` plans **autonomously** (no human attaches to steer; it records open questions in the
 > plan). Then, if the issue has no `Plan review:` **comment** recorded (see the `todo` skill's
 > start step 4) and the plan is complex, run the gate BEFORE implementing — under `/afk` the
@@ -91,7 +92,7 @@ JOURNAL="logs/afk-$BRANCH.md"   # logs/ is gitignored
 mkdir -p logs
 ```
 
-Print and append to `$JOURNAL`: the task, flavor (A/B), `--max-rounds`, the issue ID, the planner/reviewer/tester models in effect (`WORKFLOW_PLAN_MODEL` / `WORKFLOW_REVIEW_MODEL_A` / `WORKFLOW_REVIEW_MODEL_B` [pinned `sonnet`] / `WORKFLOW_TEST_MODEL` — resolve each and journal the **effective** model, printing "inherit" for every empty knob rather than a default that isn't set), the landing policy ("commit on the lane branch; push it to origin only if --push; never land master, never open a PR"), and the exact stop conditions. Keep appending a timestamped line at every state transition, every review finding + how you resolved it, every non-blocking default you picked, and every test result. This journal is also your **resume state** if the run is interrupted (context compaction, restart) — on resume, read it to find where you left off.
+Print and append to `$JOURNAL`: the task, flavor (A/B), `--max-rounds`, the issue ID, the planner/reviewer/tester models in effect (`WORKFLOW_PLAN_MODEL` / `WORKFLOW_REVIEW_MODEL_A` / `WORKFLOW_REVIEW_MODEL_B` [pinned `sonnet`] / `WORKFLOW_TEST_MODEL` — resolve each and journal the **effective** model, printing "inherit" for every empty knob rather than a default that isn't set. **Resolve them ONCE, here, by sourcing the loader — never by reading `workflow.config`:** `. .claude/scripts/_config.sh && for k in WORKFLOW_PLAN_MODEL WORKFLOW_REVIEW_MODEL_A WORKFLOW_REVIEW_MODEL_B WORKFLOW_TEST_MODEL; do eval "v=\${$k:-}"; printf '%s=%s\n' "$k" "${v:-inherit}"; done`. The committed file is only the first of three layers — `.claude/workflow.config.local` (gitignored, per-machine) is sourced after it and the environment wins last — so grepping it reports "" ⇒ inherit for a knob the machine has pinned, and an unattended run spends the wrong model for hours. Every later spawn in this run uses the values journaled here), the landing policy ("commit on the lane branch; push it to origin only if --push; never land master, never open a PR"), and the exact stop conditions. Keep appending a timestamped line at every state transition, every review finding + how you resolved it, every non-blocking default you picked, and every test result. This journal is also your **resume state** if the run is interrupted (context compaction, restart) — on resume, read it to find where you left off.
 
 ## State machine
 
@@ -136,7 +137,8 @@ Repeat up to `--max-rounds`:
    `agentId`**, because the roster is flat and a named spawn from a teammate hard-errors;
    `model` model-diverse: first = `WORKFLOW_REVIEW_MODEL_A`, second =
    `WORKFLOW_REVIEW_MODEL_B` (pinned `sonnet`); **each empty ⇒ omit the param**, which
-   inherits this session's model — that is the default for `_A`) with the definition's
+   inherits this session's model — that is the default for `_A`; use the values you resolved
+   and journaled at start-up via `_config.sh`, never a fresh read of `workflow.config`) with the definition's
    **mode-1 contract**: the issue id, `type: diff`, the commit SHA/range, the pin SHA,
    and any business decisions not yet in the files.
 2. **Collect both verdicts.** A spawn returns its verdict as its result (or errors —
@@ -157,7 +159,8 @@ Repeat up to `--max-rounds`:
 ## Test loop
 
 1. **Spawn the `.claude/agents/tester.md`** (Agent tool, `subagent_type: tester`,
-   name `tester`, `model` = `WORKFLOW_TEST_MODEL` when set, else omit) **in place on the
+   name `tester`, `model` = `WORKFLOW_TEST_MODEL` when set, else omit — the journaled value
+   from the `_config.sh` resolution at start-up) **in place on the
    branch**: "Full sweep. Changed range: `origin/master..<BRANCH>`." The tester makes zero
    git/source mutations and serializes the Docker-bound phase through the machine-wide
    e2e lock (`.claude/scripts/e2e-lock.sh`) itself — long waits on the lock are normal

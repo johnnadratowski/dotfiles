@@ -75,7 +75,11 @@ One anchor per target (`<target>-review`), so each derives its own.
    > which is right for a one-shot lookup and wrong for a review you may want to interrupt.
    > **It will not exit on its own**: stop it once its verdict is in. Canonical rule: CLAUDE.md
    > → "WHERE A SPAWNED AGENT GOES". Model from `WORKFLOW_REVIEW_MODEL_B` (the
-   single-reviewer / stronger knob, default `sonnet`; empty ⇒ omit ⇒ inherit). The
+   single-reviewer / stronger knob, default `sonnet`; empty ⇒ omit ⇒ inherit) — **resolve it
+   by sourcing the loader, never by reading `workflow.config`:**
+   `. .claude/scripts/_config.sh && printf '%s\n' "${WORKFLOW_REVIEW_MODEL_B:-inherit}"`, since
+   the committed file is only the first of three layers (`.claude/workflow.config.local`, then
+   the environment, override it) and reports "" ⇒ inherit for a knob the machine has pinned. The
    definition owns the entire audit (corpus, dimensions A–E, nemesis escalation, verdict
    tokens).
 4. **Relay the verdict** to the user. Findings are **reported, not fixed here** — fixes

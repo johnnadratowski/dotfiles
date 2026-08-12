@@ -12,7 +12,12 @@ gotchas). This stub is the invocation recipe.
 ## Invocation
 
 **Spawn the tester** — Agent tool, `subagent_type: tester`, `model` =
-`WORKFLOW_TEST_MODEL` when set (else omit ⇒ inherit). Prompt: what to run (default:
+`WORKFLOW_TEST_MODEL` when set (else omit ⇒ inherit). **Resolve the knob by sourcing the
+loader, never by reading `workflow.config`:**
+`. .claude/scripts/_config.sh && printf '%s\n' "${WORKFLOW_TEST_MODEL:-inherit}"` — the
+committed file is only the first of three layers (`.claude/workflow.config.local`, then the
+environment, override it), so grepping it reports "" ⇒ inherit for a knob the machine has
+pinned. Prompt: what to run (default:
 the full sweep) and the **changed range** for the post-GREEN missing-tests advisory
 (e.g. `origin/master..HEAD`). It tests **whatever is checked out, in place** — uncommitted
 work included — and makes zero git/source mutations. Fix failures yourself and re-run

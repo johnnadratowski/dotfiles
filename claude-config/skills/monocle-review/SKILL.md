@@ -235,6 +235,12 @@ review, and declining agent review must NEVER drop the Monocle human review:**
 > reviewer (Q2 = One, and the range/PR audits in `/review` / `/pr-comments`) runs
 > **`WORKFLOW_REVIEW_MODEL_B`**, so a lone reviewer is never left on whatever the session
 > happens to be. Pass each as the Agent `model` param; an **empty** knob ⇒ omit ⇒ inherit.
+> **RESOLVE both knobs by sourcing the loader, never by reading `workflow.config`:**
+> `. .claude/scripts/_config.sh && printf '%s|%s\n' "${WORKFLOW_REVIEW_MODEL_A:-inherit}" "${WORKFLOW_REVIEW_MODEL_B:-inherit}"`.
+> The committed file is only the first of three layers — `.claude/workflow.config.local`
+> (gitignored, per-machine) is sourced after it and the environment wins last — so grepping it
+> reports "" ⇒ inherit for a knob the machine has pinned, and the model diversity the pin buys
+> is silently lost.
 > **Fix rounds RESUME the same named reviewer** (SendMessage with the fix SHA) — a fresh
 > spawn under the same name is for the NEXT issue (that's the per-issue context clear).
 

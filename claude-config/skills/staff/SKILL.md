@@ -202,7 +202,12 @@ Apply the project's configured values once the panes exist:
 .claude/scripts/agent-tune.sh apply            # add --dry-run first if you want the plan
 ```
 
-Knobs live in the project's `.claude/workflow.config` (`WORKFLOW_LANE_EFFORT[_N]`,
+Knobs live in the project's `.claude/workflow.config` **and its gitignored, per-machine
+`.claude/workflow.config.local`, which overrides it** (the environment wins last).
+`agent-tune.sh` sources `_config.sh` and therefore sees all three layers; read a knob by hand
+the same way (`. .claude/scripts/_config.sh && printf '%s\n' "$WORKFLOW_LANE_MODEL"`) rather
+than grepping the committed file, which reports "" for anything `.local` has pinned. The set:
+(`WORKFLOW_LANE_EFFORT[_N]`,
 `WORKFLOW_LANE_MODEL[_N]`, and the per-subagent `WORKFLOW_*_EFFORT` set). **Empty means
 inherit**, so a fleet that configures nothing is unaffected by this step and `apply` is a
 no-op that reports SKIP for every lane.
