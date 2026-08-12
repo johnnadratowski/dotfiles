@@ -44,7 +44,15 @@
 # unreported for weeks.
 # Canonical bottom-up order (group_order) runs substrate first, surface last: infra, then
 # the project's own layers (schema/data, shared types, service, client, ui), then docs and
-# tests. The concrete layer names are the consuming project's, not this script's.
+# tests. The concrete layer names are the consuming project's, not this script's — but the
+# TAIL of the order is the engine's and is not project-overridable:
+#
+#   … → docs → tests → <fallback: unclassified> → deps (lockfiles)
+#
+# because both of those buckets are things a reviewer reads LAST, and both used to be able
+# to land FIRST. A file that matches no rule is unclassified, so it cannot be the substrate
+# the review is read from; a lockfile is a byproduct of the change, never its subject. The
+# consuming project may name the fallback group, but not order it.
 #
 # This is the CATEGORY level only (the inner level under Monocle's N-level grouping).
 # For a multi-TODO diff review the AUTHOR wraps each file's category under its TODO id
@@ -199,13 +207,37 @@ import os, json, re
 # default (tests/docs/infra/other) so any repo groups sanely. group_order is the bottom-up
 # display order; regex FIRST-match wins (precedence is NOT the display order).
 ROOT = os.environ.get("ROOT", "")
+# The generic default set mirrors the canonical BY-FILE-TYPE order the skill documents
+# (infra → contracts → subgraph → db → types → shared → api → sdk → ui → docs → tests), so a
+# repo with NO review-layers.json still groups by type instead of collapsing into one "code"
+# bucket. Paths are the common conventions; a project that names things differently overrides
+# the whole set in .claude/project/review-layers.json.
 _DEFAULT_RULES = [
-    ("tests", 11, "test",   r"(^|/)(tests?|test-infrastructure|__tests__|e2e)/|\.(test|spec)\.[cm]?[jt]sx?$|\.t\.sol$"),
-    ("infra",  1, "config", r"^\.claude/|^\.github/|^infra/|^deploy/|^scripts/|(^|/)Dockerfile|docker-compose|^\.env|(^|/)Caddyfile|^[^/]*\.config\.[cm]?[jt]s$"),
-    ("docs",  10, "docs",   r"^docs/|\.mdx?$"),
-    ("code",   5, "code",   r"."),
+    ("tests",    11, "test",   r"(^|/)(tests?|test-infrastructure|__tests__|e2e)/|\.(test|spec)\.[cm]?[jt]sx?$|\.t\.sol$"),
+    ("infra",     1, "config", r"^\.claude/|^\.github/|^\.husky/|^\.circleci/|^infra/|^deploy/|^scripts/|(^|/)Dockerfile|docker-compose|^\.env|(^|/)Caddyfile|^[^/]*\.config\.[cm]?[jt]s$|^[^/]*\.(ya?ml|toml)$|^[^/]*rc(\.[a-z]+)?$"),
+    ("docs",     10, "docs",   r"^docs/|\.mdx?$"),
+    ("contracts", 2, "code",   r"^contracts?/|\.sol$"),
+    ("subgraph",  3, "code",   r"^(subgraph|indexer|ponder)/"),
+    ("db",        4, "code",   r"(^|/)migrations?/|(^|/)fixtures?/|\.sql$"),
+    ("types",     5, "code",   r"^types/|\.d\.ts$"),
+    ("shared",    6, "code",   r"^shared/|^common/"),
+    ("api",       7, "code",   r"^(server|api|backend)/"),
+    ("sdk",       8, "code",   r"^sdk/|^packages?/sdk/"),
+    ("ui",        9, "code",   r"^(ui|web|frontend|client)[^/]*/"),
 ]
-_DEFAULT_FALLBACK = ("infra", 1, "config")
+_DEFAULT_FALLBACK = ("other", "other")
+
+# Lockfiles are classified by the ENGINE, ahead of any project rule, into a `deps` group
+# ordered DEAD LAST. They are never what a change is ABOUT — they are a byproduct of it —
+# and every plausible per-repo regex swept them somewhere wrong: goals-onchain's config had
+# no rule for them, so `pnpm-lock.yaml` fell to a fallback pinned at order 1 and opened the
+# whole review, AHEAD of the file the change existed for (observed on the DX-18 review).
+_LOCKFILE_RE = re.compile(
+    r"(^|/)(pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb?"
+    r"|Cargo\.lock|poetry\.lock|uv\.lock|Pipfile\.lock|Gemfile\.lock|composer\.lock"
+    r"|go\.sum|flake\.lock)$"
+)
+
 def _load_layers():
     path = os.path.join(ROOT, ".claude", "project", "review-layers.json")
     try:
@@ -213,12 +245,26 @@ def _load_layers():
             data = json.load(f)
         rules = [(r["group"], int(r["order"]), r["category"], r["regex"]) for r in data["rules"]]
         fb = data.get("fallback")
-        fallback = (fb["group"], int(fb["order"]), fb["category"]) if fb else _DEFAULT_FALLBACK
-        return (rules or _DEFAULT_RULES), fallback
+        fallback = (fb["group"], fb.get("category", "other")) if fb else _DEFAULT_FALLBACK
+        return (rules or _DEFAULT_RULES), (fallback if rules else _DEFAULT_FALLBACK)
     except (OSError, ValueError, KeyError, TypeError):
         return _DEFAULT_RULES, _DEFAULT_FALLBACK
-RULES, FALLBACK = _load_layers()
+RULES, _FB = _load_layers()
+
+# An unmatched file is BY DEFINITION unclassified, so it can never be the substrate the
+# reviewer should read first — the engine always places the fallback bucket after every
+# real layer, and a config's `fallback.order` is deliberately ignored. (goals-onchain's
+# pinned it to order 1, which is how `.husky/`, root manifests and the lockfile came to
+# open a review whose subject was elsewhere.) A fallback whose name collides with a real
+# rule group is renamed `other`, so the trailing bucket cannot masquerade as that layer.
+_MAX_ORDER = max(o for _, o, _, _ in RULES)
+_RULE_GROUPS = {g for g, _, _, _ in RULES}
+FALLBACK = (_FB[0] if _FB[0] not in _RULE_GROUPS else "other", _MAX_ORDER + 1, _FB[1])
+DEPS = ("deps", _MAX_ORDER + 2, "config")
+
 def classify(p):
+    if _LOCKFILE_RE.search(p):
+        return DEPS
     for g, o, c, rx in RULES:
         if re.search(rx, p):
             return g, o, c

@@ -90,10 +90,18 @@ only sends **context** (issue + plan).
      **`monocle-review.sh groups`** (or **`monocle-review.sh groups <base>`** for a
      committed / base-ref review — the same `<ref>` you passed to `set_base_ref`). It
      classifies the diff **deterministically** into the canonical bottom-up order
-     **infra → contracts → subgraph → db → types → shared → api → sdk → ui → docs → tests**
+     **infra → contracts → subgraph → db → types → shared → api → sdk → ui → docs → tests
+     → other → deps**
      (substrate → surface), call-hierarchy-sorted within each, and **applies it** — then
      prints the file count it grouped. Being script-derived, every agent (author OR a peer)
      groups identically.
+     The two trailing groups are the **engine's**, not the project's: `other` is whatever
+     matched no rule, `deps` is lockfiles, and both are pinned AFTER every real layer — a
+     project's `.claude/project/review-layers.json` may NAME its fallback group but not
+     order it. Unclassified is by definition not the substrate a review is read from, and a
+     lockfile is a byproduct of a change rather than its subject; before this was enforced,
+     goals-onchain's fallback (pinned at order 1) opened the DX-18 review with
+     `pnpm-lock.yaml` and the root manifests, ahead of the file the change existed for.
      > **You do NOT call `set_file_groups` by hand for this level.** The script used to only
      > print JSON for you to relay into the MCP tool, which made grouping a second step
      > nothing verified — and it was silently skipped for weeks (one lane had never called it
@@ -262,6 +270,6 @@ rather than sent as an artifact.
 
 ---
 
-**Skill Version**: 1.9.0
+**Skill Version**: 1.10.0
 **Category**: Workflow, Review
 _Version history: see [CHANGELOG.md](./CHANGELOG.md)._

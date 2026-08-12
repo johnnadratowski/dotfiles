@@ -2,6 +2,21 @@
 
 ## Changelog
 
+- **1.10.0** — **The `groups` classifier can no longer open a review with a lockfile.** Two
+  fixes to the ordering tail, both enforced by the engine and not overridable per-project:
+  an **unclassified** file (matched no rule) now lands in a trailing `other` group and a
+  **lockfile** in a trailing `deps` group, both ordered after `tests` — a project's
+  `review-layers.json` may still NAME its fallback group but its `fallback.order` is
+  ignored, and a fallback whose name collides with a real rule group is renamed `other`.
+  goals-onchain pinned its fallback at **order 1**, so every root manifest, `.husky/`,
+  `artifacts/` and `pnpm-lock.yaml` sorted ahead of the whole change: the DX-18 review read
+  as "infra / ui / docs" with the lockfile 39 files ahead of its subject. The generic
+  `_DEFAULT_RULES` (used by any repo with no `review-layers.json`) also grew from
+  tests/infra/docs/**code** to the full canonical by-type set, so a config-less repo groups
+  by type instead of collapsing every source file into one bucket. Canonical order is now
+  infra → contracts → subgraph → db → types → shared → api → sdk → ui → docs → tests →
+  **other → deps**. First tests for the classifier: `scripts/monocle-review.test.sh`.
+
 - **1.9.1** — **The gate prompt is channel-conditional.** Solo or as the team lead, ask the
   two axes with `AskUserQuestion` as before. A **lane agent in a team** now sends them to the
   lead instead (standing rule, 2026-08-11): its card never reaches the user, so raising one
