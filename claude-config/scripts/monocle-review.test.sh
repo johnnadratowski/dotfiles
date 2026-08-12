@@ -140,6 +140,40 @@ touchall "$d" server/models/user.ts pnpm-lock.yaml
 eq "an unparseable review-layers.json degrades to the built-in rules" \
    "api deps" "$(order "$d")"
 
+# ── a stray CONTEXT arg is a usage error, not an empty review ────────────────────────────
+# `groups plan` used to be read as a BASE REF: the diff's error was swallowed and the command
+# reported "0 changed files vs 'plan'", which reads as a review with nothing in it rather than
+# as the wrong verb. Both halves are asserted — the exit code AND the message — because a loud
+# failure that says the wrong thing sends the caller looking at their diff.
+d="$(mkrepo strayarg "$GOALS_CFG")"
+touchall "$d" server/models/user.ts
+git -C "$d" add -A >/dev/null 2>&1; git -C "$d" -c user.email=t@t -c user.name=t commit -qm base >/dev/null 2>&1
+out="$( (cd "$d" && bash "$SCRIPT" groups plan) 2>&1 )"; rc=$?
+eq "groups <context-word> exits non-zero"        "1" "$rc"
+eq "…and says the arg must be a commit-ish"      "1" "$(printf '%s' "$out" | grep -c "not a commit in this repo")"
+eq "…and points at the subcommand actually meant" "1" "$(printf '%s' "$out" | grep -c "send <context> <ID>")"
+eq "…and never claims 0 changed files"           "0" "$(printf '%s' "$out" | grep -c "0 changed files")"
+# A REAL ref still works, so the guard narrows nothing it should not.
+out="$( (cd "$d" && bash "$SCRIPT" groups --print-only HEAD) 2>&1 )"; rc=$?
+eq "an explicit real ref is still accepted"      "0" "$rc"
+
+# ── a missing artifact is announced, with its path and a way to produce it ───────────────
+# The staging files are per-worktree and gitignored, so "another lane authored the plan" is
+# the ordinary way to have none — and the old one-line skip scrolled past inside a send that
+# reported success. `list` exercises the same resolver without touching a Monocle engine.
+d="$(mkrepo missingart "$GOALS_CFG")"
+mkdir -p "$d/.claude/plans"
+cp "$here/../../.claude/monocle-artifacts.json" "$d/.claude/monocle-artifacts.json" 2>/dev/null \
+  || printf '%s' '{"roles":{"issue":{"path":".claude/plans/{ID}.issue.md","id":"issue:{ID}","type":"md","title":"Issue {ID}"},"plan":{"path":".claude/plans/{ID}.md","id":"plan:{ID}","type":"md","title":"Plan {ID}"},"plan-diff":{"path":".claude/plans/{ID}.diff","id":"plan-diff:{ID}","type":"diff","title":"Plan {ID} diff"}},"contexts":{"plan":["plan","plan-diff","issue"]}}' > "$d/.claude/monocle-artifacts.json"
+printf '# plan\n' > "$d/.claude/plans/ZZ-1.md"     # plan present, issue absent
+out="$( (cd "$d" && bash "$SCRIPT" list plan ZZ-1) 2>&1 )"
+eq "a missing artifact is announced loudly"   "1" "$(printf '%s' "$out" | grep -c 'MISSING ARTIFACT')"
+eq "…naming the exact path it expected"       "1" "$(printf '%s' "$out" | grep -c '.claude/plans/ZZ-1.issue.md')"
+eq "…and how to produce it"                   "1" "$(printf '%s' "$out" | grep -c 'how to fix')"
+# plan-diff's absence is EXPECTED on round 1 and must stay quiet, or the loud channel is noise.
+eq "an absent plan-diff is a note, not an alarm" "1" "$(printf '%s' "$out" | grep -c 'normal on round 1')"
+eq "…and is not counted as a loud miss"          "1" "$(printf '%s' "$out" | grep -c "1 artifact(s) MISSING")"
+
 echo
 echo "  $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

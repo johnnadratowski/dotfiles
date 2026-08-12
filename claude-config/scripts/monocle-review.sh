@@ -127,6 +127,26 @@ if order is None:
 def expand(tmpl):
     return tmpl.replace("{ID}", ID).replace("{plan}", plan_rel).replace("{todo}", todo_rel)
 
+# A MISSING ARTIFACT IS ANNOUNCED, NOT MURMURED. Every path here is PER-WORKTREE and
+# gitignored (.claude/plans/), so the ordinary way to lose one is structural rather than
+# careless: another lane authored the plan, so this worktree has no copy of it. The old
+# one-line "… not found — skipping" scrolled past inside a send that otherwise reported
+# success, and the human then reviewed a plan with no ticket beside it, or a review went out
+# with nothing in it at all. Both were observed. So each miss gets a block that names the
+# exact path expected and how to put it there.
+#
+# `plan-diff` is the one EXPECTED absence — round 1 has nothing to diff against — so it stays
+# a quiet note. Everything else is loud, and the caller is told the count.
+HOWTO = {
+    "plan": ("the plan staging file is per-worktree and gitignored, so a plan authored in\n"
+             "      ANOTHER LANE does not exist here. Copy it from the authoring lane\n"
+             "      (<that-lane>/.claude/plans/{ID}.md), or re-export the Linear plan document\n"
+             "      (get_issue {ID} -> documents[] -> get_document) into this path."),
+    "issue": ("write a snapshot of the Linear issue to this path before sending —\n"
+              "      get_issue {ID}, save its title + description as markdown. Without it the\n"
+              "      human reviews the plan with no ticket beside it."),
+}
+missing_loud = []
 for role in order:
     spec = roles.get(role)
     if not spec:
@@ -136,8 +156,21 @@ for role in order:
         sys.stderr.write("monocle-review: role '%s' unresolved (no path) — skipping\n" % role); continue
     ap = os.path.join(root, rel)
     if not os.path.isfile(ap):
-        sys.stderr.write("monocle-review: %s not found at %s — skipping\n" % (role, rel)); continue
+        if role == "plan-diff":
+            sys.stderr.write("monocle-review: note — no %s at %s (normal on round 1)\n" % (role, rel))
+        else:
+            missing_loud.append(role)
+            howto = HOWTO.get(role, "create the file at that path, then re-run.").replace("{ID}", ID)
+            sys.stderr.write(
+                "\nmonocle-review: ⚠ MISSING ARTIFACT — '%s' will NOT be sent\n"
+                "      expected: %s\n"
+                "      how to fix: %s\n\n" % (role, ap, howto))
+        continue
     print("\t".join([ap, expand(spec["id"]), spec.get("type", "md"), expand(spec.get("title", role))]))
+
+if missing_loud:
+    sys.stderr.write("monocle-review: %d artifact(s) MISSING for context '%s' (%s): %s\n"
+                     % (len(missing_loud), context, ID, ", ".join(missing_loud)))
 PY
 }
 
@@ -165,7 +198,12 @@ case "$cmd" in
       echo "  → sent $title  (id=$id)"
       sent=$((sent+1))
     done <<< "$resolved"
-    [ "$sent" -gt 0 ] && echo "monocle: $sent artifact(s) sent/updated for context '$1' ($2)" || echo "monocle: no artifacts resolved for '$1' ($2)"
+    # ZERO RESOLVED IS AN ERROR, NOT A REPORT. It used to print one line and exit 0, which is
+    # indistinguishable from a successful send in a transcript — the agent moved on believing
+    # the human had the plan. The per-artifact blocks above already say which files are missing
+    # and how to produce them; this makes the command fail so the caller cannot miss it.
+    [ "$sent" -gt 0 ] || _die "no artifacts resolved for context '$1' ($2) — nothing was sent. See the MISSING ARTIFACT block(s) above."
+    echo "monocle: $sent artifact(s) sent/updated for context '$1' ($2)"
     ;;
   groups)
     # Emit set_file_groups entries (JSON) for the review diff, classified into the
@@ -187,7 +225,23 @@ case "$cmd" in
     # --print-only restores the old behaviour for anyone who wants the raw JSON.
     apply=1
     if [ "${1:-}" = "--print-only" ]; then apply=0; shift; fi
+    base_explicit=0; [ $# -ge 1 ] && base_explicit=1
     base="${1:-HEAD}"
+    # THE ARG IS A BASE REF, AND IT IS VALIDATED BEFORE IT IS USED. `groups plan` — a context
+    # name, the shape every OTHER subcommand takes — used to be accepted as a ref: the diff
+    # below swallows git's error via `|| true`, so the file list came back empty and the
+    # command reported "0 changed files vs 'plan'". That reads as a finished review with
+    # nothing in it, when it is a usage error. Same for a typo'd SHA or a deleted branch.
+    # Only an EXPLICIT arg is checked. The default `HEAD` must still work in a repo with no
+    # commits yet, where the untracked-file half of the list is the whole review.
+    if [ "$base_explicit" = 1 ] && ! git -C "$ROOT" rev-parse --verify --quiet "$base^{commit}" >/dev/null 2>&1; then
+      _die "groups: '$base' is not a commit in this repo.
+  'groups' takes a BASE REF (a commit-ish) — the same ref you gave set_base_ref — not a
+  context name or an issue id. Examples:
+      monocle-review.sh groups                 # working tree vs HEAD (the default)
+      monocle-review.sh groups origin/master   # an already-committed review
+  If you meant to send context artifacts, that is:  monocle-review.sh send <context> <ID>"
+    fi
     files="$(
       {
         git -C "$ROOT" diff --name-only "$base" 2>/dev/null || true
