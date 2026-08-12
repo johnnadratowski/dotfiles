@@ -17,6 +17,8 @@
 #     narrow for both, the prose is shortened and the clock is kept whole
 #   - status and asks are hard-capped at 60 chars, so one verbose entry cannot own the pane
 #   - current-work yields the id only, never the resume prose that follows it
+#   - …and it BEATS the branch name, which outlives the work it was cut for; a disagreement
+#     is marked rather than resolved silently
 #   - emoji-width padding keeps the columns aligned
 
 set -uo pipefail
@@ -122,6 +124,21 @@ printf 'FEAT-42\thttps://example.invalid/FEAT-42\n# a comment\nresume prose that
   > "$LANES/alpha/.claude/current-work"
 has "current-work yields the tracker id"           "FEAT-42" "$(row alpha)"
 hasnt "current-work does not leak the resume prose" "resume prose" "$(row alpha)"
+
+# ── the branch is the loser of that resolution, and says so ──────────────────────────────
+# A lane keeps the branch of work it has FINISHED until someone branches again, so a lane on
+# `john/dx-16-…` while actively working FEAT-42 is normal and the branch's id is the stale
+# one. The table shows what the agent is doing and marks the disagreement; it used to show
+# DX-16 and the reader had no way to see FEAT-42 at all.
+mkdir -p "$LANES/alpha/gitdir"
+printf 'ref: refs/heads/john/dx-16-move-plans-to-documents\n' > "$LANES/alpha/gitdir/HEAD"
+printf 'gitdir: %s\n' "$LANES/alpha/gitdir" > "$LANES/alpha/.git"
+has "a branch left on finished work does not displace the current ticket" \
+                                                   "FEAT-42" "$(row alpha)"
+hasnt "…and the branch's stale id is not in the column" "DX-16" "$(row alpha)"
+has "…but the disagreement is marked"              "≠branch" "$(row alpha)"
+rm -rf "$LANES/alpha/gitdir" "$LANES/alpha/.git"
+hasnt "with the branch gone the marker goes too"   "≠branch" "$(row alpha)"
 
 assistant_line "TRANSCRIPT PIN" > "$T/t.jsonl"
 transcript alpha "$T/t.jsonl"

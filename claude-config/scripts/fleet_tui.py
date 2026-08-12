@@ -73,8 +73,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_KINDS, ask_detail, ask_kind,  # noqa: E402
-                          ask_trailers, branch_for, clip, fleet_goal, fleet_goal_path,
-                          fmt_age, fmt_ago, refresh_open_prs, status_text)
+                          ask_trailers, branch_for, branch_ticket_for, clip, fleet_goal,
+                          fleet_goal_path, fmt_age, fmt_ago, refresh_open_prs, status_text,
+                          tickets_for)
 
 from rich.console import Console  # noqa: E402
 from rich.markup import escape  # noqa: E402
@@ -546,6 +547,7 @@ def detail_data(row):
     cfg = read_shell_config(os.path.join(path, ".claude", "workflow.config"))
     cfg.update(read_shell_config(os.path.join(path, ".claude", "workflow.config.local")))
     base = cfg.get("WORKFLOW_PR_TARGET_BRANCH") or "master"
+    tpairs, tmismatch = tickets_for(path) if path else ([], False)
     # THE UNCLIPPED STATUS, READ FROM THE FILE — not row["status"], which fleet-status.sh has
     # already cut to 60 characters for its column. That cut is why the overlay looked
     # truncated no matter how wide the terminal got: the missing words were gone before the
@@ -562,6 +564,14 @@ def detail_data(row):
         "last_active": row.get("last_active"),
         "context_pct": row.get("context_pct"),
         "git": git_state(path, base) if path else None,
+        # BOTH SIDES OF THE TICKET RESOLUTION, re-read here for the same reason as the status
+        # text: the row was assembled by a previous poll, and this dialog is where the reader
+        # goes when the row's `≠branch` marker made them doubt it. The column shows the work
+        # id alone; here the branch's leftover id gets its own labelled line, which is the
+        # only place the reader can see WHICH branch-vs-file disagreement they have.
+        "tickets": tpairs,
+        "ticket_mismatch": tmismatch,
+        "branch_ticket": branch_ticket_for(path) if path else "",
         "live": live_tuning(name),
         "cfg": config_rows(path, name),
         "local_path": os.path.join(path, ".claude", "workflow.config.local"),
@@ -909,12 +919,13 @@ def head_markup(r, ctx=None):
     ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
                    else linkify(i, ctx)
                    for i, u in links) or linkify(r.get("issue") or "—", ctx)
-    # ≠ MEANS "THE BRANCH AND THE FILE DISAGREE, AND THIS IS THE BRANCH'S ANSWER". The id
-    # shown is machine truth either way; the marker is there because the other source has
-    # gone stale and someone should fix it — silently preferring the branch would hide the
-    # one fact the reader can act on.
+    # ≠branch MEANS "THIS IS `.claude/current-work`'S ANSWER AND THE BRANCH NAMES ANOTHER
+    # TICKET". The id shown is the one the agent is working; the marker is there because the
+    # branch has been left behind on finished work and someone may want to fix it. It TRAILS
+    # the id — it is a note about the id, not part of it — and the branch's own id is in the
+    # detail dialog rather than the column, which has one line and a job already.
     if r.get("ticket_mismatch"):
-        ids = "[b yellow]≠[/]" + ids
+        ids += " [b yellow]≠branch[/]"
     return (
         f"[{icolor}]{icon}[/] "
         f"[b]{escape(r.get('label') or ''):<4}[/]"
@@ -1710,15 +1721,34 @@ class FleetTUI(App):
         return "%s\n[i]%s[/]" % (head, body)
 
     def detail_git_markup(self, data):
+        """Branch, distances — and the ticket, LABELLED BY SOURCE when the two disagree.
+
+        The row's `≠branch` marker says a disagreement exists and shows the winning id only.
+        This is where the reader finds out what it disagrees WITH, so both ids appear with
+        the name of the file or branch they came from: an unlabelled pair would leave the
+        reader guessing which one the panel is acting on, which is the thing the marker was
+        supposed to end.
+        """
         g = data.get("git")
         if not g:
             return "[dim]no path on this row — nothing to read[/]"
+
+        ids = " ".join(i for i, _u in (data.get("tickets") or []))
+        ticket = ""
+        if data.get("ticket_mismatch"):
+            ticket = ("ticket [b cyan]%s[/] [dim]— from .claude/current-work[/]\n"
+                      "[dim]branch names[/] [yellow]%s[/] "
+                      "[dim]— left over from finished work; the file wins[/]\n"
+                      % (escape(ids), escape(data.get("branch_ticket") or "")))
+        elif ids:
+            ticket = "ticket [b cyan]%s[/]\n" % escape(ids)
 
         def dist(c):
             return "[dim]—[/]" if c is None else "[green]↑%d[/] [yellow]↓%d[/]" % c
         dirty = ("[dim]clean[/]" if g["dirty"] == 0 else
                  "[yellow]%d dirty[/]" % g["dirty"] if g["dirty"] else "[dim]—[/]")
-        return ("branch [b cyan]%s[/]   %s\n"
+        return (ticket
+                + "branch [b cyan]%s[/]   %s\n"
                 "vs [b]%s[/]         %s\n"
                 "vs [b]origin/%s[/]  %s   [dim](local ref — not fetched, may be stale)[/]"
                 % (escape(g["branch"] or "(detached)"), dirty,

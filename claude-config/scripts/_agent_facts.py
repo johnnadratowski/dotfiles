@@ -136,8 +136,10 @@ def todo_pairs_for(cwd):
 def branch_ticket_for(cwd):
     """The tracker id encoded in this worktree's branch name, or "".
 
-    Branch names here are machine-written (`john/dx-16-…`, `pr/srv-22-…`), which is exactly
-    what `.claude/current-work` is not.
+    Branch names here are machine-written (`john/dx-16-…`, `pr/srv-22-…`), but they are not
+    machine-MAINTAINED: a lane keeps the branch of work it has finished until someone
+    branches again. So this is the FALLBACK for a lane whose `.claude/current-work` names
+    nothing, and otherwise the id a surface shows beside the real one. See tickets_for.
     """
     m = _BRANCH_TICKET.search(branch_for(cwd) or "")
     return m.group(1).upper() if m else ""
@@ -146,17 +148,25 @@ def branch_ticket_for(cwd):
 def tickets_for(cwd):
     """([(id, url), …], mismatch) — what this lane is actually on.
 
-    TWO SOURCES, AND THE MACHINE ONE WINS. `current-work` is written by hand and goes stale
-    without any signal; the branch is written by the tooling that created it. When they
-    disagree the branch's id is reported and `mismatch` is True, so the surfaces can mark the
-    row rather than quietly picking a side the reader cannot see. The branch carries no URL —
-    callers linkify a bare id from the workspace base.
+    TWO SOURCES, AND `current-work` WINS. It is the id the agent is WORKING, rewritten every
+    time `/todo` starts something; the branch is machine state that outlives the work on it —
+    a lane that finished DX-16 and picked up SRV-24 stays on `john/dx-16-…` until someone
+    branches again, so the branch names the PREVIOUS ticket for as long as the lane keeps
+    going. The branch used to win here, on the reasoning that it is machine-written and the
+    file is hand-written; what that missed is that "machine-written" says nothing about
+    machine-MAINTAINED. Both sources go stale; only the file goes stale at the moment the
+    work changes, and only the file is what the agent is actually on.
+
+    `mismatch` still travels with the answer, so a surface can mark the row and show the
+    branch's id beside it — the disagreement is worth seeing either way. Falling back to the
+    branch when the file names nothing is unchanged, and is not a mismatch: there is only one
+    source. The branch carries no URL — callers linkify a bare id from the workspace base.
     """
     pairs = todo_pairs_for(cwd)
     bt = branch_ticket_for(cwd)
-    if bt and bt not in [i for i, _ in pairs]:
-        return [(bt, "")], True
-    return pairs, False
+    if not pairs:
+        return ([(bt, "")], False) if bt else ([], False)
+    return pairs, bool(bt) and bt not in [i for i, _ in pairs]
 
 
 def todo_for(cwd):
@@ -272,9 +282,12 @@ def open_prs_for(cwd):
         return []
 
     branch = branch_for(cwd)
-    # tickets_for, not todo_pairs_for: when the lane's file has gone stale, matching on the
-    # id it still names surfaces the PREVIOUS ticket's PRs on this lane -- the same stale
-    # bookkeeping showing up in a second column.
+    # tickets_for, not todo_pairs_for: it is the one resolution of "what is this lane on",
+    # and a second column resolving it differently would disagree with the ticket column on
+    # the same row. It also carries the branch fallback for a lane whose file names nothing.
+    # The branch's OWN id is deliberately not matched on when the file names something else:
+    # that id is the ticket the lane has finished, and its PRs are not this lane's work any
+    # more. A PR still open on the checked-out branch is caught by the head == branch test.
     ids = [i for i, _u in tickets_for(cwd)[0]]
     out, seen = [], set()
     for pr in prs:

@@ -1655,8 +1655,11 @@ async def main():
         ok("resume prose still ends the ticket list — a later id is not a second ticket",
            _agent_facts.todo_for(prose) == "DX-5", _agent_facts.todo_for(prose))
 
-        # The branch is machine truth; the file is agent diligence. When they disagree, the
-        # column follows the branch and SAYS SO, rather than silently picking a side.
+        # The two sources, and which one the column follows. `current-work` is what the agent
+        # is DOING; the branch is machine state that outlives the work on it. The branch used
+        # to win here, and the live failure that ended that was a lane still on
+        # `john/dx-16-…` from finished work while actively on SRV-24: the panel confidently
+        # showed DX-16. The disagreement is still SAID, so nothing is silently picked.
         ok("a ticket id is read out of the branch name",
            _agent_facts.branch_ticket_for(
                lane_at("", branch="john/dx-16-move-plans-to-documents")) == "DX-16")
@@ -1671,17 +1674,60 @@ async def main():
                                                 False),
            _agent_facts.tickets_for(agreed))
 
-        stale = lane_at("DX-6\thttps://linear.app/acme/issue/DX-6\n",
-                        branch="john/dx-16-move-plans-to-documents")
-        pairs, mismatch = _agent_facts.tickets_for(stale)
-        ok("a stale current-work loses to the branch", pairs == [("DX-16", "")], pairs)
+        # THE LIVE FAILURE, in its real shapes: the lane finished DX-16, left the branch
+        # behind, and is on SRV-24 with the file to prove it. The panel showed DX-16 and the
+        # user asked why SRV-24 was missing.
+        moved_on = lane_at("SRV-24\thttps://linear.app/acme/issue/SRV-24\n",
+                           branch="john/dx-16-move-implementation-plans-to-documents")
+        pairs, mismatch = _agent_facts.tickets_for(moved_on)
+        ok("the work the file names beats a branch left over from finished work",
+           pairs == [("SRV-24", "https://linear.app/acme/issue/SRV-24")], pairs)
+        ok("…and the URL survives the resolution, so the column stays clickable",
+           pairs[0][1] == "https://linear.app/acme/issue/SRV-24", pairs)
         ok("…and the disagreement is reported, not swallowed", mismatch is True)
-        ok("…so the row shows the branch's ticket with a ≠ marker",
-           "≠" in fleet_tui.head_markup(
+        ok("…so the row shows the WORK's ticket, marked ≠branch",
+           "SRV-24" in fleet_tui.head_markup(
+               dict(lane_row, issue_links=pairs, ticket_mismatch=True))
+           and "≠branch" in fleet_tui.head_markup(
+               dict(lane_row, issue_links=pairs, ticket_mismatch=True)),
+           fleet_tui.head_markup(dict(lane_row, issue_links=pairs, ticket_mismatch=True)))
+        ok("…and the branch's stale id is NOT in the column",
+           "DX-16" not in fleet_tui.head_markup(
                dict(lane_row, issue_links=pairs, ticket_mismatch=True)))
         ok("…and an agreeing row wears no marker",
            "≠" not in fleet_tui.head_markup(
                dict(lane_row, issue_links=[("SRV-22", "")])))
+
+        # The fallback: a lane whose file names nothing still gets the branch's id — one
+        # source, so nothing to disagree with and nothing to mark.
+        empty_file = lane_at("# nothing but a checkpoint here\n",
+                             branch="john/dx-16-move-plans-to-documents")
+        ok("a file naming no ticket falls back to the branch's id",
+           _agent_facts.tickets_for(empty_file) == ([("DX-16", "")], False),
+           _agent_facts.tickets_for(empty_file))
+        ok("…and a lane with neither reports nothing rather than a guess",
+           _agent_facts.tickets_for(lane_at("", branch="feature-2")) == ([], False))
+
+        # PR matching resolves the ticket the same way — one answer per row. The branch's own
+        # leftover id is deliberately not matched on: those PRs belong to finished work.
+        ok("PR matching follows the same resolution as the column",
+           _agent_facts.todo_for(moved_on) == "SRV-24", _agent_facts.todo_for(moved_on))
+
+        # THE DETAIL DIALOG IS WHERE THE LOSER GOES. The row says a disagreement exists; the
+        # dialog says what with, and both ids wear the name of where they came from.
+        detail = fleet_tui.detail_data({"name": "feature-1", "path": moved_on})
+        ok("the overlay's data carries both sides of the resolution",
+           detail["tickets"] == pairs and detail["ticket_mismatch"] is True
+           and detail["branch_ticket"] == "DX-16",
+           (detail["tickets"], detail["ticket_mismatch"], detail["branch_ticket"]))
+        git_markup = fleet_tui.FleetTUI.detail_git_markup(
+            None, dict(detail, git={"branch": "john/dx-16-move-implementation-plans-"
+                                              "to-documents",
+                                    "dirty": 0, "base": "master",
+                                    "local": (1, 0), "origin": (1, 0)}))
+        ok("…and shows BOTH ids, each labelled with its source",
+           "SRV-24" in git_markup and "DX-16" in git_markup
+           and "current-work" in git_markup and "branch names" in git_markup, git_markup)
 
     # ── the detail overlay's own data, against real files and a real repo ────────────────
     # The UI tests above drive the overlay; these drive the functions under it, where the

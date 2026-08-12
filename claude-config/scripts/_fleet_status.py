@@ -15,7 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, agent_transcript, ask_kind, ask_trailers, clip, context_for, fleet_goal,
+    ASK, agent_transcript, ask_kind, ask_trailers, branch_ticket_for, clip, context_for,
+    fleet_goal,
     fleet_goal_path, fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items,
     open_prs_for, status_age, status_line, tickets_for,
 )
@@ -161,8 +162,10 @@ def rows():
             continue
 
         used, win = context_for(path, tpath or None)
-        # One resolution, two fields: the branch wins over a stale `.claude/current-work`, and
-        # the fact that they disagreed travels with the answer so a surface can mark the row.
+        # One resolution, three fields: `.claude/current-work` wins (it is what the agent is
+        # DOING), the fact that the branch disagreed travels with the answer so a surface can
+        # mark the row, and the branch's own id comes along so the detail dialog can show both
+        # rather than making the reader go find it.
         pairs, ticket_mismatch = tickets_for(path)
         yield {
             "name": name,
@@ -186,6 +189,9 @@ def rows():
             # ids, the terminal wants them clickable, and one field cannot be both.
             "issue_links": pairs,
             "ticket_mismatch": ticket_mismatch,
+            # The loser of that resolution, kept for the detail dialog. Empty unless the two
+            # sources disagree — a row where they agree has nothing extra to say.
+            "branch_ticket": branch_ticket_for(path) if ticket_mismatch else "",
             # [(number, url, is_draft), …] — a LIST like the tracker ids, because a lane can
             # have more than one PR in flight. The only fact here that lives off this machine,
             # so it comes from a cache a long-running caller refreshes — never a fetch on the
@@ -298,11 +304,14 @@ def main():
             pad(up, 7, right=True)
         if not sub:
             links = r.get("issue_links") or []
-            # ≠: the branch and `.claude/current-work` disagree, and this is the branch's
-            # answer. Same marker, same meaning, as the TUI's.
-            line += "  ▸ " + ("≠" if r.get("ticket_mismatch") else "") + \
+            # ≠branch: this is `.claude/current-work`'s answer, and the branch name still
+            # says something else — usually because the lane moved on and the branch did not.
+            # It trails the id rather than leading it, so the id reads first and the marker
+            # reads as a note about it. Same marker, same meaning, as the TUI's.
+            line += "  ▸ " + \
                 (" ".join(osc8(i, u) for i, u in links) if links
-                 else (r["issue"] or "—"))
+                 else (r["issue"] or "—")) + \
+                (" ≠branch" if r.get("ticket_mismatch") else "")
             # Its own column, beside the tickets: together they answer one question — what is
             # this lane on, and has the work left the lane yet. A lane with an open PR is
             # waiting on review rather than working, which the ticket alone cannot say.
