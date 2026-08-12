@@ -79,6 +79,18 @@ nnoremap <A-j> :call ResizeWindow('down')<CR>
 nnoremap <A-k> :call ResizeWindow('up')<CR>
 nnoremap <A-l> :call ResizeWindow('right')<CR>
 
+" Block navigation: out one level, and out to the top level.
+"
+" [[ is a *section* motion — ":h [[" defines it as the previous '{' in the FIRST
+" column, which is K&R C style. In Go/JS/Rust the brace ends the line and in
+" Python there is none, so [[ finds nothing and lands at the top of the file.
+" [{ is the bracket-aware one ("previous unmatched '{'"), and a count on it
+" climbs out N levels — the idiom ":h [[" itself recommends for this.
+"
+" Same keys in monocle's diff pane, where [ and ] are diff-chunk navigation.
+nnoremap ( [{
+nnoremap ) 99[{
+
 " Keep cursor centered when scrolling/searching
 nnoremap n nzzzv
 nnoremap N Nzzzv

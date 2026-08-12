@@ -152,8 +152,9 @@
 " }}}
 
 " vim-sideways {{{
-  nmap ( :SidewaysLeft<CR>
-  nmap ) :SidewaysRight<CR>
+  " Moved off ( and ), which now do block navigation (see keymaps.vim).
+  nmap { :SidewaysLeft<CR>
+  nmap } :SidewaysRight<CR>
   omap aa <Plug>SidewaysArgumentTextobjA
   xmap aa <Plug>SidewaysArgumentTextobjA
   omap ia <Plug>SidewaysArgumentTextobjI
