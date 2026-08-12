@@ -50,10 +50,16 @@ eq "a LIVE registration beats alphabetically-earlier stale debris (the 4afe6cdd 
 
 # Same debris, but the registration is DEAD → the live pass yields nothing and the
 # sidecar-glob fallback (first match) is the documented behavior.
+#
+# The badge below is `other`, not `feat`: `4afe6cdd` has no trailing `-<digits>`, so it no
+# longer resolves to `feature` — that role now means the LANE SHAPE rather than "everything
+# left over". What this row asserts — WHICH sidecar the picker chose — is unchanged, and
+# `other` vs `lead` still separates them. (`zz-9` below DOES have the shape, so it stays
+# `feat`.)
 rm -f "$FAKEHOME/.claude/running-agents/wf-cc.$$"
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/wf-cc.$DEADPID"
 eq "a DEAD registration does not win — falls back to the sidecar glob (first match)" \
-   "feat" "$(run "$T/wt")"
+   "other" "$(run "$T/wt")"
 
 # Unregistered/headless: no running-agents entry at all — the fallback still resolves.
 printf '%s\n' "$T/wt2" > "$FAKEHOME/.claude/agents/zz-9.cwd"

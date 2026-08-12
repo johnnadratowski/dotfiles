@@ -35,14 +35,17 @@ resumes the pane's latest conversation, name set at launch). **`restart` and `co
 run without `--yes`** — the human gate below decides when to pass it; the allow-list removes the
 bash prompt, NOT the confirmation.
 
-Targeting flags: `--role feature|review|test|team-lead|all` · `--only name1,name2` explicit
+Targeting flags: `--role feature|review|test|team-lead|other|all` · `--only name1,name2` explicit
 list · `--exclude a,b` · `--dry-run`. `compact` adds `--threshold N` (default 80).
 
 Roles are derived from the agent name via **dash-delimited segment matching** — the canonical
 patterns live in `fleet_resolve_role()` (`_fleet.sh`), which `role_of()` here and
 `resolve_role()` in `register-agent.sh` both delegate to. A `test` segment → test, a
-`pr`/`review` segment → review, a `cc`/`coordinator`/`team-lead` segment → team-lead, else
-feature (`x-print` is NOT review). **You are never a target of your own fan-out** (self is
+`pr`/`review` segment → review, a `cc`/`coordinator`/`team-lead` segment → team-lead, a
+**trailing `-<digits>`** (the lane shape, which is what derives a lane's worktree, branch and
+ports) → feature, and **everything else → `other`** (`x-print` is NOT review, and
+`goal-machinery` is NOT a lane). That default matters most for `restart`: it SIGTERMs its
+targets, so a lead's task-named subagent must never answer to `--role feature`. **You are never a target of your own fan-out** (self is
 excluded by identity token).
 
 ## Mode: `status` (read-only — start here)

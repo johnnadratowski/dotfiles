@@ -11,7 +11,10 @@
 # transport; both are gone with it. A lead addresses a teammate with native `SendMessage`,
 # by team name. This script is registry+pane mechanics only.
 #
-# Targeting (all but status): --role feature|review|test|team-lead|all (default all) ·
+# Targeting (all but status): --role feature|review|test|team-lead|other|all (default all) ·
+#   `feature` is the LANE shape (a trailing `-<digits>`) ONLY. A task-named subagent
+#   ("goal-machinery") resolves to `other`, so `restart --role feature` — which SIGTERMs its
+#   targets — can no longer reach one. `--role all` still means all; that is what --yes is for.
 #   --only name1,name2 (explicit set) · --exclude a,b · --threshold N (compact) · --dry-run.
 # CTX% finds each agent's transcript via recorded transcript_path/cwd sidecars (tmux only as
 # an optional fallback); window = $WORKFLOW_CTX_WINDOW or a model default (opus/sonnet-4.x→1M).

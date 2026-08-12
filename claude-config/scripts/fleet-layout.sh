@@ -120,10 +120,13 @@ _role_of() {
 # owns a window, a subagent belongs stacked under the pane that spawned it (`subagents` owns
 # that placement, and these verbs must not compete for it).
 #
-# WHY THE RESOLVED ROLE IS NOT ENOUGH — this is the whole point of the helper.
-# `fleet_resolve_role` DEFAULTS TO `feature` for any name it does not recognise, and a lead's
-# subagent is named for its TASK ("goal-machinery", "lesson-and-layout"), which no pattern
-# matches. So every one of them answered "feature" and every verb below read it as a lane.
+# WHY THE SHAPE TEST IS HERE AT ALL — it predates the fix, and it is kept deliberately.
+# `fleet_resolve_role` USED TO DEFAULT TO `feature` for any name it did not recognise, and a
+# lead's subagent is named for its TASK ("goal-machinery", "lesson-and-layout"), which no
+# pattern matched. So every one of them answered "feature" and every verb below read it as a
+# lane. The resolver now applies this same trailing-`-<digits>` discriminator itself and
+# defaults to `other`, so the two agree — this is no longer a workaround, it is the local half of one
+# rule, and it still carries the `.role`-override case below.
 # Observed 2026-08-11: two of the lead's subagents were broken out into windows of their own,
 # named for their tasks, instead of staying panes under their spawner. The role-name filters
 # these verbs already carried could not have caught it — the misclassification happens upstream
@@ -167,11 +170,10 @@ _type_tag() {
     review|reviewer|rev|rev-*|*-rev|*-review*|pr|pr-*|*-pr|*-pr-*) printf ' (rev)' ;;
     *)
       # An unrecognised name falls through to its RESOLVED role, including a per-agent
-      # `.role` override. One consequence worth stating rather than discovering: anything
-      # resolving to `feature` is left unmarked, and `fleet_resolve_role`'s default IS
-      # `feature` — so a stray name nobody's pattern matched reads as a lane on the tab bar.
-      # Deliberate. The alternative is a second classification rule living here that disagrees
-      # with the canonical one, and a tab bar is not worth forking agent identity over.
+      # `.role` override. Since the resolver's default became `other`, a stray name nobody's
+      # pattern matched now reads as ` (other)` rather than silently as a lane — the tab bar
+      # inherited that correction for free, which is the argument for keeping one
+      # classification rule instead of forking agent identity for a cosmetic reason.
       case "$(_role_of "$1")" in
         feature|team-lead) printf '' ;;
         review)            printf ' (rev)' ;;

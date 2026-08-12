@@ -46,7 +46,11 @@ if [ -z "$role" ]; then
     cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) role=team-lead ;;
     test|*-test|*-test-*|test-*)                                     role=test ;;
     review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)          role=review ;;
-    *)                                                               role=feature ;;
+    # `feature` is the LANE SHAPE (a trailing -<digits>), not the leftovers — the same
+    # discriminator fleet_resolve_role applies. A task-named subagent ("goal-machinery") has
+    # no lane and must not wear a lane's label.
+    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])                          role=feature ;;
+    *)                                                               role=other ;;
   esac
 fi
 

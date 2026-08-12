@@ -205,7 +205,7 @@ fleet_turn_open() {
 }
 
 # fleet_resolve_role <name> — canonical agent-name → role classifier
-# (coordinator|test|review|feature). THE single source of these name patterns;
+# (team-lead|test|review|feature|other). THE single source of these name patterns;
 # register-agent.sh's resolve_role() and agent-fanout.sh's role_of() delegate here so
 # status/targeting/role-context can never classify an agent differently. Pure pattern
 # match — callers that ALSO honor a per-agent ~/.claude/agents/<name>.role override
@@ -227,6 +227,39 @@ fleet_turn_open() {
 # legacy `cc` / `*-cc` / `coordinator` spellings still MATCH (old sessions, old
 # per-agent .role overrides, historical ids) but they all RESOLVE to `team-lead`, so
 # there is exactly one role name downstream and one role doc: agent-roles/team-lead.md.
+#
+# ── `feature` IS A LANE SHAPE, AND THE DEFAULT IS `other` ─────────────────────────────────
+# `feature` no longer means "everything left over". It means the NAME HAS A LANE'S SHAPE —
+# a trailing `-<digits>` — because that number is what derives a lane's worktree, its branch
+# and its port block, so a durable lane always has one and a task-named subagent never does.
+# Everything else resolves to `other`: a real role name, never a lane, and one that no
+# lane-targeting verb selects.
+#
+# THE SHAPE IS `<prefix>-<digits>`, NOT LITERALLY `feature-<digits>`, and deliberately: it is
+# the SAME discriminator `_is_lane_agent` (fleet-layout.sh) and `fleet_lane_display_name`
+# (below) already apply, so the three now agree instead of two of them working around the
+# third. A fleet whose lanes are not called `feature-N` — the layout suite's `x-1`/`x-2`
+# fixtures, `agentic-2` — keeps working, which a literal `feature-` prefix would have broken.
+# The task-scoped subagent names are caught either way: `rev-a`, `tester` and `planner` match
+# their own arms above, and a lead's task-named subagent ("goal-machinery") has no trailing
+# number at all. What this does NOT catch is a task subagent deliberately named `audit-2`; the
+# per-agent `~/.claude/agents/<name>.role` override is the escape hatch for that.
+#
+# THE DEFAULT WAS THE BUG. A lead's subagent is named for its TASK ("goal-machinery",
+# "lesson-and-layout"), which matches no pattern here, so every one of them answered `feature`
+# and every lane verb read it as a lane. `agent-fanout restart --role feature --yes` SIGTERMs
+# its targets and relaunches them with `claude --continue` — against a task subagent that is
+# killing a live team member and bringing it back permanently outside the lead's team.
+# Observed on the layout side 2026-08-11 (two task subagents broken out into their own
+# windows); the restart blast radius is the same misclassification with a worse consequence.
+#
+# `fleet-layout.sh` already worked around this locally in `_is_lane_agent`, by testing the
+# name's shape BEFORE trusting the role. That discriminator now lives here, at the source, so
+# every caller gets it — a workaround in one reader could not protect `agent-fanout`.
+#
+# A per-agent `~/.claude/agents/<name>.role` override still wins wherever it is honored, which
+# is the escape hatch for an agent that really should be treated as a lane under a name this
+# cannot recognise.
 fleet_resolve_role() {
   case "$1" in
     team-lead|*-team-lead|team-lead-*) echo team-lead ;;
@@ -234,7 +267,8 @@ fleet_resolve_role() {
     test|tester|*-test|*-test-*|test-*|tester-*)                       echo test ;;
     review|reviewer|rev|rev-*|*-rev|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*|planner|plan-*)
                                                                        echo review ;;
-    *)                                                                 echo feature ;;
+    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])                            echo feature ;;
+    *)                                                                 echo other ;;
   esac
 }
 
@@ -260,7 +294,10 @@ fleet_agent_id() {
     feature)     printf 'f%s'    "${num:-1}" ;;
     review)      printf 'pr%s'   "${num:-1}" ;;
     test)        printf 'test%s' "${num:-1}" ;;
-    *)           printf 'f%s'    "${num:-1}" ;;  # unreachable (role is exhaustive) — id-safe default
+    # `other` — a task-named agent, no lane. Its own prefix on purpose: it used to fall to
+    # `f<N>` and collide with the lane of that number, which is exactly the uniqueness the
+    # `agent:<id>` label depends on.
+    *)           printf 'a%s'    "${num:-1}" ;;
   esac
 }
 
