@@ -165,3 +165,18 @@ alias mksnip='(cd ~/git/dotfiles/_hammerspoon/snippets; vim .)'
 alias mountMacMini='sshfs john@johns-mac-mini.lan:/ ~/mnt/macmini'
 alias umountMacMini='sudo diskutil umount force ~/mnt/macmini'
 alias remountMacMini='umountMacMini; mountMacMini'
+
+# ------------------------------------------------------------------ Claude fleet
+#
+# `team` is the WHOLE team-boot.sh CLI, not just its `boot` verb — the script dispatches on
+# a subcommand, so aliasing the verb would make `team status` unreachable:
+#
+#   team boot [--with-team [N]] [--fresh] [--session NAME]   lead in lane 0, optionally staffed
+#   team status                                              what is actually alive, per process
+#   team down                                                stop every agent in a lane (idle-gated)
+#   team stop-engines [lane…]                                stop a lane's monocle engines
+#
+# Guarded because ~/.claude/scripts exists only on a machine that has run ./symlink.py.
+if [ -x "$HOME/.claude/scripts/team-boot.sh" ]; then
+	alias team='bash "$HOME/.claude/scripts/team-boot.sh"'
+fi

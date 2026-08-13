@@ -25,48 +25,22 @@
     "maxWidth": 14
    },
    {
-    "id": "fleet-behind-base",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-behind-target.sh\" \"$r/.claude/scripts/statusline-behind-target.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 10
-   },
-   {
-    "id": "fleet-unpushed-base",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-unpushed-target.sh\" \"$r/.claude/scripts/statusline-unpushed-target.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 10
-   },
-   {
-    "id": "sep-l1",
-    "type": "flex-separator"
-   },
-   {
     "id": "fleet-lastmsg",
     "type": "custom-command",
     "commandPath": "~/.claude/scripts/statusline-lastmsg.sh",
     "timeout": 2000,
     "maxWidth": 10
-   }
-  ],
-  [
-   {
-    "id": "b67f891a-22a4-4b09-9741-977a68735223",
-    "type": "version"
    },
    {
-    "id": "2880417e-5371-4d48-980d-d4d91b26a7f8",
-    "type": "model"
+    "id": "fleet-activity-ago",
+    "type": "custom-command",
+    "commandPath": "~/.claude/scripts/statusline-activity-ago.sh",
+    "timeout": 2000,
+    "maxWidth": 14
    },
    {
-    "id": "2303120f-0250-44a6-a0e9-141f01aad151",
-    "type": "thinking-effort",
-    "backgroundColor": "bgBrightBlack"
-   },
-   {
-    "id": "9c2a1b7e-git-changes",
-    "type": "git-changes"
+    "id": "sep-l1",
+    "type": "flex-separator"
    },
    {
     "id": "usage-ctx",
@@ -90,6 +64,43 @@
     "timeout": 2000,
     "maxWidth": 8,
     "backgroundColor": "bgBrightRed"
+   }
+  ],
+  [
+   {
+    "id": "b67f891a-22a4-4b09-9741-977a68735223",
+    "type": "version"
+   },
+   {
+    "id": "2880417e-5371-4d48-980d-d4d91b26a7f8",
+    "type": "model"
+   },
+   {
+    "id": "2303120f-0250-44a6-a0e9-141f01aad151",
+    "type": "thinking-effort",
+    "backgroundColor": "bgBrightBlack"
+   },
+   {
+    "id": "sep-l2a",
+    "type": "flex-separator"
+   },
+   {
+    "id": "9c2a1b7e-git-changes",
+    "type": "git-changes"
+   },
+   {
+    "id": "fleet-behind-base",
+    "type": "custom-command",
+    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-behind-target.sh\" \"$r/.claude/scripts/statusline-behind-target.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
+    "timeout": 2000,
+    "maxWidth": 10
+   },
+   {
+    "id": "fleet-unpushed-base",
+    "type": "custom-command",
+    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-unpushed-target.sh\" \"$r/.claude/scripts/statusline-unpushed-target.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
+    "timeout": 2000,
+    "maxWidth": 10
    },
    {
     "id": "sep-l2b",
