@@ -2,33 +2,53 @@
 # .claude/scripts/statusline-role.sh
 #
 # ccstatusline `custom-command` widget: prints a compact fleet-identity badge for THIS
-# pane — "<role>·L<lane>" (e.g. "cc·L8", "feat·L2") so each worktree's terminal is
-# identifiable at a glance. Falls back to just "<role>" when no lane is known. Silent
-# (exit 0, no output) when this worktree isn't a registered fleet agent.
+# SESSION — "<role>·L<lane>" (e.g. "lead·L8", "feat·L2") so each terminal is identifiable at
+# a glance. A session with no role of its own — a teammate, a Task-tool subagent — is badged
+# with its own NAME instead ("goal-mach·L2"), because that is what distinguishes it from the
+# lane it is running inside. Falls back to just the label when no lane is known. Silent
+# (exit 0, no output) when this session isn't a registered fleet agent.
 #
-# Self is identified in two passes (tmux-independent). LIVE pass first: a name with a
-# live-pid ~/.claude/running-agents entry whose ~/.claude/agents/<name>.cwd sidecar
-# matches $PWD — crash debris (dead entries, stale sidecars) can never shadow a live
-# registration (DX-jn-cc-007; a stale alphabetically-earlier sidecar once mislabeled the
-# coordinator `feat`). Fallback: first $PWD-matching .cwd sidecar, which keeps headless /
-# unregistered sessions working. Plain `kill -0` liveness only — this widget renders on
-# every statusline tick and must stay dependency-free (no _fleet.sh source). Role comes
-# from a ~/.claude/agents/<name>.role override, else the name pattern (matches
+# Self is identified in three passes (tmux-independent).
+#
+# SESSION-EXACT pass first: the StatusJSON on stdin carries THIS session's transcript_path,
+# and register-agent.sh recorded the same path in ~/.claude/agents/<name>.transcript, so the
+# two match on a value that is unique per session. Every other pass keys on $PWD, and a cwd
+# is NOT unique: a teammate or Task-tool subagent runs in its lane's worktree, so a
+# $PWD-keyed badge pins to the LANE and a subagent console cannot say whose it is. Only this
+# pass can tell the two apart.
+#
+# LIVE pass second: a name with a live-pid ~/.claude/running-agents entry whose
+# ~/.claude/agents/<name>.cwd sidecar matches $PWD — crash debris (dead entries, stale
+# sidecars) can never shadow a live registration (DX-jn-cc-007; a stale alphabetically-earlier
+# sidecar once mislabeled the coordinator `feat`). Fallback: first $PWD-matching .cwd sidecar,
+# which keeps headless / unregistered sessions working. Plain `kill -0` liveness only — this
+# widget renders on every statusline tick and must stay dependency-free (no _fleet.sh source).
+# Role comes from a ~/.claude/agents/<name>.role override, else the name pattern (matches
 # resolve_role in register-agent.sh / role_of in agent-fanout.sh). Lane comes from
 # the worktrees manifest resolved by fleet_manifest_path (worktree path → lane).
 
-cat >/dev/null 2>&1 || true   # drain the StatusJSON ccstatusline pipes in (unused)
+# No jq: this renders on every repaint, and a transcript path holds no escaped quotes.
+transcript="$(cat 2>/dev/null |
+  sed -n 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 
 shopt -s nullglob
 self=""
-for f in "$HOME"/.claude/running-agents/*; do
-  [ -f "$f" ] || continue
-  base="${f##*/}"; pid="${base##*.}"; name="${base%.*}"
-  case "$pid" in ''|*[!0-9]*) continue ;; esac
-  [ "$(cat "$HOME/.claude/agents/$name.cwd" 2>/dev/null)" = "$PWD" ] || continue
-  kill -0 "$pid" 2>/dev/null || continue
-  self="$name"; break
-done
+if [ -n "$transcript" ]; then
+  for f in "$HOME"/.claude/agents/*.transcript; do
+    [ "$(cat "$f" 2>/dev/null)" = "$transcript" ] || continue
+    self="$(basename "$f" .transcript)"; break
+  done
+fi
+if [ -z "$self" ]; then
+  for f in "$HOME"/.claude/running-agents/*; do
+    [ -f "$f" ] || continue
+    base="${f##*/}"; pid="${base##*.}"; name="${base%.*}"
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    [ "$(cat "$HOME/.claude/agents/$name.cwd" 2>/dev/null)" = "$PWD" ] || continue
+    kill -0 "$pid" 2>/dev/null || continue
+    self="$name"; break
+  done
+fi
 if [ -z "$self" ]; then
   for f in "$HOME"/.claude/agents/*.cwd; do
     [ "$(cat "$f" 2>/dev/null)" = "$PWD" ] && { self="$(basename "$f" .cwd)"; break; }
@@ -55,11 +75,18 @@ if [ -z "$role" ]; then
 fi
 
 # Short label.
+#
+# `other` is the ABSENCE of a role, not a role, so printing it says nothing — and it is
+# exactly what a teammate or Task-tool subagent resolves to, because its name is its task
+# ("goal-machinery") rather than a lane shape. For those the NAME is the information: it is
+# the only thing that says which of several sessions sharing this worktree you are looking
+# at. Any other value is a real role (including a .role override) and is printed as-is.
 case "$role" in
   team-lead) label=lead ;;
   feature)     label=feat ;;
   review)      label=rev ;;
   test)        label=test ;;
+  other)       label="${self:0:9}" ;;
   *)           label="$role" ;;
 esac
 

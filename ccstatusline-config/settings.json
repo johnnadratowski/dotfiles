@@ -18,15 +18,11 @@
     }
    },
    {
-    "id": "f47fcac4-36dd-485e-bae2-615d12a60f64",
-    "type": "git-branch",
-    "metadata": {
-     "hideNoGit": "false"
-    }
-   },
-   {
-    "id": "9c2a1b7e-git-changes",
-    "type": "git-changes"
+    "id": "fleet-branch",
+    "type": "custom-command",
+    "commandPath": "~/.claude/scripts/statusline-branch.sh",
+    "timeout": 2000,
+    "maxWidth": 14
    },
    {
     "id": "fleet-behind-base",
@@ -45,6 +41,32 @@
    {
     "id": "sep-l1",
     "type": "flex-separator"
+   },
+   {
+    "id": "fleet-lastmsg",
+    "type": "custom-command",
+    "commandPath": "~/.claude/scripts/statusline-lastmsg.sh",
+    "timeout": 2000,
+    "maxWidth": 10
+   }
+  ],
+  [
+   {
+    "id": "b67f891a-22a4-4b09-9741-977a68735223",
+    "type": "version"
+   },
+   {
+    "id": "2880417e-5371-4d48-980d-d4d91b26a7f8",
+    "type": "model"
+   },
+   {
+    "id": "2303120f-0250-44a6-a0e9-141f01aad151",
+    "type": "thinking-effort",
+    "backgroundColor": "bgBrightBlack"
+   },
+   {
+    "id": "9c2a1b7e-git-changes",
+    "type": "git-changes"
    },
    {
     "id": "usage-ctx",
@@ -68,21 +90,6 @@
     "timeout": 2000,
     "maxWidth": 8,
     "backgroundColor": "bgBrightRed"
-   }
-  ],
-  [
-   {
-    "id": "b67f891a-22a4-4b09-9741-977a68735223",
-    "type": "version"
-   },
-   {
-    "id": "2880417e-5371-4d48-980d-d4d91b26a7f8",
-    "type": "model"
-   },
-   {
-    "id": "2303120f-0250-44a6-a0e9-141f01aad151",
-    "type": "thinking-effort",
-    "backgroundColor": "bgBrightBlack"
    },
    {
     "id": "sep-l2b",
@@ -109,23 +116,6 @@
     "timeout": 2000,
     "maxWidth": 22,
     "preserveColors": true
-   }
-  ],
-  [
-   {
-    "id": "sep-l3a",
-    "type": "flex-separator"
-   },
-   {
-    "id": "fleet-summary",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null); for q in \"$HOME/.claude/scripts/statusline-summary.sh\" \"$r/.claude/scripts/statusline-summary.sh\"; do [ -n \"$q\" ] && [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "preserveColors": true
-   },
-   {
-    "id": "sep-l3b",
-    "type": "flex-separator"
    }
   ]
  ],

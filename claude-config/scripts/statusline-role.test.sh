@@ -11,6 +11,9 @@
 #   - a DEAD registration does not win — self-ID falls back to the sidecar glob
 #   - the sidecar fallback still resolves unregistered/headless sessions
 #   - a non-agent cwd stays silent (exit 0, no output)
+#
+# …and the session-exact pass: the StatusJSON's transcript_path outranks every $PWD-keyed
+# pass, so a subagent sharing its lane's worktree is badged as ITSELF, not as the lane.
 
 set -uo pipefail
 
@@ -34,8 +37,13 @@ mkdir -p "$FAKEHOME/.claude/running-agents" "$FAKEHOME/.claude/agents" "$T/wt" "
 # A provably dead pid: a subshell that has already been reaped.
 ( : ) & DEADPID=$!; wait "$DEADPID" 2>/dev/null
 
-# run <cwd> — the widget reads $PWD, $HOME, and drains stdin.
+# run <cwd> — the widget reads $PWD, $HOME, and stdin (empty here: no StatusJSON).
 run(){ (cd "$1" && HOME="$FAKEHOME" bash "$SCRIPT" </dev/null); }
+
+# runjson <cwd> <transcript-path> — as a real repaint arrives: the harness's StatusJSON on
+# stdin, carrying this session's own transcript.
+runjson(){ (cd "$1" && printf '{"session_id":"s","transcript_path":"%s","cwd":"%s"}' "$2" "$1" \
+             | HOME="$FAKEHOME" bash "$SCRIPT"); }
 
 echo "statusline-role.sh"
 
@@ -51,15 +59,15 @@ eq "a LIVE registration beats alphabetically-earlier stale debris (the 4afe6cdd 
 # Same debris, but the registration is DEAD → the live pass yields nothing and the
 # sidecar-glob fallback (first match) is the documented behavior.
 #
-# The badge below is `other`, not `feat`: `4afe6cdd` has no trailing `-<digits>`, so it no
-# longer resolves to `feature` — that role now means the LANE SHAPE rather than "everything
-# left over". What this row asserts — WHICH sidecar the picker chose — is unchanged, and
-# `other` vs `lead` still separates them. (`zz-9` below DOES have the shape, so it stays
-# `feat`.)
+# The badge below is the NAME `4afe6cdd`, not `feat`: the name has no trailing `-<digits>`,
+# so it does not resolve to `feature` — that role means the LANE SHAPE rather than "everything
+# left over" — and a role of `other` now prints the agent's own name, which is the only thing
+# that identifies a session with no role. What this row asserts — WHICH sidecar the picker
+# chose — is unchanged. (`zz-9` below DOES have the lane shape, so it stays `feat`.)
 rm -f "$FAKEHOME/.claude/running-agents/wf-cc.$$"
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/wf-cc.$DEADPID"
 eq "a DEAD registration does not win — falls back to the sidecar glob (first match)" \
-   "other" "$(run "$T/wt")"
+   "4afe6cdd" "$(run "$T/wt")"
 
 # Unregistered/headless: no running-agents entry at all — the fallback still resolves.
 printf '%s\n' "$T/wt2" > "$FAKEHOME/.claude/agents/zz-9.cwd"
@@ -83,6 +91,29 @@ eq "…and exits 0"                    "0" "$rc"
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/aa-no-sidecar.$$"
 printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/wf-cc.$$"
 eq "a registration with no .cwd sidecar is skipped, not fatal" "lead" "$(run "$T/wt")"
+
+# ------------------------------------------------- session-exact identity (transcript_path)
+# The case no $PWD-keyed pass can decide: a subagent runs in its LANE's worktree, so both
+# sessions match the same cwd and the picker has nothing to separate them by. The lane is
+# live-registered and would win every $PWD pass; the StatusJSON's transcript_path must
+# override it and badge the console as the subagent.
+echo
+echo "session-exact identity"
+
+printf '%s\n' "$T/wt" > "$FAKEHOME/.claude/agents/lane-7.cwd"
+printf 'cwd:%s\n' "$T/wt" > "$FAKEHOME/.claude/running-agents/lane-7.$$"
+printf '%s\n' "/tmp/x/lane-7.jsonl" > "$FAKEHOME/.claude/agents/lane-7.transcript"
+printf '%s\n' "$T/wt" > "$FAKEHOME/.claude/agents/goal-machinery.cwd"
+printf '%s\n' "/tmp/x/sub.jsonl" > "$FAKEHOME/.claude/agents/goal-machinery.transcript"
+
+eq "the subagent's own transcript wins over the live lane registration" \
+   "goal-mach" "$(runjson "$T/wt" /tmp/x/sub.jsonl)"
+eq "the lane's own transcript still resolves the lane" \
+   "feat" "$(runjson "$T/wt" /tmp/x/lane-7.jsonl)"
+eq "an unrecorded transcript falls through to the \$PWD passes" \
+   "feat" "$(runjson "$T/wt" /tmp/x/nobody.jsonl)"
+rm -f "$FAKEHOME/.claude/agents/lane-7."* "$FAKEHOME/.claude/agents/goal-machinery."* \
+      "$FAKEHOME/.claude/running-agents/lane-7.$$"
 
 # ---------------------------------------------------------------- DX-jn-cc-014: lane fallback
 # The manifest path is resolved by fleet_manifest_path (_fleet.sh) — no hardcoded project
