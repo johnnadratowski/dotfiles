@@ -178,8 +178,10 @@ teammate reported the root it bound to.** A teammate that says nothing about it 
 skipped it; under strict mode its first review call will hard-fail, which is the intended
 outcome but a worse place to find out.
 
-**The lead binds too.** You never call `EnterWorktree`, so you have no natural trigger, and
-strict mode refuses you like everyone else. Bind to your own lane at boot.
+**The lead does NOT bind — it runs no Monocle at all** (John, 2026-08-13): no engine in the
+lead's lane, no TUI in its companion pane (`WORKFLOW_LEAD_CELL_COMMAND` in fleet-layout.sh
+defaults the lead's companion to a bare cmdline), no `set_repo` at boot. Review traffic lives
+in the LANE agents' engines; anything the lead would have staged goes to chat or ad hoc.
 
 **Do NOT reach for `/mcp` reconnect.** It was the fix before `set_repo` existed; it needs a
 human in each pane and rebinds nothing an agent can verify. If a teammate is unbound, the

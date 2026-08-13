@@ -63,32 +63,11 @@ Rules that make the comparison do the work:
 - **≤ 15 lines per block.** Over that, the topic is more than one fix — split it or narrow to
   the half the user asked about.
 
-## Delivery — contrasts go to Monocle, single blocks stay here
+## Delivery — chat output
 
-**When the output contrasts two states** — before/after, or the two-options variant — **send
-it through Monocle's `send_diff` tool** so the user reads it side-by-side. **A single block
-with no counterpart is chat output**; a diff viewer adds nothing to an example that contrasts
-with nothing, so print it and stop.
-
-`send_diff` takes the contents directly — nothing on disk is read, no git command runs, so it
-is safe with a dirty tree, under an in-flight reviewer, and beside a staged review, none of
-which was true of the commit/reset workaround it replaced (removed 2026-08-10; do not
-reintroduce it):
-
-1. `set_repo` first if this session has not already bound its lane — the standing Monocle
-   rule, unchanged.
-2. One call: `send_diff({ name: "pseudocode: <topic>", pairs: [...] })`. One pair for a
-   before/after; for the options variant, one pair per option sharing the same `before`, so
-   each option renders as its own switchable diff. `label` names the pane (it need not be a
-   real file), `lang` is an optional highlight hint, and an empty `before` renders as
-   all-new — which is the delivery for the no-before-state variant too, when the user asks to
-   see it rendered.
-3. Tell the user it is up, under what name. Re-sending the same name/label updates the
-   comparison in place, so an amended illustration replaces itself rather than stacking.
-
-**Fallbacks, in order:** no engine running, or `send_diff` unavailable (older Monocle) → chat
-output, with one line saying why. Chat is always correct when in doubt — the diff view is a
-comfort, not a gate.
+Print the blocks in chat, per the Shape above. The Monocle `send_diff` delivery was removed
+2026-08-13 — the lead runs no Monocle, so a rendered diff had no reader; do not reintroduce
+it here. If a one-off rendered comparison is ever wanted, do it ad hoc on request.
 
 ## Variants
 
@@ -114,7 +93,7 @@ comfort, not a gate.
 
 ---
 
-**Skill Version**: 1.0.0
+**Skill Version**: 1.1.0
 **Category**: Reporting
 
 _Companions: [`/go-deeper`](../go-deeper/SKILL.md) — one level down in prose; this skill is

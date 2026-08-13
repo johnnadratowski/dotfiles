@@ -93,6 +93,11 @@ FL_HOME_SESSION="${WORKFLOW_FLEET_HOME_SESSION:-main}"
 # lacks would print `command not found` in every agent's pane AND be invisible to boot's report.
 # A project that wants one sets WORKFLOW_CELL_COMMAND in its workflow.config (e.g. "monocle").
 FL_CELL_COMMAND="${WORKFLOW_CELL_COMMAND:-}"
+# The LEAD's companion is a plain cmdline by default (John, 2026-08-13): the lead stages no
+# reviews of its own — review traffic lives in the LANE agents' engines — so seeding the
+# fleet's cell command there spent the pane on a tool the lead never reads. A project that
+# wants a lead companion tool sets WORKFLOW_LEAD_CELL_COMMAND explicitly.
+FL_LEAD_CELL_COMMAND="${WORKFLOW_LEAD_CELL_COMMAND:-}"
 FL_EXT_SESSION="${WORKFLOW_FLEET_EXT_SESSION:-${WORKFLOW_FLEET_WIDE_SESSION:-wide}}"
 FL_PLACEHOLDER='__fl_placeholder'
 
@@ -1426,18 +1431,31 @@ _pane_is_shell() {
 # with the text. A pane already running something (an editor, a log tail, a shell mid-command)
 # is left strictly alone — a missing companion is a small annoyance, typing into a live process
 # is not.
+# Which command a given claude pane's companion runs. Role comes from the pane's cwd basename
+# (the lane name) via fleet_resolve_role, not the agent registry — seeding fires during boot,
+# before registration completes. team-lead ⇒ FL_LEAD_CELL_COMMAND (default: bare shell).
+_companion_cmd() {  # <claude-pane>
+  local base
+  base="$(basename "$(tmux display-message -p -t "$1" '#{pane_current_path}' 2>/dev/null)")"
+  case "$(fleet_resolve_role "$base")" in
+    team-lead) printf '%s' "$FL_LEAD_CELL_COMMAND" ;;
+    *)         printf '%s' "$FL_CELL_COMMAND" ;;
+  esac
+}
+
 _seed_companion() {  # <window> <lead-pane>
-  [ -n "$FL_CELL_COMMAND" ] || return 0          # empty by default; nothing to seed
-  local win="$1" lead="$2" top_right
+  local win="$1" lead="$2" top_right cmd
+  cmd="$(_companion_cmd "$lead")"
+  [ -n "$cmd" ] || return 0                      # empty ⇒ the companion stays a bare shell
   # Top-right = the pane in a different column from the lead (greatest left), highest up
   # (smallest top). Ties break on the topmost, which is what "top right" means visually.
   top_right="$(tmux list-panes -t "$win" -F '#{pane_id} #{pane_left} #{pane_top}' 2>/dev/null \
     | awk -v lead="$lead" '$1!=lead { if ($2>bl || ($2==bl && $3<bt)) { bl=$2; bt=$3; id=$1 } } END{ if (id) print id }')"
   [ -n "$top_right" ] || return 0
   _pane_is_shell "$top_right" || return 0        # busy with something real — hands off
-  _rw send-keys -t "$top_right" -l "$FL_CELL_COMMAND"
+  _rw send-keys -t "$top_right" -l "$cmd"
   _rw send-keys -t "$top_right" Enter
-  echo "  companion    started '$FL_CELL_COMMAND' in $top_right (was an idle shell)"
+  echo "  companion    started '$cmd' in $top_right (was an idle shell)"
 }
 
 # Split the companion column beside an agent's claude pane.
