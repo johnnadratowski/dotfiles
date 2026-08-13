@@ -80,16 +80,42 @@ is a symlink back into this repo, so an edit here is live in the next shell.
 
 Adding a new dotfile means adding a row to `symlink.py` and re-running `./symlink.py`.
 
-### One symlink is not currently a symlink
+### `~/.claude/settings.json` gets un-symlinked by `monocle register`
 
-`~/.claude/settings.json` is a **real file**, not a link to `claude-config/settings.json`, and
-the two have diverged — the live copy calls monocle at `/Users/john/bin/monocle` where the repo
-copy calls `$HOME/.claude/hooks/monocle.sh`. Claude Code rewrites this file in place whenever a
-setting changes through `/config` or `/model`, which replaces the symlink with a plain file.
+Relinked 2026-08-13 after being found as a plain, diverged file. It will happen again, and the
+writer is **not** Claude Code:
 
-**Consequence: editing `claude-config/settings.json` changes nothing until it is re-linked.**
-Check before trusting an edit to that file. Every other Claude-side path — `hooks/`, `scripts/`,
-`output-styles/`, `keybindings.json`, and the ccstatusline config — is still a live symlink.
+    monocle register
+      → adapters.WriteJSONFile
+        → WriteFileAtomic: os.WriteFile(path+".tmp"); os.Rename(tmp, path)
+
+`os.Rename` onto a symlink **replaces the link**, so the repo copy silently stops being the live
+one. The signature is unmistakable when you see it: Go's `json.Marshal` sorts map keys, so the
+whole file comes back alphabetised, where Claude Code (Node) preserves insertion order. Register
+also re-adds monocle's hooks with the absolute `/Users/john/bin/monocle` path that
+`claude-config/hooks/monocle.sh` exists to avoid, and does not recognise the wrapper form as
+already-registered — so `on-stop` ended up wired twice and fired twice per turn.
+
+Fix in monocle would be one line: `filepath.EvalSymlinks` the path before the rename, so the
+write lands on the real file and the link survives.
+
+**Until then, after any `monocle register`: check `ls -la ~/.claude/settings.json` and re-link
+if it is no longer a symlink.** Edits to `claude-config/settings.json` do nothing while it is
+not. Every other Claude-side path — `hooks/`, `scripts/`, `output-styles/`, `keybindings.json`,
+the ccstatusline config — is a live symlink and is unaffected.
+
+### Freezing a setting against *any* writer
+
+Claude Code does legitimately persist `/config`, `/model` and `/theme` changes into
+`~/.claude/settings.json`; that is normal and cannot be turned off. What can be done is to move
+the settings that must never drift up a tier, into the admin/policy file:
+
+    /Library/Application Support/ClaudeCode/managed-settings.json     (+ managed-settings.d/)
+
+That tier has the highest precedence, is never written by Claude Code, and is root-owned so
+nothing user-level can rewrite it. The cost is real: it needs `sudo` to edit, it applies to every
+project on the machine, and a key pinned there stops being changeable from `/config` at all.
+Worth it for hooks and permissions; not worth it for the theme.
 
 ## Gotchas that have already bitten
 
