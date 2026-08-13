@@ -1220,3 +1220,179 @@ reassuring shape whether or not it saw the thing. Closest in mechanism is "A swe
 file-KIND misses the file that selects the thing being swept": both fail on a file the enumeration
 had no way to name, and both are fixed by reaching for a source that does not depend on your
 categories — there, grepping the outgoing literal; here, asking `git status` rather than the diff.
+
+## Operator-facing changes need a WORKFLOW lens, not only a branch lens (2026-08-11)
+
+**The instance.** Two reviewers certified every branch of a recovery command money-safe and were
+right — and both missed two blockers living in what a CORRECT refusal causes the operator to do
+next: reach for a sibling command with no guard that double-moves funds, and read "unknown
+outcome" wording on a state where the outcome is certain. A per-branch audit structurally cannot
+see harms located in the workflow *around* the code.
+
+**The rule.** When briefing reviewers on operator-facing changes, assign one lens the question
+"after each refusal/message, what does the human do next, and is THAT safe?"
+
+**Corollary from the same rounds:** a verdict function over an enum must be TOTAL — the omitted
+status was the main case, not the edge (six of seven enumerated; the seventh was the one the
+command exists for).
+
+## When the observation is an ABSENCE, enumerate what else produces the same absence (2026-08-12)
+
+**The instance.** A staged review "gone" after an engine restart had a clean same-tool
+before/after — and could not discriminate DESTROYED from SHADOWED-by-a-newer-session. The wrong
+cause prescribed expensive rework (re-stage + re-annotate) the right one did not, and the
+prescribed fix would itself have minted another shadowing session.
+
+**The rule.** Absence is the weakest evidence about mechanism and the easiest to mistake for
+strong evidence, because a clean disappearance looks decisive. Before reporting a cause for an
+absence, enumerate the mechanisms that produce the identical observation. Settled here by the
+tool owner's schema + a two-engine test — measurement over inference.
+
+## Parking a file by whole-file copy silently reverts everything that changed underneath it (2026-08-12)
+
+**The instance.** A master sync added a teammate's entry to a shared file between copy and
+restore; the restore deleted it wholesale — no conflict, no warning. Caught only because the diff
+stat jarred: expected +45, saw 80 deletions.
+
+**The rule.** A snapshot restore does not merge, it overwrites; stash-pop at least conflicts
+loudly. Park by EXTRACTING the delta, or by a WIP commit cherry-picked back (which git will
+conflict on) — never by copy-restore. This sharpens the earlier "stash is a fleet hazard, copy
+instead" note: the copy has its own hazard, and it fails silently, which is worse.
+
+## Two grep epistemics: interrogate the output you have, and never widen a filtered claim (2026-08-12)
+
+**(a) Under-interrogated output.** The fatal counterexample was IN the grep results the author
+read — they asked only the question they arrived with ("which of these writes the flag") and
+never the adjacent one ("which of these reads it as a guard my change removes"). "Always grep"
+cannot prevent this; the rule is to interrogate output against every claim the change makes, not
+just the claim that motivated the grep.
+
+**(b) A filter, then a totality claim.** `grep -v .test.` followed by "the only write in the
+entire codebase" — the filter excluded the exact counterexample. Never describe filtered results
+with unfiltered scope; state the filter in the claim ("only production write").
+
+## A lesson that only asks for care recurs; one that changes what the artifact must SHOW does not (2026-08-12)
+
+**The instance.** Three of five round-2 blockers were the same defect — undercounted call sites
+("1 writer"→3, "2 callers"→3, "2 callers"→3) — INSIDE a revision that cited the "enumerate every
+caller by grep" lesson by name. Writing it down demonstrably did not prevent the next instance.
+
+**The fix that worked.** Change the mechanism, not the resolve: every enumeration in a plan
+carries the grep command pasted next to its result, so a fresh search is visually
+distinguishable from a remembered one. The general form: a lesson that only asks for care
+recurs; a lesson that changes what the artifact must show does not.
+
+## Grep the COLUMN ASSIGNMENT, never the literal value (2026-08-12)
+
+**The instance.** `update_state.sql` writes `SET state = $1` — structurally invisible to any grep
+for `'completed'`, including the grep the prior enumeration lesson prescribed. A parameterized
+writer means value-greps undercount writers BY CONSTRUCTION; the rigorous-looking check inherits
+the defect.
+
+**The rule.** Enumerate writers of a column by grepping the assignment target (`state =`,
+`SET state`), then classify the values.
+
+## A fix for an evidence failure is itself evidence — and gets audited as evidence (2026-08-12)
+
+**The instance.** The "paste the grep beside its result" mechanism (from the enumeration lesson
+above) was implemented as hand-curated subsets rendered as raw output — 3 lines shown, 46 real.
+The curation step — deciding which lines are call sites — is the step that failed originally, and
+rendering the filtered list as raw output hides that step while asserting it doesn't exist.
+Third instance of the shape "the check's representation excludes the defect."
+
+**The rule.** Paste raw output with its `wc -l`, then a SEPARATELY LABELLED "of these, the call
+sites are…" — the filter then exists on the page and can be argued with. State grep scopes
+explicitly; inconsistent unstated scopes are the same defect.
+
+## Cite the commit reachable from the branch the reader will check (2026-08-12)
+
+**The instance.** A gate's landing was corrected fleet-wide citing the PR-branch head — which
+does not exist in master's history after the merge. Someone verifying the citation against
+master finds nothing and concludes the opposite of the truth.
+
+**The rule.** When telling anyone "X landed," cite the master commit, not the branch head — the
+commit reachable from the branch they will actually check.
+
+## The partial line in a failed-task notification is shaped exactly like a result (2026-08-12)
+
+**The instance.** A reviewer died mid-delivery with last line "All verification done. Loading the
+tools for the verdict delivery." — reads as completion, was a failure. Taking it at face value
+would have recorded an audit that produced no verdict.
+
+**The rule.** A failed agent's fragment is never a result. Resume or respawn, and require the
+artifact (the verdict itself), not the narration of having produced it. Companion: an agent whose
+context degraded should say "respawn me" rather than reconstruct a verdict from memory of having
+done the work.
+
+## Check the cache-failure DIRECTION per path before copying a remedy (2026-08-12)
+
+**The instance.** A server cache proxy throws if initialization hasn't run; try/catch fail-open
+decides what happens next, and the direction differs per path. One author's "green tests, inert
+feature" framing was wrong about their own finding — their suppression tests failed loudly, and
+that failure is how the bug was found.
+
+**The rule.** Fails open toward ACTING (send/notify): over-action, and "exactly once"/
+"suppressed" tests fail NOISILY — the residual risk is a COVERAGE gap (no suppression assertion
+means nothing detects it), not a silent-failure class. Fails open toward NOT acting (skip, early
+return): quiet, and the vacuous pass is real. Never copy a remedy across paths without checking
+which direction that path fails.
+## A fix that resolves the reported instance reliably creates the next one (2026-08-12, SRV-27 plan review, 4 rounds)
+
+**The pattern:** four review rounds, and **every round's defect lived inside the previous
+round's fix**. Not four unrelated defects — one defect class, re-entering four times through
+whatever the last fix had just built. Each fix was correct about the instance it was shown and
+silent about the class it belonged to. Each looked complete when it landed.
+
+The class here was *vacuity*: an assertion that cannot fail. The chain:
+
+| # | The fix that was applied | The defect that fix created |
+| --- | --- | --- |
+| 1 | absence-only assertion → add a positive control | the control was a **different row**, so it could not prove the subject row existed |
+| 2 | pair the polarities on the **same** row → "use an existing seed" | **no such seed existed**; the cheap resolution paired on the wrong row and left the realistic one decorative |
+| 3 | add the missing seed to the shared array | the seed's **name** collided with a diagnostic grep, falsifying a claim made in the same commit |
+| 4 | guard the seed's id with a definedness assertion | written for **one of two** consumers of that id; the second had the identical hole |
+
+Read the right-hand column as a single sentence and the shape is obvious: **the fix generalised
+to the instance, not to the class.** It is obvious in hindsight every time, which is exactly why
+it needs a mechanical counter rather than more care.
+
+**Why it is so hard to see from the inside.** The fix *is* responsive — it genuinely closes the
+reported hole. Closure feels like completion, and there is no artifact that represents the
+un-asked question. Worse, the fixer has just proven competence at this defect class, which reads
+as evidence they will not reproduce it. Instance 4 is the sharpest illustration: the guard was
+written *by someone who had just spent three rounds on vacuity*, and it still covered one of two
+call sites.
+
+**What to actually do.**
+
+1. **After writing a fix, ask "what else has this property?" before shipping it.** Not "is this
+   fix right" — it usually is — but "what is the set this instance belongs to, and did I cover
+   the set?" One consumer or two. One call site or five. One doc or every doc that argued from
+   the claim.
+2. **Prefer the structural form over the positional one.** Instance 4's real fix was moving the
+   guard from inside one test into the shared setup: it then cannot be filtered out, cannot be
+   deleted by editing a test, and covers every present *and future* consumer at once. Same
+   upgrade as "derive the cursor, don't maintain it" — make the guard a property of the
+   structure rather than a thing someone must remember to duplicate.
+3. **Grep the claim's own words; do not re-read for it.** A retraction lands where the author is
+   looking while the original claim survives everywhere that argued from it. A hedge that landed
+   in two of four places is the normal outcome of careful re-reading, and the abnormal outcome of
+   a grep.
+4. **Ask the reviewer to hunt the next instance explicitly.** Instance 4 was found *only* because
+   the next round's request said "you have called this pattern three rounds running — look for the
+   fourth rather than assuming the streak ended." A reviewer converging toward approval will not
+   volunteer that search; a streak is evidence the next one exists, not evidence it is over.
+5. **Never treat a fix round as smaller than the round before.** The rounds got *shorter*, which
+   felt like convergence. They were not converging on correctness; they were converging on the
+   last place anyone had looked.
+
+**The falsifier, so this does not become unfalsifiable folklore:** if a fix round produces a
+defect in code the previous round did **not** touch, this pattern is not what is happening — that
+is ordinary review finding ordinary bugs. The signature is specifically that the new defect is
+*inside the previous fix*. Check where the defect lives before invoking this.
+
+**Corollary on reviewer diversity.** Across four rounds two reviewers on different models each
+found blockers the other missed, every single round, with stable specialisation — one on
+assertion mechanics, one on premise and cross-lane consequence. Neither was ever redundant.
+Two reviewers agreeing is one verification if they ran the same check; these ran different ones.
+
