@@ -7,16 +7,12 @@
 # this file was in the same directory, so it went out with the transport it had nothing to do
 # with. Nothing replaced it, and the bar has had no elapsed-time field since 2026-07-29.
 #
-# ANY record counts — an assistant turn, a user message, a tool result. That is deliberate,
-# and it is what makes this DIFFERENT from statusline-lastmsg.sh rather than a second format
-# for the same fact:
-#
-#   🕐 15:40      the last time the agent SPOKE          (statusline-lastmsg.sh)
-#   ⏱ 12s ago    the last time anything happened at all  (this)
-#
-# Read together they separate the two failures that look identical in a quiet pane: spoke 8m
-# ago / active 12s ago is an agent deep in a tool run, spoke 8m ago / active 8m ago is an
-# agent that has stopped.
+# ANY record counts — an assistant turn, a user message, a tool result. So this answers "is
+# this pane still moving", not "when did the agent last talk to me". A companion widget
+# printing the clock time of the last assistant utterance was tried alongside it and dropped:
+# two time fields next to each other read as one fact in two formats, and this is the one that
+# needs no arithmetic to act on. Do not re-add it without a reason the elapsed field cannot
+# cover.
 #
 # Session-exact: the transcript comes from the StatusJSON on stdin, so a cwd hosting several
 # sessions reports each one's own elapsed time.

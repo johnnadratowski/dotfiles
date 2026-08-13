@@ -25,13 +25,6 @@
     "maxWidth": 14
    },
    {
-    "id": "fleet-lastmsg",
-    "type": "custom-command",
-    "commandPath": "~/.claude/scripts/statusline-lastmsg.sh",
-    "timeout": 2000,
-    "maxWidth": 10
-   },
-   {
     "id": "fleet-activity-ago",
     "type": "custom-command",
     "commandPath": "~/.claude/scripts/statusline-activity-ago.sh",
