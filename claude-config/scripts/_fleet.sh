@@ -211,8 +211,10 @@ fleet_turn_open() {
 # match — callers that ALSO honor a per-agent ~/.claude/agents/<name>.role override
 # (register-agent.sh, statusline-role.sh) apply that override first and
 # only fall back to this.
-# `team-lead` is the ONLY name Claude Code will let the lead answer to — it is a
-# hardcoded constant there, so this is the canonical spelling, not a preference. The
+# `team-lead` is OUR name for the lead, not the harness's: it is the value team-boot.sh
+# passes to `claude --name` (LEAD_AGENT), and WORKFLOW_AGENT_NAME_PREFIX may prepend to it
+# (this machine's goals fleet registers `g-team-lead`). Nothing in Claude Code requires
+# the string; what IS fixed is the ROLE word every spelling resolves to. The
 # The task-scoped SUBAGENT names this fleet spawns — `reviewer`/`rev-a`/`rev-b`, `tester`,
 # `planner` — must match too, and none of them did: every one fell through to `feature`. That is
 # not cosmetic. `layout_single` restructures feature agents, so `single --dry-run` was observed
@@ -264,8 +266,8 @@ fleet_resolve_role() {
   case "$1" in
     team-lead|*-team-lead|team-lead-*) echo team-lead ;;
     cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo team-lead ;;
-    test|tester|*-test|*-test-*|test-*|tester-*)                       echo test ;;
-    review|reviewer|rev|rev-*|*-rev|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*|planner|plan-*)
+    test|tester|*-test|*-test-*|test-*|tester-*|*-tester|*-tester-*)   echo test ;;
+    review|reviewer|rev|rev-*|*-rev|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*|planner|plan-*|*-reviewer|*-reviewer-*|*-planner|*-plan-*)
                                                                        echo review ;;
     *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])                            echo feature ;;
     *)                                                                 echo other ;;
@@ -363,7 +365,7 @@ fleet_lane_display_name() {
   # the LEAD's label. Two agents wearing one name is worse than an unlabelled one, so anything
   # that is not `team-lead` or `<prefix>-<digits>` degrades to its own name.
   case "$agent" in
-    team-lead) n=0 ;;
+    team-lead|*-team-lead) n=0 ;;
     *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])
       # TRAILING DIGITS ARE NOT ENOUGH. `test-1`, `x-test-1`, `pr-2` all have the shape, and
       # labelling them handed a TESTER lane 1's name — so a transient agent's tmux tab read

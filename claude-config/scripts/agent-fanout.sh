@@ -11,6 +11,18 @@
 # transport; both are gone with it. A lead addresses a teammate with native `SendMessage`,
 # by team name. This script is registry+pane mechanics only.
 #
+# ⚠ `restart` AND `compact` REQUIRE THE TARGET TO HAVE A PANE IN THE FLEET SESSION, because
+#   both work by typing into one (`compact` injects `/compact`; `restart` kills that pane's
+#   claude and relaunches it there). Since 2026-08-14 the fleet's default is
+#   WORKFLOW_TEAMMATE_MODE=detached (see team-boot.sh's launch line), which puts every
+#   teammate's TUI in the SEPARATE `claude-swarm` tmux session — so for teammates these two
+#   verbs find no addressable pane and are INERT. That is a skip, not a failure: they act only
+#   on what they can address, and `status` is unaffected because it resolves agents from the
+#   registry + process cwd, never from panes.
+#   KEPT DELIBERATELY. Both still work for the lead and for anything running in the fleet
+#   session, and a fleet switched back to `native` gets them back unchanged. Reviving them for
+#   detached teammates is a matter of targeting `claude-swarm`, not of deleting anything here.
+#
 # Targeting (all but status): --role feature|review|test|team-lead|other|all (default all) ·
 #   `feature` is the LANE shape (a trailing `-<digits>`) ONLY. A task-named subagent
 #   ("goal-machinery") resolves to `other`, so `restart --role feature` — which SIGTERMs its

@@ -131,23 +131,83 @@ parent_session_for() {  # <cwd>
   return 1
 }
 
-# Emit one TAB-separated record per lane: name, path, state, uptime, kind, session.
+# THE LANE IS NOT THE AGENT, and this view is the place that forgets it.
+#
+# A lane is a directory (`feature-2`). The agent living in it is a REGISTRY name, and
+# WORKFLOW_AGENT_NAME_PREFIX prepends to that name and not to the lane's — the lane is a
+# path/branch/tmux/port identity inside one clone and cannot collide, while the registry
+# (`~/.claude/running-agents/<name>.<pid>`, `~/.claude/agent-busy/<name>`) is MACHINE-GLOBAL
+# and therefore does. So this fleet's lane `feature-2` is occupied by `g-feature-2`.
+#
+# Reading the registry under the LANE's name is what broke: every lane rendered `down` while
+# four agents were live, and — because the sweep below emits any registry entry that is not a
+# lane DIRECTORY — the same four agents came back as ticketless `subagent` rows, which carry
+# no lane path and therefore none of the ticket/status/context columns. A view that reports a
+# working fleet as dead, twice over, in two different places.
+#
+# lane_agent_name resolves lane → agent by trying, in order:
+#   1. "$AGENT_PREFIX<lane>"  the configured prefix (env, else the main clone's workflow.config)
+#   2. "<lane>"               unprefixed — every fleet that sets no prefix, and the test suite
+#   3. a live registry entry whose cwd sidecar IS this lane and whose name ENDS in the lane
+#      name — prefix-agnostic, so it still attributes when step 1 cannot find a config at all
+#      (a WORKFLOW_LANES_DIR override breaks the main-clone derivation).
+#
+# Step 3 is cwd-matched but NOT cwd-matched ALONE, and the suffix test is the load-bearing
+# half: a subagent runs in its SPAWNER's cwd, so the lead's lane path is the sidecar value of
+# `g-team-lead`, `g-tester` and every task subagent the lead has spawned at once (this is the
+# same ambiguity parent_session_for exists to resolve). Matching on cwd only would let
+# whichever of them the glob reached first claim the lead's row and report ITS state and
+# uptime under the lead's name. Requiring the name to end in the lane name leaves exactly one
+# candidate.
+#
+# Liveness is checked PER CANDIDATE, not after the fact: a stale `g-feature-1.<dead-pid>`
+# entry must not win the lane and report `down` over a live unprefixed one.
+lane_agent_name() {  # <lane-name> <lane-path> <registry> — echoes the resolved agent name
+  local name="$1" p="$2" reg="$3" cand f bn pid
+  for cand in ${AGENT_PREFIX:+"${AGENT_PREFIX}$name"} "$name"; do
+    for f in "$reg/$cand".*; do
+      bn="$(basename "$f")"; pid="${bn##*.}"
+      case "$pid" in ''|*[!0-9]*) continue ;; esac
+      is_alive "$pid" "$(cat "$f" 2>/dev/null)" || continue
+      printf '%s' "$cand"; return 0
+    done
+  done
+  for f in "$reg"/*; do
+    [ -f "$f" ] || continue
+    bn="$(basename "$f")"; cand="${bn%.*}"; pid="${bn##*.}"
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+    case "$cand" in *"$name") ;; *) continue ;; esac
+    [ "$(cat "$HOME/.claude/agents/$cand.cwd" 2>/dev/null)" = "$p" ] || continue
+    is_alive "$pid" "$(cat "$f" 2>/dev/null)" || continue
+    printf '%s' "$cand"; return 0
+  done
+  printf '%s' "$name"
+}
+
+# Emit one TAB-separated record per lane: name, path, state, uptime, kind, session, label.
 # Everything else is read from the lane's own files by the renderer.
+#
+# THE FIRST FIELD STAYS THE LANE NAME even though the facts behind it are now read under the
+# agent's. It is what the renderer keys the lane's path, label and display off, what the user
+# types into SendMessage, and what every path on disk is named for.
 collect() {
   local dir="$1" registry="$HOME/.claude/running-agents" p name f bn pid token state up
+  local agent lane_agents=""
   shopt -s nullglob
   for p in "$dir"/*/; do
     p="${p%/}"
     [ -d "$p" ] || continue
     name="$(basename "$p")"
     fleet_not_a_lane "$name" && continue
+    agent="$(lane_agent_name "$name" "$p" "$registry")"
+    lane_agents="$lane_agents $agent"
     state=down up=""
-    for f in "$registry/$name".*; do
+    for f in "$registry/$agent".*; do
       bn="$(basename "$f")"; pid="${bn##*.}"
       case "$pid" in ''|*[!0-9]*) continue ;; esac
       token="$(cat "$f" 2>/dev/null)"
       if is_alive "$pid" "$token"; then
-        state="$(agent_state "$name")"
+        state="$(agent_state "$agent")"
         up="$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ')"
         break
       fi
@@ -159,12 +219,23 @@ collect() {
   # whoever spawned them cwd), so the lane loop above cannot see them, and leaving them out
   # makes the view claim a quiet fleet while four subagents are mid-audit. Their cwd comes
   # from the sidecar mark-busy.sh keeps current.
+  #
+  # WHAT COUNTS AS "already emitted" IS THE RESOLVED AGENT NAME, not the lane directory.
+  # The `-d "$dir/$name"` test alone only ever recognised an agent named exactly like its
+  # lane, so under a prefix every lane agent fell through to here and was emitted a second
+  # time as a subagent. Both tests are kept: the set covers the prefixed spelling, the
+  # directory test still suppresses a bare `feature-1` when the prefixed one won the lane.
+  #
+  # DELIBERATELY NOT "cwd is a lane path". A subagent runs in its spawner's cwd, so that test
+  # calls the standing tester and every task subagent the lead spawns a lane agent and drops
+  # them from the view entirely — silently retiring the rows this sweep exists to produce.
   local seen=""
   for f in "$registry"/*; do
     [ -f "$f" ] || continue
     bn="$(basename "$f")"; name="${bn%.*}"; pid="${bn##*.}"
     case "$pid" in ''|*[!0-9]*) continue ;; esac
-    [ -d "$dir/$name" ] && continue                       # already emitted as a lane
+    case " $lane_agents " in *" $name "*) continue ;; esac   # already emitted as a lane
+    [ -d "$dir/$name" ] && continue                          # …or is one under its bare name
     case " $seen " in *" $name "*) continue ;; esac
     token="$(cat "$f" 2>/dev/null)"
     is_alive "$pid" "$token" || continue
@@ -184,6 +255,21 @@ render() {
 
 dir="$(resolve_lanes_dir)" || { echo "fleet-status: cannot resolve a lanes directory from $PWD" >&2; exit 1; }
 [ -d "$dir" ] || { echo "fleet-status: lanes directory does not exist: $dir" >&2; exit 1; }
+
+# The agent-name prefix, resolved ONCE — see lane_agent_name. Env first, then the MAIN CLONE's
+# workflow.config, read with the same sed team-boot.sh uses so the two cannot disagree about
+# what this fleet's agents are called. The derivation is `<lanes>/../..` because the default
+# lanes dir is `<main-clone>/.claude/worktrees` (fleet_lanes_dir).
+#
+# EMPTY IS A VALID ANSWER, not a failure: a fleet that sets no prefix, and the hermetic test
+# suite's scratch lanes dir, both land here and both resolve correctly via step 2. A
+# WORKFLOW_LANES_DIR pointing outside the clone also lands here — step 3 is what covers it.
+AGENT_PREFIX="${WORKFLOW_AGENT_NAME_PREFIX:-}"
+if [ -z "$AGENT_PREFIX" ]; then
+  _cfg="$(dirname "$(dirname "$dir")")/.claude/workflow.config"
+  [ -r "$_cfg" ] &&
+    AGENT_PREFIX="$(sed -n 's/^WORKFLOW_AGENT_NAME_PREFIX="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$_cfg" | tail -1)"
+fi
 
 if [ "$WATCH" = 1 ]; then
   # The pane is the consumer here: clear-and-redraw, and never die on a transient error.

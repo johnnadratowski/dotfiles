@@ -106,7 +106,9 @@ Prereq: `gh` authenticated.
 2. **Spawn the reviewer** — mode 2 with the **PR number + body + the diff artifact
    inline** (the reviewer's isolation worktree can also run `gh pr diff` itself; inline
    guards against auth differences). Deep review (gates against the PR head) is the
-   caller's business: `gh pr checkout` in a scratch worktree, then spawn the tester there.
+   caller's business: `gh pr checkout` in a scratch worktree, then ask the standing tester
+   for a sweep on THAT path (`/test` — in a fleet it is a request to `<prefix>tester`, never
+   a spawn of your own).
 3. **Relay the verdict in the terminal** as a recommendation to the human
    (approve / request-changes / comment) — never posted to GitHub.
 

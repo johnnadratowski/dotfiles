@@ -10,6 +10,79 @@ stays with its product (e.g. `.claude/docs/review-lessons.md` in goals-onchain).
 
 Each entry: what was missed, why it was missable, and the check that would have caught it.
 
+## 2026-08-13 — A retry keyed on absence-of-exception, from an egress that swallows its failures
+
+A cron path refused a wire, then had to alert operators and notify the business. Both had to
+be **re-armable**: the money-idempotency anchor makes the row a permanent resident of the
+scan, so a tail that runs once is a tail that can be lost forever. The fix gave each channel
+its own durable marker.
+
+**The alert half was right and the notify half was wrong, for the same reason stated twice.**
+The alert marker was written only on `alertSlack`'s `'sent'` — a real delivery signal. The
+notify marker was written unless `emitToAllMembers` **threw** — and that function cannot
+throw. It catches a member-load failure and returns, catches every per-recipient failure and
+continues, and its inner `insertInAppRow` catches its own insert failure and returns `null`.
+So the `catch` the marker depended on was **unreachable code**, the marker was set on every
+tick regardless of what happened, and a transient DB blip silenced the notification
+permanently — the exact defect the re-arm was written to remove, reintroduced inside its own
+remedy, one review round later.
+
+**Why it survived being written carefully.** The author *knew* the function swallowed
+failures — the code comment said so, in the weaker-claim form ("means only that it
+returned"). Knowing that and still gating on a catch is not a contradiction, it is the trap:
+once you have decided a marker is needed, the call site offers exactly one signal (`try` /
+`catch`) and it looks like the signal. Nothing at the call site announces that the signal is
+constant.
+
+**And the hedge did not survive restatement.** The honest weak claim lived in the code
+comment; **four documents in the same diff asserted the strong one** ("written only once that
+channel has actually delivered"). Prose drifts toward the claim the author *wanted* to be
+true. So the doc sentence is where this is most detectable — and the cheapest place to catch
+it, since it needs no execution to read.
+
+**The checks, in the order they cost least:**
+
+1. **For each side effect, ask "what re-attempts this if it fails?" — separately, per effect.**
+   One idempotency token covers exactly one of them. Money-mutating work wants at-most-once;
+   a notification wants at-least-once. They cannot share a marker.
+2. **Read the egress, not the call site.** Before trusting any `catch` as a failure signal,
+   open the function and find its `throw`. If every path returns, the `catch` is decoration
+   and every guard built on it is inert.
+3. **Grep the diff's prose for the strong claim.** "confirms delivery", "only once ... has
+   delivered", "guaranteed". Then check the code claims the same thing. A marker documented
+   as proving delivery will be trusted as proving delivery.
+4. **Mutate the guard.** Change `if (outcome === 'sent')` to `if (true)` and see if anything
+   reddens. Here nothing did — the test environment forced the channel to `'disabled'`, so the
+   conditional was never exercised in either direction. **A guard whose test environment
+   disables its subject has no test**, however many tests surround it.
+
+**The generalisation worth carrying:** *if an egress swallows its failures, the signal has to
+come from the egress.* Give it a return value reporting what it achieved and key the marker on
+that. No amount of care at the call site substitutes for a signal that isn't there — and
+"it didn't throw" is not a signal, it is the absence of one.
+
+**Addendum, same day, next review round — COUNT THE SWALLOW SITES.** The fix above shipped
+and was still wrong, because the function had **two** swallow-and-resolve sites and the fix
+closed one. The in-app insert was counted correctly; the email/SMS queue insert, ten lines
+down in the same function, still resolved on failure, so the delivered-counter — and the four
+doc sentences resting on it — went on claiming a channel that had not been queued.
+
+The trap is specific and worth naming, because "I already fixed the swallowing" is what stops
+you looking: **finding one instance of a defect feels like understanding it, and understanding
+it feels like having fixed it.** The second site was not hidden. It was adjacent, identical in
+shape, and inside the exact function under repair.
+
+So make the check an **enumeration, not an inspection**. Grep the function for every `catch`
+that does not rethrow and every `return null` / early `return` on an error path, list them, and
+tick each one off against the claim the caller now makes. Then read the docstring and the docs
+back as a specification and ask, clause by clause, *which line proves this clause?* Here the
+clause "and email/SMS queued" had no line behind it — visible in the sentence before it was
+visible in the code.
+
+**The reusable form:** when a claim is a conjunction ("in-app written AND channels queued"),
+each conjunct needs its own evidence. A counter incremented once, at the end, cannot be
+evidence for two things — and it will be read as if it were.
+
 ## 2026-07-29 — Deleting an abstraction strands its READERS, and they fail silently
 
 Removing the `base-*` skills deleted the `WORKFLOW_BASE_BRANCH` knob but not the **three
@@ -1396,3 +1469,68 @@ found blockers the other missed, every single round, with stable specialisation 
 assertion mechanics, one on premise and cross-lane consequence. Neither was ever redundant.
 Two reviewers agreeing is one verification if they ran the same check; these ran different ones.
 
+
+## Narrow the callee's parameter to its TRUE read-set before hoisting a call above a gate (2026-08-14, MON-1 plan review, 3 rounds)
+
+Round 1 of the review found that a retry path was starved by loop position: an early `continue`
+for a null owner sat above the block that re-arms an operator alert, so an owner-less business
+silenced the alert forever. The fix was to hoist the anchor read and the re-arm above the owner
+gate, and I verified the premise properly — I read the callee and confirmed it needs no owner.
+
+Round 2 found the defect **inside that fix**. The verification was sound and the contradiction
+sat one level below it, in the TYPE rather than the behaviour: the hoisted call still passed a
+row type that *required* `owner_user_id`, at a site deliberately placed above the only
+trustworthy source of one. An implementer would have filled it with the stale fetch-time value
+that the re-derivation exists to prevent, and nothing would have complained.
+
+**The remedy generalises past this bug.** Before repositioning a call site above a gate, split
+the callee's parameter down to the fields it actually reads. Here that produced two types where
+there had been one: a narrow visibility row (goal id, business id, title, deleted-at) and the
+fat row that still carries owner, automation id, archived flag. The narrow type then
+*mechanically proves* the hoist — a future tail that grows an owner dependency fails to COMPILE
+at the hoisted site instead of silently reading stale attribution. The rationale stops being a
+comment somebody must keep believing and becomes the compiler's.
+
+**Why the weaker version fails.** "I checked that the callee doesn't need X" is a claim about
+today's body of the function, discharged by reading. The type is a claim about every future
+body, discharged by the build. When you move code across a guard, you need the second kind.
+
+**The falsifier:** if the callee genuinely reads every field of the fat type, there is no split
+to make and the hoist has to be justified some other way — usually by moving the gate instead of
+the call.
+
+## When a defect's signature is an ABORT, every negative assertion downstream is vacuous (2026-08-14, MON-1 Phase C)
+
+A mutation guard aimed at a branch whose failure mode is a thrown error took three attempts, and
+the first two were wrong in ways that both looked correct while running green.
+
+- **Attempt 1 measured the wrong EFFECT.** It asserted "no second anchor row is written". That
+  stays true under the mutation — but only because a partial UNIQUE index is what prevents the
+  duplicate. The defect was the throw, not the row. The index was doing the test's work.
+- **Attempt 2 measured the right effect on the wrong POPULATION.** It used rows that earlier
+  `continue`s in the same loop prevent from ever reaching the mutated line. A test aimed outside
+  the observable population is green by construction, and reads exactly like a passing guard.
+- **Attempt 3 worked** by finding the one row state that passes every earlier gate and then hits
+  the mutated check, and by asserting something POSITIVE: the row must ADVANCE to a terminal
+  state. Not "nothing bad happened" — "this specific thing still happened".
+
+**Two rules, and the second is the one that generalises.** When the bug aborts a code path,
+"nothing happened" is *what the bug causes*, so at least one assertion must be positive. And
+before writing any mutation guard, trace WHICH ROWS REACH THE MUTATED LINE — earlier `continue`s
+and guards define the observable population, and that population is usually much smaller than
+the table you seeded.
+
+I reported attempt 2 as closed and had to retract it. The retraction is the point: both wrong
+versions passed, and running them told me nothing.
+
+## A fixture must never CONTAIN the text an assertion matches on (2026-08-14, MON-1 Phase C)
+
+An invariant test asserted that the word "prior" appears in an operator alert if and only if the
+source owner differs from the current one. It failed — on the fixture. The seeded wallet address
+was `0xprior-smart-wallet`, which contains the very word the assertion searched for, so the
+"must not appear" leg could never pass no matter what the code did.
+
+Cheap to fix, and worth stating as a rule because the failure points at the code and the bug is
+in the test data: **when an assertion matches on a substring, no fixture value in scope may
+contain that substring.** The same shape hides the opposite failure — a fixture that contains
+the token makes a broken implementation look correct — and that direction is silent.

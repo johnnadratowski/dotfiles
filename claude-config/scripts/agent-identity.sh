@@ -32,13 +32,23 @@ role_of() {  # KEEP IN SYNC — see header.
     tr -dc 'A-Za-z0-9_-' < "$HOME/.claude/agents/$name.role"
     return 0
   fi
-  case "$name" in
-    team-lead|*-team-lead|team-lead-*)                               echo team-lead ;;
-    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo team-lead ;;
-    test|*-test|*-test-*|test-*)                                     echo test ;;
-    review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)          echo review ;;
-    *)                                                               echo feature ;;
-  esac
+  # ONE classifier, not a third drifted copy: this block used to carry its own patterns
+  # (missing tester/reviewer/planner entirely) with a `feature` fallback — so it called a
+  # tester a lane agent. Delegate to fleet_resolve_role, the same source register-agent.sh
+  # uses; the minimal fallback below only exists for a machine with no _fleet.sh at all.
+  command -v fleet_resolve_role >/dev/null 2>&1 || . "$HOME/.claude/scripts/_fleet.sh" 2>/dev/null || true
+  if command -v fleet_resolve_role >/dev/null 2>&1; then
+    fleet_resolve_role "$name"
+  else
+    case "$name" in
+      team-lead|*-team-lead|team-lead-*)                               echo team-lead ;;
+      cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) echo team-lead ;;
+      test|tester|*-test|*-test-*|test-*|tester-*|*-tester)            echo test ;;
+      review|reviewer|rev|rev-*|*-rev|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*|planner|plan-*|*-reviewer|*-planner) echo review ;;
+      *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])                          echo feature ;;
+      *)                                                               echo other ;;
+    esac
+  fi
 }
 
 case "${1:-tag}" in

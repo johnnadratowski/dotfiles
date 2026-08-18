@@ -286,6 +286,89 @@ hasnt "a subagent does NOT borrow its spawner's status" "PR #124 staged, parked"
 hasnt "a subagent does NOT borrow its spawner's activity" "active"                "$sub"
 rm -f "$FAKEHOME/.claude/running-agents/rev-a.$$" "$FAKEHOME/.claude/agents/rev-a.cwd"
 
+# ── the lane is not the agent: WORKFLOW_AGENT_NAME_PREFIX ────────────────────────────────
+# A lane is a DIRECTORY (`foxtrot`). The agent occupying it is a MACHINE-GLOBAL registry name
+# that the prefix prepends to (`g-foxtrot`) — the registry collides between fleets on one
+# machine, the lane cannot. Reading the registry under the LANE's name reported every lane of
+# a fully live fleet as `down` AND re-emitted each of its agents as a ticketless `subagent`
+# row: one outage rendered twice, in two places. Both halves are asserted here, because
+# fixing only the first leaves a duplicate row per lane.
+#
+# EVERY FIXTURE BELOW IS REMOVED AT THE END OF THE SECTION. The lane tally and the --json
+# count are asserted against the five lanes above, both before this point and after it.
+lane foxtrot
+printf 'cwd:%s' "$LANES/foxtrot" > "$FAKEHOME/.claude/running-agents/g-foxtrot.$$"
+busy_now g-foxtrot
+# NO cwd sidecar for g-foxtrot, deliberately: that isolates step 1 (the configured prefix) as
+# the only thing that can resolve this lane, so the assertion cannot be satisfied by the
+# cwd-based fallback and silently stop testing the prefix.
+runp(){ WORKFLOW_AGENT_NAME_PREFIX=g- run "$@"; }
+rowp(){ WORKFLOW_AGENT_NAME_PREFIX=g- row "$@"; }
+
+has  "a prefixed agent occupies its lane"                    " busy "     "$(rowp foxtrot)"
+has  "…and the row is still keyed by the LANE name"          " foxtrot "  "$(rowp foxtrot)"
+hasnt "…so the agent name never replaces it in the table"    "g-foxtrot"  "$(runp)"
+hasnt "…and the lane agent is not ALSO emitted as a subagent" "1 subagent" "$(runp | head -1)"
+has  "with no prefix configured the same lane reads down"    " down "     "$(row foxtrot)"
+
+# STEP 3 — attribution with NO prefix configured anywhere. The agent's cwd sidecar names this
+# lane and its name ends in the lane name, which is enough to attribute it. This is what keeps
+# the view working when the main-clone workflow.config cannot be derived (a WORKFLOW_LANES_DIR
+# pointing outside the clone).
+lane golf
+printf 'cwd:%s' "$LANES/golf" > "$FAKEHOME/.claude/running-agents/z-golf.$$"
+printf '%s' "$LANES/golf" > "$FAKEHOME/.claude/agents/z-golf.cwd"
+busy_now z-golf
+has  "an unconfigured prefix still attributes via the cwd sidecar" " busy "  "$(row golf)"
+hasnt "…and that agent is not double-emitted either"              "z-golf"  "$(run)"
+
+# THE SUFFIX TEST IS LOAD-BEARING, and this is the case that proves it. A subagent runs in its
+# SPAWNER's cwd, so a lane path is the sidecar value of the lane agent AND of every subagent
+# the lane has spawned. Skipping the sweep on "cwd is a lane path" would delete this row —
+# retiring the standing tester and every task subagent from the view to fix the lane rows.
+printf 'cwd:%s' "$LANES/golf" > "$FAKEHOME/.claude/running-agents/g-tester.$$"
+printf '%s' "$LANES/golf" > "$FAKEHOME/.claude/agents/g-tester.cwd"
+has  "a subagent sharing a lane's cwd is still listed"   "g-tester"  "$(run)"
+has  "…as a subagent, not as that lane"                  " golf "    "$(row golf)"
+rm -f "$FAKEHOME/.claude/running-agents/g-tester.$$" "$FAKEHOME/.claude/agents/g-tester.cwd"
+
+# LIVENESS IS PER CANDIDATE, not resolved-then-checked. A stale prefixed entry left by a dead
+# agent must not win the lane and report `down` over a live unprefixed one — the failure would
+# look exactly like the bug this section fixes, from the opposite direction.
+lane hotel
+printf 'cwd:%s' "$LANES/hotel" > "$FAKEHOME/.claude/running-agents/g-hotel.$DEADPID"
+live hotel; busy_now hotel
+has "a stale prefixed entry does not beat a live bare one" " busy " "$(rowp hotel)"
+
+# THE PREFIX COMES FROM THE MAIN CLONE'S workflow.config when the env does not carry it, which
+# is how the live fleet actually resolves it — no agent exports the variable. The derivation is
+# `<lanes>/../..`, so the fixture has to be clone-shaped rather than a bare directory.
+CLONE="$T/clone"; L2="$CLONE/.claude/worktrees"
+mkdir -p "$L2/india/.claude" "$CLONE/.claude"
+printf 'WORKFLOW_AGENT_NAME_PREFIX="q-"\n' > "$CLONE/.claude/workflow.config"
+printf 'cwd:%s' "$L2/india" > "$FAKEHOME/.claude/running-agents/q-india.$$"
+busy_now q-india
+c2="$(HOME="$FAKEHOME" COLUMNS=160 bash "$SCRIPT" --once --lanes-dir "$L2" </dev/null 2>&1)"
+# ROW-SCOPED, not whole-output. Asserted against the full table this reads ` busy ` off ANY
+# row — and the registry still holds the live subagents from the sections above, so it passed
+# against a deliberately broken build that rendered india itself as `down`. The assertion has
+# to name the row it is about.
+rowin(){ printf '%s\n' "$2" | awk -v n="$1" '
+  $0 ~ ("^ +[^ ]+ +" n " ") {show=1; print; next}
+  show && /^      / {print; next}
+  show {show=0}'; }
+has   "the prefix is read from the main clone's workflow.config" " busy "  "$(rowin india "$c2")"
+hasnt "…and that agent is not emitted as a subagent as well"     "q-india" "$c2"
+rm -f "$FAKEHOME/.claude/running-agents/q-india.$$" "$FAKEHOME/.claude/agent-busy/q-india"
+rm -rf "$CLONE"
+
+rm -rf "$LANES/foxtrot" "$LANES/golf" "$LANES/hotel"
+rm -f "$FAKEHOME/.claude/running-agents/g-foxtrot.$$" "$FAKEHOME/.claude/agent-busy/g-foxtrot" \
+      "$FAKEHOME/.claude/running-agents/z-golf.$$" "$FAKEHOME/.claude/agents/z-golf.cwd" \
+      "$FAKEHOME/.claude/agent-busy/z-golf" \
+      "$FAKEHOME/.claude/running-agents/g-hotel.$DEADPID" \
+      "$FAKEHOME/.claude/running-agents/hotel.$$" "$FAKEHOME/.claude/agent-busy/hotel"
+
 # ── 4ME, the fleet-level list ────────────────────────────────────────────────────────────
 # It belongs to no lane, so it renders last under its own heading. The label and the row
 # NUMBERS are one contract with the TUI: the user says "4me 2", and a reference that resolves

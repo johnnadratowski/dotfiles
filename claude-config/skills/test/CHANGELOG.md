@@ -1,5 +1,13 @@
 # base-test — changelog
 
+- **7.0.0** — (2026-08-14) **Serialization by ownership.** In a fleet, a lane no longer runs
+  or spawns a tester at all: it `SendMessage`s the STANDING TESTER teammate
+  (`<prefix>tester`), which owns Docker / the shared DB / the fixed ports fleet-wide and runs
+  requests serially. The machine-wide `e2e-lock.sh` is RETIRED and deleted — it covered E2E
+  only, while the integration suite that actually caused the cross-lane collisions took no
+  lock. Solo sessions still spawn the tester subagent in place. Request shape:
+  `worktree:` / `suite:` / `range:`.
+
 - **5.0.0** — (DX-jn-cc-005) **Tester-subagent cutover.** The gate catalog, gotchas,
   and report shape moved into `.claude/agents/tester.md`; this skill is now an
   invocation stub. The `<target>`/`--pr <n>` checkout choreography is RETIRED — the

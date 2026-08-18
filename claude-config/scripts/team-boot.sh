@@ -20,8 +20,14 @@
 #                           to do; --session picks (and CREATES if absent) the tmux session
 #                           the fleet lives in, so two fleets can occupy two terminal windows
 #                           instead of interleaving windows in one. Default: $WORKFLOW_FLEET_SESSION,
-#                           else `main`.
+#                           else `main`. Teammates do NOT land in that session: see
+#                           WORKFLOW_TEAMMATE_MODE at the launch line (default `detached` —
+#                           their windows go to the separate `claude-swarm` session).
 #   spawn-prompt <lane>   print the exact prompt to hand the lead for one teammate
+#   spawn-prompt --tester print the boot prompt for the STANDING TESTER (`<prefix>tester`),
+#                         the one agent in the fleet allowed to run DB-bound / fixed-port
+#                         suites. It has no lane: it parks in the main clone and cd's into
+#                         whichever worktree asks. Versioned here so the prompt has one source.
 #   status       what is actually alive, verified against processes not config
 #   down         stop every agent occupying a lane (idle-gated)
 #   stop-engines [lane…]  stop the monocle review engines a lane owns; default all
@@ -88,7 +94,19 @@ elif [ -z "$LANES_DIR" ] && [ -r "$_LANES_PTR" ]; then
   [ -d "$LANES_DIR" ] || LANES_DIR=""
 fi
 SESSION="${WORKFLOW_FLEET_SESSION:-main}"
+# LEAD_LANE is a PATH/tmux identity (LANES_DIR/team-lead, the window name) and is never
+# prefixed. LEAD_AGENT is the REGISTRY identity — what the lead is launched as and what
+# the registry, the sidecars and SendMessage know it by. Keeping one variable for both
+# is what breaks under WORKFLOW_AGENT_NAME_PREFIX: the lead would register as
+# `g-team-lead` while `verify` looked for `running-agents/team-lead.*` and reported a
+# live lead as unregistered.
 LEAD_LANE="team-lead"
+AGENT_PREFIX="${WORKFLOW_AGENT_NAME_PREFIX:-}"
+if [ -z "$AGENT_PREFIX" ] && [ -n "$LANES_DIR" ]; then
+  _tb_cfg="$(dirname "$(dirname "$LANES_DIR")")/.claude/workflow.config"
+  [ -r "$_tb_cfg" ] && AGENT_PREFIX="$(sed -n 's/^WORKFLOW_AGENT_NAME_PREFIX="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$_tb_cfg" | tail -1)"
+fi
+LEAD_AGENT="${AGENT_PREFIX}${LEAD_LANE}"
 
 die() { echo "team-boot: $*" >&2; exit 1; }
 
@@ -339,7 +357,50 @@ cmd_boot() {
   # off for good reason: the single-repo, zero-config user is correctly bound by the launch dir
   # and would be regressed into a mandatory ritual. The danger lives only where agents move
   # between worktrees, which is exactly here.
-  local launch="MONOCLE_REQUIRE_SET_REPO=1 claude --teammate-mode tmux --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_LANE"
+  # WHERE TEAMMATES' TUIs GO — WORKFLOW_TEAMMATE_MODE, set on the LEAD because teammates
+  # inherit the lead's environment and the harness decides this once, at the lead's startup.
+  #
+  #   detached    (default) each teammate gets a window in the SEPARATE tmux session
+  #               `claude-swarm`, not in the fleet session. The fleet windows stay free for
+  #               a human's own use, and a teammate is still a real process — which is what
+  #               every piece of fleet machinery is built on.
+  #   native      the old behaviour: teammates split panes inside the lead's own window.
+  #   in-process  no teammate processes at all. READ THE WARNING BELOW BEFORE PICKING THIS.
+  #
+  # HOW `detached` IS ACHIEVED, since there is no flag for it. Verified by reading the
+  # 2.1.232 binary: `--teammate-mode` accepts auto|tmux|iterm2|in-process, and with `tmux`
+  # the backend registry branches on ONE thing — `isInsideTmux()`, which is literally
+  # `!!process.env.TMUX`. Inside tmux it splits the lead's window ("running inside tmux
+  # session"); outside it, it creates/reuses a detached session named `claude-swarm` and
+  # gives each teammate a window there ("external session mode"). So `env -u TMUX` on the
+  # LEAD's launch — and nothing else — moves every teammate out of the fleet session. The
+  # lead itself does not move: it is still the process in this pane, still attachable
+  # exactly where it was. Attach to a teammate's TUI with `tmux attach -t claude-swarm`
+  # (or `tmux switch-client -t claude-swarm`) when you want to watch one.
+  #
+  # WHY NOT in-process, given it is the flag that literally means "no panes": an in-process
+  # teammate is a TASK INSIDE THE LEAD'S PROCESS, not a process. It therefore has no pid, and
+  # the UDS attach socket is `<runtime dir>/cc-socks/<pid>.sock` — per PROCESS. No pid, no
+  # socket, no way in. It also fires no SessionStart, so register-agent.sh never runs: no
+  # registry entry, no role doc, no `.role` sidecar. And `status`/`down`/fleet-status resolve
+  # agents by PROCESS CWD, so a fleet of in-process teammates reads as an empty fleet. It is
+  # a real option — it is simply a different fleet, and this machinery is not it.
+  # Like AGENT_PREFIX above: honour the env, else the PROJECT's workflow.config — the
+  # project owns this presentation choice (goals runs in-process per John 2026-08-14).
+  local tm_mode="${WORKFLOW_TEAMMATE_MODE:-}"
+  if [ -z "$tm_mode" ] && [ -n "$LANES_DIR" ]; then
+    local _tb_cfg2="$(dirname "$(dirname "$LANES_DIR")")/.claude/workflow.config"
+    [ -r "$_tb_cfg2" ] && tm_mode="$(sed -n 's/^WORKFLOW_TEAMMATE_MODE="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$_tb_cfg2" | tail -1)"
+  fi
+  tm_mode="${tm_mode:-detached}"
+  local launch_env="MONOCLE_REQUIRE_SET_REPO=1" tm_flag="--teammate-mode tmux"
+  case "$tm_mode" in
+    detached)   launch_env="env -u TMUX $launch_env" ;;
+    native)     ;;
+    in-process) tm_flag="--teammate-mode in-process" ;;
+    *) die "WORKFLOW_TEAMMATE_MODE must be detached|native|in-process (got '$tm_mode')" ;;
+  esac
+  local launch="$launch_env claude $tm_flag --permission-mode auto --allow-dangerously-skip-permissions --name $LEAD_AGENT"
   # CONTINUITY: a relaunched lead resumes ITS OWN conversation. Without this a shutdown/boot
   # cycle read as amnesia — the lead came back knowing nothing of the work it had just been
   # doing, which is the whole reason the cycle exists.
@@ -410,7 +471,8 @@ cmd_boot() {
 # writes in the meantime, but a teammate that never enters is simply stuck — so the
 # instruction leads, and it is unambiguous.
 cmd_spawn_prompt() {
-  local name="${1:-}"; [ -n "$name" ] || die "spawn-prompt needs a lane name"
+  local name="${1:-}"; [ -n "$name" ] || die "spawn-prompt needs a lane name (or --tester)"
+  case "$name" in --tester|tester) cmd_tester_prompt; return ;; esac
   local p; p="$(lane_path "$name")"
   [ -d "$p" ] || die "no lane at $p"
   # The agent's own short lane label, interpolated so the example in the prompt is the agent's
@@ -420,9 +482,14 @@ cmd_spawn_prompt() {
   local label="$name"
   command -v fleet_lane_display_name >/dev/null 2>&1 &&
     label="$(fleet_lane_display_name "$name" 2>/dev/null || printf '%s' "$name")"
+  # The lane name is the PATH and the BRANCH; the agent name is the REGISTRY identity the
+  # lead spawns it under and the address its report must go to. Under a name prefix these
+  # differ, and the prompt needs both — an unprefixed reply address is a report nobody
+  # receives, which is the exact failure the last paragraph of this prompt warns about.
+  local agent="${AGENT_PREFIX}${name}"
   cat <<EOF
 --- hand this to the lead, verbatim, as the spawn prompt for '$name' ---
-You are teammate \`$name\`, working lane $name.
+You are teammate \`$agent\`, working lane $name.
 
 FIRST, before anything else: call EnterWorktree with
   path: "$p"
@@ -459,6 +526,16 @@ every time (no \`--continue\` exists for you: the lead creates you through the A
 and a CLI relaunch would put you outside its team and make you unaddressable). Your
 continuity is on disk instead. Read it, in this order:
 
+  cat .claude/HANDOFF.md          # predecessor's handoff — may be absent. Its claims are
+                                  # LEADS, not facts: verify each against the tree/Linear
+                                  # before acting on it (a handoff has asserted false state
+                                  # before). STALENESS CHECK: compare its mtime against
+                                  # \`git log -1 --format=%cI\` and the newest transcript
+                                  # activity — a handoff OLDER than either predates later
+                                  # work; trust the newer evidence and say so. Read it
+                                  # WHOLE, then DELETE it in the same turn — never head/grep
+                                  # it, and never delete before the entire file is in
+                                  # context. A stale handoff is worse than none.
   cat .claude/current-work        # <ID>\\t<url> per Linear issue left In Progress — may be empty
   git log --oneline -5            # what you last landed on this branch
   git status --short              # what you left uncommitted
@@ -521,10 +598,109 @@ branch or whose issue it is about. Ticket last, so it stays greppable and clicka
 prefix on the first line of any message you send asking for a decision — including the one
 that tells the lead you are blocked.
 
-Report with SendMessage to \`team-lead\`: your lane, your branch, and either the issue you
+Report with SendMessage to \`$LEAD_AGENT\`: your lane, your branch, and either the issue you
 are resuming or "no work in flight" — then stand by. **Your plain output is not visible to
 the lead** — a report you merely print is a report nobody receives, which is exactly how
 two teammates came up looking like they had ignored this instruction.
+--- end ---
+EOF
+}
+
+# THE STANDING TESTER's boot prompt. Versioned here, beside the lane prompt, for the same
+# reason that one is: the /staff skill hands it to the lead verbatim, and a prompt improvised
+# per staffing is a contract nobody can diff.
+#
+# IT HAS NO LANE, AND THAT IS THE DESIGN. Tests run IN PLACE against a lane's tree, so a
+# tester with a worktree of its own would have to copy or check out someone else's branch —
+# exactly the git mutation the tester definition forbids. So it parks in the main clone and
+# `cd`s into whichever worktree asks. It is still a teammate (the lead spawns it, SendMessage
+# addresses it); it simply never calls EnterWorktree.
+#
+# lane-guard is not in its way: the hook only matches Edit|Write|NotebookEdit, and with no
+# `$LANES_DIR/<its name>` directory it exits 0 for this agent. Bash is not hooked at all, so
+# running a lane's test commands from outside that lane is unguarded and always was.
+cmd_tester_prompt() {
+  local agent="${AGENT_PREFIX}tester"
+  # LANES_DIR is <main clone>/.claude/worktrees, so two dirnames give the clone. This is the
+  # tester's home: the one checkout that is nobody's lane.
+  local clone; clone="$(dirname "$(dirname "$LANES_DIR")")"
+  [ -d "$clone" ] || die "cannot resolve the main clone from $LANES_DIR"
+  cat <<EOF
+--- hand this to the lead, verbatim, as the spawn prompt for the standing tester ---
+You are \`$agent\`, the fleet's STANDING TEST AGENT. You are a teammate, and you are the
+only agent in this fleet permitted to run anything that touches Docker, the shared test
+database, or a fixed host port.
+
+FIRST: do NOT call EnterWorktree. Ever. You have no lane and no branch of your own — you
+park in the MAIN CLONE and visit other people's trees:
+
+    $clone
+
+Confirm with a single command: pwd && git rev-parse --abbrev-ref HEAD
+
+Every request names a worktree; you enter it with \`cd\` inside a Bash call, per command.
+Never by moving yourself, and never by checking anything out.
+
+You do NOT bind Monocle and you never open a review — you have no diff of your own.
+
+WHY YOU EXIST — SERIALIZATION BY OWNERSHIP, NOT BY LOCK.
+
+The integration and E2E stacks bind FIXED machine resources: one \`goals-test-postgres\`
+container on :5434, \`goals-test-redis\` on :6380, server :3100, UI :3101. Worse, a run's
+teardown stops the shared container AND Docker Desktop itself, so a second lane's run dies
+mid-suite with an error that looks like its own bug. That collided three times in one day.
+
+The old answer was a machine-wide lock file every worktree had to remember to take. The new
+answer is you. Because you are the ONLY runner, there is nothing left to serialize against —
+provided you run ONE request at a time. That is the whole invariant, and it is yours alone
+to keep.
+
+Lanes keep running the DB-free gates themselves (format, lint, typecheck, unit). Everything
+else — server integration, Playwright E2E, and the full sweep — comes to you.
+
+THE REQUEST PROTOCOL. A lane sends you:
+
+    worktree: <absolute path>            # required
+    suite:    unit | integration | full  # required
+    range:    <base>..HEAD               # optional, for the missing-tests advisory
+
+- A field missing or ambiguous ⇒ ASK the requester. Never guess a worktree.
+- A \`worktree\` that is not a directory, or not a git worktree of $clone ⇒ refuse, say why,
+  and do not substitute one you think they meant.
+- \`suite: unit\` is legitimate but tell them once: those gates are DB-free and they can run
+  them in place without waiting behind your queue.
+
+ONE AT A TIME, IN ARRIVAL ORDER. Acknowledge each request when it lands — with its queue
+position — then run them strictly FIFO. Never start a second sweep while one is running,
+and never interleave two worktrees' Docker phases: that is precisely the failure you exist
+to prevent. If a request arrives mid-sweep, say "queued behind <lane>" and let it wait.
+
+HOW YOU RUN. The gate catalog is \`.claude/agents/tester.md\` **in the worktree you are
+testing** — read it there, not from memory, because it is versioned with that branch. It
+holds the gate table, the direnv rule, the G-16 read-only recipe and the known gotchas. Its
+hard rules are yours: in place, against whatever is checked out (uncommitted work included),
+ZERO git mutations, ZERO source edits.
+
+    suite: unit         the DB-free gates only
+    suite: integration  \`pnpm --filter goals test:integration\` (needs Docker + the stack)
+    suite: full         the whole catalog, ending in \`pnpm test:e2e\`
+
+Between requests, leave Docker up. Do not stop containers "to be tidy" — the next request in
+your queue will only have to start them again, and stopping Docker Desktop is the exact blast
+radius that made a lock necessary in the first place.
+
+REPORTING. SendMessage the RESULT to the lane that asked — the byte-exact verdict line, and
+every failure with its gate, its \`file:line\` and a short log excerpt. Always state what ran
+and what was skipped, and why: a silently skipped gate is a false PASS. **On FAIL, CC
+\`$LEAD_AGENT\`** with the one-line summary, so the lead sees a red branch without polling.
+On PASS, the requester alone is enough.
+
+You never fix anything. The author fixes and asks you to re-run; a re-run is a new request
+and takes its turn in the queue like any other.
+
+Report with SendMessage to \`$LEAD_AGENT\` once you are up: that you are parked in the main
+clone, and that your queue is empty. **Your plain output is not visible to anyone** — a
+report you merely print is a report nobody receives.
 --- end ---
 EOF
 }
@@ -677,7 +853,7 @@ cmd_verify() {
   echo "== fleet verify =="
 
   # 1. The lead: registered, and its window first.
-  if ls "$HOME/.claude/running-agents/$LEAD_LANE".* >/dev/null 2>&1; then
+  if ls "$HOME/.claude/running-agents/$LEAD_AGENT".* >/dev/null 2>&1; then
     echo "  ok    lead registered"
   else
     echo "  FAIL  lead NOT registered — its tab will sort last and the panel reads it as down"
@@ -738,6 +914,10 @@ usage: team-boot.sh <verb>
                          teammates (N lanes, default all) — the lead must do the spawning or
                          they are unaddressable
   spawn-prompt <lane>    the exact prompt to hand the lead for one teammate
+  spawn-prompt --tester  the boot prompt for the standing tester (no lane; parks in the
+                         main clone and cd's into whichever worktree asks). It is the ONLY
+                         agent that runs Docker/DB/fixed-port suites — ownership replaces
+                         the retired machine-wide e2e lock.
   down [--force] [--dry-run]
                          stop agents occupying lanes. Skips BUSY (fail-closed: anything
                          indeterminate counts as busy) and never targets itself. The

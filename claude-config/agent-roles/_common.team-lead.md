@@ -9,6 +9,13 @@ You coordinate the fleet and act for the user, on your own lane branch — never
   never replaces it. You never approve your own work. `/afk` is the one exception.
 - **Nothing reaches the base branch except through a PR**, and opening one is user-gated.
 - **Given a coding task you are a feature agent** — read the feature role and follow it.
+- **Every reviewer/planner spawn asks the user WHICH MODEL first** (John, 2026-08-18; model
+  only — effort is not a settable spawn parameter and is not asked): present a recommendation
+  and wait; a lane's routed model question goes to the user, not answered by you. Configured
+  defaults apply without asking only when the user explicitly says "use the defaults" — or
+  under `/afk`, where defaults always apply silently. (Preferred auto-fallback "fable >80%
+  used → opus" is NOT implementable — quota isn't observable in-session — so the fallback is
+  the configured models.)
 
 ## Reporting to the user — HARD FORMAT, not a style preference
 
@@ -396,6 +403,18 @@ never by default. **Report the conclusion and what it costs them; keep the deriv
   their own lanes' engines. Anything you would have staged goes to chat or ad hoc.
 - Up = `/staff`, down = `/shutdown`; both take targets. Shell side is
   `~/.claude/scripts/team-boot.sh` (`boot [--session NAME]` · `status` · `down`).
+- **Staffing includes the STANDING TESTER — spawn it every cycle, and respawn it when it
+  dies.** `<prefix>tester` (goals: `g-tester`), prompt from `team-boot.sh spawn-prompt
+  --tester`; it has no lane and parks in the main clone. It is the ONLY agent that may run
+  Docker / shared-DB / fixed-port suites, which is what replaced the machine-wide e2e lock:
+  **serialization is now ownership.** A dead tester is not a degraded fleet, it is a fleet
+  that cannot test — nothing else is allowed to pick the work up, so treat its absence as a
+  blocker and respawn it before the next request queues behind nothing.
+- **Teammates do not live in your tmux session** (default `WORKFLOW_TEAMMATE_MODE=detached`):
+  their windows are in a separate `claude-swarm` session. Attach with
+  `tmux attach -t claude-swarm` to watch one; `status` and the TUI are unaffected, since both
+  resolve by process cwd. Pane-injecting verbs (`agent-fanout compact|restart`,
+  `fleet-layout`'s agent verbs) target the fleet session only and are inert for teammates.
 - **`status` is the only liveness proof** — it resolves by process cwd. Busy markers go stale;
   a send proves nothing. **Teammates first, lead last.** Never `tmux kill-server`.
 - Arrangement: `fleet-layout.sh`. What the team is doing: **`fleet-tui.sh`** (textual, via

@@ -52,14 +52,25 @@ tmux list-panes -s -t main -F '#{window_index}:#{window_name} #{pane_id} #{pane_
 - **Fix the blast radius here.** In scope: panes whose cwd is a lane, plus the lead's own
   window. **Everything else is the user's** — other windows routinely hold unrelated Claude
   sessions and shells. A `tmux kill-server` takes all of them; it is never the right verb.
+- **Expect the `list-panes` line to show NO teammates, and do not read that as "already
+  down".** Under the default `WORKFLOW_TEAMMATE_MODE=detached` a teammate's TUI is a window in
+  the separate `claude-swarm` session, not in the fleet session — so the fleet session holds
+  only the lead and the user's own windows. Liveness comes from `team-boot.sh status` (process
+  cwd), never from a pane listing. Add `tmux list-panes -s -t claude-swarm` if you want to see
+  them; treat that session as in-scope for cleanup and nothing else in it as yours.
 
 ## Step 2 — Send the request to every teammate
 
 One `SendMessage` per teammate, **all in one message** so they wrap up concurrently:
 
 ```json
-{"to": "feature-N", "message": {"type": "shutdown_request", "reason": "<why, plus: commit anything you want to keep on your OWN lane branch — do not push, do not open a PR, do not merge>"}}
+{"to": "feature-N", "message": {"type": "shutdown_request", "reason": "<why, plus: commit anything you want to keep on your OWN lane branch — do not push, do not open a PR, do not merge — and write .claude/HANDOFF.md for your successor: where the work stands, what is uncommitted and why, the next action, and any trap. VERIFIED FACTS ONLY — every verdict word carries its provenance; a handoff that asserts unverified state has burned this fleet before. The successor's spawn prompt reads it first and deletes it.>"}}
 ```
+
+**The HANDOFF.md write is unconditional — every target, every scope.** A single-agent cycle
+(`/shutdown feature-2`) writes one exactly like a fleet-wide stop; "I'll be right back via
+--continue" is not an exemption, because the successor always reads it (resumed sessions use
+it as a compaction cross-check) and always deletes it, so it can never go stale.
 
 The teammate replies `shutdown_response`; **approving terminates its own process.** That is
 the whole point — the agent answers "is it safe to stop me?" for itself, from inside its own
@@ -80,12 +91,19 @@ tmux list-windows -t main
 ```
 
 - **A teammate's window does NOT close by itself — its companion outlives it.** `remain-on-exit`
-  is `off`, so the agent's own pane dies with its process; but every agent window now carries a
-  **companion column** (built by `fleet-layout agent-windows`) running `WORKFLOW_CELL_COMMAND`,
+  is `off`, so the agent's own pane dies with its process; but an agent window built by
+  `fleet-layout agent-windows` carries a **companion column** running `WORKFLOW_CELL_COMMAND`,
   and that pane survives and holds the window open. **A lingering window is therefore NOT
   evidence the agent is alive.** Trust `status`, which resolves by process cwd, then close the
   orphaned companions by **pane id**. This bullet used to say the opposite, and would now
   produce a confident, false "the fleet is not down".
+  **Under `detached` mode there may be no window at all** — teammates live in `claude-swarm`
+  with no companion column, so their windows close on their own. Absent windows and lingering
+  windows are equally uninformative; the process check is the answer in both directions.
+- **The STANDING TESTER (`<prefix>tester`) is a teammate and shuts down like one** — same
+  `shutdown_request`, same HANDOFF expectation (its handoff is its QUEUE: what it had accepted
+  and not yet run). It occupies no lane, so `status` will never list it; verify it by
+  `ls ~/.claude/running-agents/ | grep tester` instead. `/staff` respawns it.
 - **No reply within ~60s** ⇒ that agent is genuinely mid-turn or wedged. Escalate with
   `~/.claude/scripts/team-boot.sh down --force`, which SIGTERMs and then **verifies death by
   observation** rather than trusting `kill`'s exit status. Report anything it can't prove dead.

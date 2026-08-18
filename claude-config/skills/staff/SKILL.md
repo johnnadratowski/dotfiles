@@ -1,6 +1,6 @@
 ---
 name: staff
-description: Spin up agents into lanes — spawn a teammate per lane, VERIFY each one actually entered its own worktree (not the lead's), and place them in their own tmux windows via the remembered layout. Handles one lane or the whole fleet, and refuses to double-staff an occupied lane. Use for "spin up an agent", "start feature-2", "staff the fleet", "add two more agents", "bring the team up".
+description: Spin up agents into lanes — spawn a teammate per lane plus the standing tester, and VERIFY each one actually entered its own worktree (not the lead's). Handles one lane or the whole fleet, and refuses to double-staff an occupied lane. Use for "spin up an agent", "start feature-2", "staff the fleet", "add two more agents", "bring the team up".
 ---
 
 # staff — put agents in lanes, and prove they landed
@@ -89,9 +89,12 @@ Get each prompt verbatim and spawn them **all in one message** so they boot conc
 ~/.claude/scripts/team-boot.sh spawn-prompt <lane>
 ```
 
-Agent tool, **background** (the default), `name` = the lane name exactly. The name is
-load-bearing twice over: `SendMessage` addresses it, and the `SessionStart` hook picks the
-role doc from it.
+Agent tool, **background** (the default), `name` = **the AGENT name: the project's
+`WORKFLOW_AGENT_NAME_PREFIX` + the lane name** (goals: `g-feature-1`, not `feature-1`; with
+no prefix configured they coincide). The spawn prompt's own first line names the agent — use
+exactly that. The name is load-bearing twice over: `SendMessage` addresses it (an unprefixed
+spawn would register prefixed via the hook while the lead addresses the bare name it thinks
+it spawned — reports into the void), and the `SessionStart` hook picks the role doc from it.
 
 > **The prompt's first instruction must stay first.** It is `EnterWorktree` with the absolute
 > lane path, because a teammate cannot be launched into a directory — there is no cwd
@@ -128,6 +131,29 @@ role doc from it.
 >   against `WORKFLOW_LANES_DIR` (`~/.claude/fleet.env`) before reaching for bypass. Bypass
 >   would paper over a misconfigured fleet, and the whole fleet inherits it.
 
+## Step 2b — Spawn the STANDING TESTER. A fleet without it cannot test at all.
+
+```bash
+~/.claude/scripts/team-boot.sh spawn-prompt --tester
+```
+
+Same Agent-tool spawn as a lane teammate, `name` = the prefix + `tester` (goals: `g-tester`).
+Include it in the **same message** as the lane spawns.
+
+- **It gets no lane and must not enter one.** Its prompt's first instruction is the opposite
+  of a lane agent's: *do NOT call `EnterWorktree`*. It parks in the main clone and `cd`s into
+  whichever worktree asks — because tests run **in place** against a lane's tree, and a tester
+  with a worktree of its own could only test it by checking someone else's branch out, which
+  is the one thing the tester contract forbids.
+- **Therefore step 3's proof does not apply to it.** No lane will ever show its pid. Confirm
+  it instead by its own report (parked in the main clone, queue empty) and by
+  `ls ~/.claude/running-agents/ | grep tester`.
+- **It is the ONLY agent permitted to run Docker / shared-DB / fixed-port suites** — server
+  integration and Playwright E2E. That ownership is what replaced the machine-wide e2e lock:
+  one runner means nothing to serialize against. Lanes keep the DB-free gates.
+- **Respawn it whenever it dies.** Nothing else may pick the work up, so a fleet whose tester
+  is gone is blocked, not merely slower.
+
 ## Step 3 — Verify each one actually landed (the reason this exists)
 
 A spawn returning is not an agent in its lane. Poll until each target lane shows a pid:
@@ -145,23 +171,23 @@ for i in $(seq 1 20); do ~/.claude/scripts/team-boot.sh status; sleep 3; done   
 - **Report a partial result honestly.** Three of four landing is a three-agent fleet, not a
   four-agent one with a caveat.
 
-## Step 4 — Place them in their own windows
+## Step 4 — Placement: there is nothing to place
 
-Teammates spawn as **split panes in the lead's window**; they are lane agents, so they belong
-in windows of their own.
+**Retired.** Teammates no longer appear in the fleet's tmux session at all: the lead launches
+with `WORKFLOW_TEAMMATE_MODE=detached`, which puts every teammate's TUI in a separate
+`claude-swarm` session. Nothing is squeezed, nothing needs breaking out, and the fleet
+session's windows stay free for a human's own use. Running a layout verb here would restructure
+the user's windows for no reason.
 
-```bash
-~/.claude/scripts/fleet-layout.sh reapply
-```
-
-`reapply` restores the last mode you chose (`~/.claude/fleet-layout-mode`) rather than
-imposing one, which is what stops each new agent from silently degrading the arrangement.
-It also ends in `agent-windows`, which is what repairs the two things staffing breaks: a
-teammate arrives as a lone full-width pane with no companion column, and the lead's own chat
-is left squeezed — tmux keeps the surviving panes' geometry when the spawned panes are broken
-out, which once cut the lead to 62 columns of 208.
-Pass an explicit `single` / `dual` / `wide` only if the user names one. Pane ids survive
-`break-pane`, so routing follows the pane id, not the window.
+- **To watch a teammate**, attach its session (`tmux attach -t claude-swarm`, or
+  `tmux switch-client -t claude-swarm` from inside tmux) — or reach its prompt over its UDS
+  socket, which is why teammates stayed real processes instead of going in-process.
+- **Verification is unaffected**: `status`, `verify` and the TUI all resolve by process cwd,
+  never by pane.
+- **If this fleet is running `WORKFLOW_TEAMMATE_MODE=native`** (teammates split into the lead's
+  window — the pre-2026-08-14 behaviour), then run `~/.claude/scripts/fleet-layout.sh reapply`
+  here: it restores the remembered mode and ends in `agent-windows`, which repairs the lone
+  full-width pane with no companion column and the lead's squeezed chat.
 
 ## Step 4b — Verify every teammate bound Monocle to its own lane
 
@@ -196,6 +222,13 @@ repo identity when no review is loaded, so it cannot tell a bound agent from an 
 `MONOCLE_REQUIRE_SET_REPO=1` refusing an unbound call is the backstop.
 
 ## Step 4c — Apply the configured effort level and model
+
+> **Check the script exists before you promise this step.** As of 2026-08-14 there is no
+> `agent-tune.sh` anywhere on this machine (`find ~/git/goals-onchain ~/git/dotfiles -name
+> agent-tune.sh` → nothing), so on this fleet the step is dead and the knobs below are unapplied.
+> It is also **pane-typing machinery**: under `WORKFLOW_TEAMMATE_MODE=detached` a teammate's
+> pane lives in the `claude-swarm` session, so any revival must target that session, not the
+> fleet's. Say the level was not applied rather than reporting a step you did not run.
 
 Teammates boot at the machine-global level, which is rarely the level you want for every lane.
 Apply the project's configured values once the panes exist:

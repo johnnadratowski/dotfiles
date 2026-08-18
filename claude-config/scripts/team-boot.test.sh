@@ -316,7 +316,7 @@ INFLEET='TMUX=/fake/sock TMUX_PANE=%7;'
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 has   "boot: the pane id is asked of new-window itself"        "$log" "-P -F #{pane_id}"
-has   "boot: …and the lead is typed into exactly that pane"    "$log" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
+has   "boot: …and the lead is typed into exactly that pane"    "$log" "send-keys -t %99 -l env -u TMUX MONOCLE_REQUIRE_SET_REPO=1 claude"
 hasnt "boot: …never into one resolved by window name"          "$log" "-t %1"
 has   "boot: the window opens in the lane, not where boot ran" "$log" "-c $LEADP"
 
@@ -341,7 +341,7 @@ has "boot from a pane outside the fleet session: a window is created" "$log" "ne
 bootlib "$BOOTL" "$TSTUB; _boot_request_team() { :; }; $INFLEET cmd_boot --with-team" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 has "boot --with-team: takes its own window even inside the fleet session" "$log" "new-window"
-has "boot --with-team: …so the lead is typed there, not into the caller's" "$log" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
+has "boot --with-team: …so the lead is typed there, not into the caller's" "$log" "send-keys -t %99 -l env -u TMUX MONOCLE_REQUIRE_SET_REPO=1 claude"
 
 echo
 echo "cmd_boot — the lead comes back to its own conversation"
@@ -372,10 +372,45 @@ echo "cmd_boot — --fresh opts out of resuming"
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot --fresh" >/dev/null 2>&1
 log="$(cat "$TMUXLOG")"
 hasnt "boot --fresh: the transcript is ignored"  "$log" "--continue"
-has   "boot --fresh: …but the lead still launches" "$log" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
+has   "boot --fresh: …but the lead still launches" "$log" "send-keys -t %99 -l env -u TMUX MONOCLE_REQUIRE_SET_REPO=1 claude"
 
 err="$(bootlib "$EMPTY" 'cmd_boot --fresh --bogus' 2>&1 >/dev/null)"
 has "boot: --fresh does not swallow the next flag" "$err" "unknown flag: --bogus"
+
+echo
+echo "cmd_boot — WORKFLOW_TEAMMATE_MODE decides where teammates' TUIs land"
+
+# The knob is set on the LEAD because teammates inherit the lead's environment and the harness
+# resolves the backend once, at the lead's startup. `detached` has no flag of its own: the
+# harness branches on `!!process.env.TMUX` (verified in the 2.1.232 binary), so blinding the
+# lead to tmux is what sends teammate windows to its own `claude-swarm` session instead of
+# splitting this one. That is why the assertion below is on `env -u TMUX` and not on a flag —
+# a regression that drops the prefix looks like nothing at all until four panes appear.
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has "boot: the default is detached — the lead is blinded to tmux" "$log" "-l env -u TMUX MONOCLE"
+has "boot: …and teammates still use the tmux backend"             "$log" "--teammate-mode tmux"
+
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX WORKFLOW_TEAMMATE_MODE=native; cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+hasnt "boot: native leaves the lead inside tmux"        "$log" "env -u TMUX"
+has   "boot: …so teammates split the lead's own window" "$log" "--teammate-mode tmux"
+
+: > "$TMUXLOG"
+bootlib "$BOOTL" "$TSTUB; $NOTMUX WORKFLOW_TEAMMATE_MODE=in-process; cmd_boot" >/dev/null 2>&1
+log="$(cat "$TMUXLOG")"
+has   "boot: in-process asks the harness for no panes at all" "$log" "--teammate-mode in-process"
+hasnt "boot: …and does not also blind the lead to tmux"       "$log" "env -u TMUX"
+
+# FAIL LOUD ON A TYPO. An unrecognised value silently falling through to `tmux` would put the
+# whole fleet in the mode the user was trying to leave, and nothing would say so.
+: > "$TMUXLOG"
+err="$(bootlib "$BOOTL" "$TSTUB; $NOTMUX WORKFLOW_TEAMMATE_MODE=detatched; cmd_boot" 2>&1 >/dev/null)"; rc=$?
+eq  "boot: an unknown teammate mode is fatal"   "1" "$rc"
+has "boot: …and names the bad value"            "$err" "detatched"
+eq  "boot: …and no lead was launched"           "" "$(grep -c 'send-keys' "$TMUXLOG" | tr -d ' ' | sed 's/^0$//')"
 
 echo
 echo "cmd_boot — --debug is passed through to the harness"
@@ -463,14 +498,14 @@ has "boot: …with the lane pinned, not the pane's transient cwd" "$log" "--cwd=
 # ORDER IS THE POINT: the split resizes the pane, and a TUI started at its final size never
 # reflows. Both calls succeed in either order, so only position can catch a regression.
 ok "boot: …before the launch keystrokes, not after" \
-   '[ "$(printf %s "$log" | grep -n "fleet-layout lead-window" | cut -d: -f1)" -lt "$(printf %s "$log" | grep -n "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude" | cut -d: -f1)" ]'
+   '[ "$(printf %s "$log" | grep -n "fleet-layout lead-window" | cut -d: -f1)" -lt "$(printf %s "$log" | grep -n "send-keys -t %99 -l env -u TMUX MONOCLE_REQUIRE_SET_REPO=1 claude" | cut -d: -f1)" ]'
 
 # A machine without fleet-layout gets a bare-pane lead — which is what every boot produced
 # before this existed — and must still boot.
 export WORKFLOW_FLEET_LAYOUT_SH="$TMP/does-not-exist.sh"
 : > "$TMUXLOG"
 bootlib "$BOOTL" "$TSTUB; $NOTMUX cmd_boot" >/dev/null 2>&1
-has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "send-keys -t %99 -l MONOCLE_REQUIRE_SET_REPO=1 claude"
+has "boot: a missing fleet-layout never blocks the lead" "$(cat "$TMUXLOG")" "send-keys -t %99 -l env -u TMUX MONOCLE_REQUIRE_SET_REPO=1 claude"
 unset WORKFLOW_FLEET_LAYOUT_SH
 
 echo

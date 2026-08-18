@@ -79,7 +79,7 @@ The **task** is the work the user set up before invoking this (the current branc
 - **Do not ask questions unless genuinely blocked.** A decision with a sensible default is NOT a blocker: pick the default, **log it in the journal**, and keep going. The user reviews your choices on return.
 - **Blocking question** = something whose answer changes the implementation and has no safe default. When you hit one: implement everything you safely can around it, run it through review + test anyway, then **stop before the final merge** and present the accumulated questions (see Finish → blocked path).
 - **Stay in scope.** Implement the task; do not opportunistically refactor unrelated code while unsupervised.
-- **Never** `--no-verify`, `--amend` published commits, force-push, run destructive git, or broadcast/fan-out to fleet agents. Reviewer/tester subagent spawns are local and always sanctioned.
+- **Never** `--no-verify`, `--amend` published commits, force-push, run destructive git, or broadcast/fan-out to fleet agents. Reviewer subagent spawns are local and always sanctioned; the TEST step is a request to the standing tester (one `SendMessage`, not a broadcast) — or a local tester spawn when there is no standing tester.
 - **Never touch origin** except the `git push` of the lane's own branch that runs ONLY when `--push` was passed. Never push `master`. Never open or merge a PR.
 
 ## Step 0 — Plan echo + journal
@@ -162,16 +162,21 @@ Repeat up to `--max-rounds`:
 
 ## Test loop
 
-1. **Spawn the `.claude/agents/tester.md`** (Agent tool, `subagent_type: tester`,
-   name `tester`, `model` = `WORKFLOW_TEST_MODEL` when set, else omit — the journaled value
-   from the `_config.sh` resolution at start-up) **in place on the
-   branch**: "Full sweep. Changed range: `origin/master..<BRANCH>`." The tester makes zero
-   git/source mutations and serializes the Docker-bound phase through the machine-wide
-   e2e lock (`.claude/scripts/e2e-lock.sh`) itself — long waits on the lock are normal
-   when another worktree is mid-sweep; its report says what ran.
+1. **Ask the STANDING TESTER** — `SendMessage` `<prefix>tester` (goals: `g-tester`) with
+   `worktree:` (this lane's absolute path), `suite: full`, `range: origin/master..<BRANCH>`.
+   It is the only agent allowed to touch Docker, the shared DB or the fixed test ports, and it
+   runs requests serially, so **a queued request is normal, not stuck** — ask it for its queue
+   position rather than running anything yourself. Do NOT spawn a tester subagent and do NOT
+   run `pnpm test:e2e` / `test:integration` in the lane; a second runner is the exact failure
+   that ownership removed (the old `e2e-lock.sh` is retired). **No standing tester on this
+   machine** (solo run) ⇒ fall back to spawning `.claude/agents/tester.md` in place (Agent
+   tool, `subagent_type: tester`, name `tester`, `model` = `WORKFLOW_TEST_MODEL` when set,
+   else omit — the journaled value from the `_config.sh` resolution at start-up): "Full sweep.
+   Changed range: `origin/master..<BRANCH>`."
 2. **Parse:** PASS → exit. Failures → **you** fix them (the tester reports; you own the
-   code), commit, then re-run — resume the same `tester` (SendMessage: "re-run the failed
-   gates") or respawn for a full sweep. Append results to the journal.
+   code), commit, then re-run — a re-run is a new request to the standing tester (or, solo,
+   resume the same `tester` via SendMessage: "re-run the failed gates"). Append results to the
+   journal.
 3. Cap at `--max-rounds`; on non-convergence Stop and surface.
 
 (Quick local gates — `pnpm types:check`, the relevant `pnpm test:unit`, lint — are fine to run yourself in-place before spawning, to avoid burning a full-sweep round on something you can catch locally.)
@@ -202,6 +207,12 @@ Once review is green **and** tests pass:
 ## Notify + final report
 
 The user is AFK, so actively get their attention, then leave a complete written report.
+
+**When the user returns** (their first real message after the run, whatever it says): run
+`/catchup` FIRST — before answering anything else — so they land on the standard
+what-changed + your-queue view with the run's accumulated questions in it. (John,
+2026-08-18: "make '/afk' always run a '/catchup' when I'm back".) The final report below is
+still written at the run's end; the catchup is how it reaches the returning user.
 
 ```bash
 # macOS native desktop notification (always available); also ring the bell.

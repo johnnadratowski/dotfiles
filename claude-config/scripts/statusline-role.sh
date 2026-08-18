@@ -61,17 +61,22 @@ fi
 role=""
 [ -f "$HOME/.claude/agents/$self.role" ] && role="$(tr -dc 'A-Za-z0-9_-' < "$HOME/.claude/agents/$self.role")"
 if [ -z "$role" ]; then
-  case "$self" in
-    team-lead|*-team-lead|team-lead-*)                               role=team-lead ;;
-    cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) role=team-lead ;;
-    test|*-test|*-test-*|test-*)                                     role=test ;;
-    review|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*)          role=review ;;
-    # `feature` is the LANE SHAPE (a trailing -<digits>), not the leftovers — the same
-    # discriminator fleet_resolve_role applies. A task-named subagent ("goal-machinery") has
-    # no lane and must not wear a lane's label.
-    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])                          role=feature ;;
-    *)                                                               role=other ;;
-  esac
+  # ONE classifier — this was the third drifted copy of the role patterns (it did not know
+  # tester/reviewer/planner). Delegate to fleet_resolve_role; minimal fallback only for a
+  # machine with no _fleet.sh.
+  command -v fleet_resolve_role >/dev/null 2>&1 || . "$HOME/.claude/scripts/_fleet.sh" 2>/dev/null || true
+  if command -v fleet_resolve_role >/dev/null 2>&1; then
+    role="$(fleet_resolve_role "$self")"
+  else
+    case "$self" in
+      team-lead|*-team-lead|team-lead-*)                               role=team-lead ;;
+      cc|coordinator|*-cc|*-coordinator|*-coordinator-*|coordinator-*) role=team-lead ;;
+      test|tester|*-test|*-test-*|test-*|tester-*|*-tester)            role=test ;;
+      review|reviewer|rev|rev-*|*-rev|pr|*-pr|*-pr-*|pr-*|*-review|*-review-*|review-*|planner|plan-*|*-reviewer|*-planner) role=review ;;
+      *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9])                          role=feature ;;
+      *)                                                               role=other ;;
+    esac
+  fi
 fi
 
 # Short label.

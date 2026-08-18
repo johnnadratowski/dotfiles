@@ -93,6 +93,14 @@ FL_HOME_SESSION="${WORKFLOW_FLEET_HOME_SESSION:-main}"
 # lacks would print `command not found` in every agent's pane AND be invisible to boot's report.
 # A project that wants one sets WORKFLOW_CELL_COMMAND in its workflow.config (e.g. "monocle").
 FL_CELL_COMMAND="${WORKFLOW_CELL_COMMAND:-}"
+# Which pane holds the cell's MAIN (left, larger) position. `claude` is the historical shape.
+# `companion` swaps the seeded tool pane into the main slot, so the tool (e.g. monocle) is
+# prominent and the agent's chat + the cwd shell stack in the side column. The lead's window
+# is exempt — its chat is always main (John, 2026-08-17).
+FL_CELL_MAIN="${WORKFLOW_CELL_MAIN:-claude}"
+# 0 ⇒ the LEAD's window gets no cwd shell pane: only the companion (the fleet TUI) sits to the
+# right of the chat. Lane agents keep their cwd pane regardless.
+FL_LEAD_CWD_PANE="${WORKFLOW_LEAD_CWD_PANE:-1}"
 # The LEAD's companion is a plain cmdline by default (John, 2026-08-13): the lead stages no
 # reviews of its own — review traffic lives in the LANE agents' engines — so seeding the
 # fleet's cell command there spent the pane on a tool the lead never reads. A project that
@@ -279,6 +287,19 @@ _sess_of_win(){ tmux list-windows -a -F "#{window_id} #{session_name}" 2>/dev/nu
 # `…/myproject` is a literal prefix of `…/myproject-2`. Longest cwd wins; an exact
 # tie means two live agents share a cwd, and the pane is given to NEITHER — joining it twice
 # would leave a half-built cell.
+#
+# ⚠ KNOWN, UNFIXED (2026-08-14): THIS SEAM IS SERVER-WIDE, NOT FLEET-SESSION-SCOPED.
+# `_pane_rows` is `tmux list-panes -a`, so every session on the server is in scope, and
+# nothing here filters on $FL_HOME_SESSION / $FL_EXT_SESSION. That was harmless while every
+# agent lived in the fleet session. It is not harmless now: with
+# WORKFLOW_TEAMMATE_MODE=detached (team-boot.sh's default since 2026-08-14) teammates get
+# windows in the harness's own `claude-swarm` session, and they still appear in the registry
+# with a real pane token — so the restructuring verbs will attribute them and reach into that
+# session (companion columns, window normalisation, and plausibly break/join moves).
+# NOT changed here on purpose: a session filter belongs at this one seam but it changes what
+# every verb sees, and this file's suite must be run by hand. Until then: do not run the agent
+# verbs (`single`/`dual`/`wide`/`reapply`/`agent-windows`) while the fleet is detached.
+# `lead-window` is unaffected — it takes an explicit pane id from team-boot.
 attribute_panes() {
   local agents panes name token acwd sess claude_sess
   agents="$(live_agents)"
@@ -337,7 +358,16 @@ _window_label() {
   case "$(_role_of "$1")" in
     team-lead|coordinator) printf 'team-lead'; return ;;
   esac
-  fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1"
+  # Lane windows carry the lane NUMBER beside the label — `vii (1)` — so the tab maps to a
+  # lane at a glance (John, 2026-08-14). Display only; the number is derived from the name's
+  # trailing digits, the same shape every lane verb keys on, and non-lane names are unchanged.
+  local _wl_label _wl_num
+  _wl_label="$(fleet_lane_display_name "$1" 2>/dev/null || printf '%s' "$1")"
+  _wl_num="${1##*-}"
+  case "$_wl_num" in
+    ''|*[!0-9]*) printf '%s' "$_wl_label" ;;
+    *) printf '%s (%s)' "$_wl_label" "$_wl_num" ;;
+  esac
 }
 
 # The window label for a set of resident agent names. Pure — this is the whole naming rule.
@@ -358,14 +388,16 @@ window_name_from_names() {
   # window you learned to look for keeps moving. Task-scoped roles are dropped whenever a
   # durable one is present; a window of ONLY subagents still names itself after them, since
   # then there is nothing else to call it.
-  durable="$(printf '%s\n' "$roles" | grep -vxE 'review|test' || true)"
+  # `other` is a task-named subagent — no lane, therefore never durable. Omitting it here
+  # let a subagent stacked under the lead rename its window `other-team-lead` (2026-08-14).
+  durable="$(printf '%s\n' "$roles" | grep -vxE 'review|test|other' || true)"
   local residents
   residents="$#"
   if [ -n "$durable" ]; then
     roles="$durable"
     # Recount the AGENTS that survive the filter, not the names we were handed: a lead hosting
     # two reviewers is one resident, and `_plural` would otherwise make its window `team-leads`.
-    residents="$(for n in "$@"; do _role_of "$n"; done | grep -vxE 'review|test' | grep -c .)"
+    residents="$(for n in "$@"; do _role_of "$n"; done | grep -vxE 'review|test|other' | grep -c .)"
   fi
 
   count="$(printf '%s\n' "$roles" | grep -c .)"
@@ -446,6 +478,7 @@ EOF
       target="$base"
     fi
     cur="$(tmux display-message -p -t "$win" '#{window_name}' 2>/dev/null)"
+    [ "$cur" = "g-subagents" ] && continue      # John 2026-08-18: subagent parking window keeps its name
     [ "$cur" = "$target" ] && continue          # idempotent: already correct
     _rw set-window-option -t "$win" automatic-rename off
     _rw rename-window -t "$win" "$target"
@@ -588,6 +621,9 @@ build_cell() {
     _rw join-pane -v -s "$comp" -t "$prev" || { _join_failed "$comp" "$prev"; return 1; }
     prev="$comp"
   done
+  # TOOL-MAIN cells: the top companion (the tool) takes the main slot, claude moves to the side
+  # column. Position swap only — pane ids, and so agent identity, are untouched.
+  [ "$FL_CELL_MAIN" = "companion" ] && _rw swap-pane -d -s "$claude" -t "$first" 2>/dev/null || true
   _balance_cell "$claude" "$first" || true          # cosmetic; never fail the build on it
 }
 
@@ -598,7 +634,7 @@ build_cell() {
 # two 100-col cells, `-x 60%` asks for 120 cols, clamps the companion column to 1, AND steals
 # 22 cols from the neighbouring cell. Resize in absolute columns instead. (DX-jn-cc-002)
 _balance_cell() {
-  local claude="$1" comp="$2" cw fw cell target
+  local claude="$1" comp="$2" cw fw cell target main cl fl
   [ "$DRY_RUN" = "1" ] && { printf 'tmux resize-pane -t %s -x <60%%%% of cell, in columns>\n' "$claude"; return 0; }
   cw="$(_pane_width "$claude")"; fw="$(_pane_width "$comp")"
   case "${cw}:${fw}" in ''|*[!0-9:]*|:*|*:) return 0 ;; esac
@@ -606,7 +642,14 @@ _balance_cell() {
   target=$(( cell * 60 / 100 ))
   # Leave the split alone when either side would be unusably narrow.
   [ "$target" -ge 20 ] && [ $(( cell - target - 1 )) -ge 15 ] || return 0
-  tmux resize-pane -t "$claude" -x "$target" 2>/dev/null || true
+  # The 60% share belongs to the MAIN POSITION (leftmost), not to the claude pane: in
+  # tool-main cells (FL_CELL_MAIN=companion) the swap has put the tool on the left, and
+  # resizing claude to 60% here would silently undo that on every balance pass.
+  cl="$(tmux display-message -p -t "$claude" '#{pane_left}' 2>/dev/null)"
+  fl="$(tmux display-message -p -t "$comp"   '#{pane_left}' 2>/dev/null)"
+  main="$claude"
+  case "${cl}:${fl}" in *[!0-9:]*|:*|*:|'') ;; *) [ "$fl" -lt "$cl" ] && main="$comp" ;; esac
+  tmux resize-pane -t "$main" -x "$target" 2>/dev/null || true
 }
 
 # Re-balance the cells this script builds. Run after a client attaches (the window resizes to
@@ -1391,12 +1434,28 @@ _even_companion_heights() {  # <lead-pane>
 }
 
 _normalize_agent_window() {  # <lead-pane>
-  local p="$1" win w h
+  local p="$1" win w h role pleft
   win="$(_win_of "$p")"; [ -n "$win" ] || return 0
   w="$(tmux display-message -p -t "$win" '#{window_width}'  2>/dev/null)"
   h="$(tmux display-message -p -t "$win" '#{window_height}' 2>/dev/null)"
   case "$w" in ''|*[!0-9]*) return 0 ;; esac
   case "$h" in ''|*[!0-9]*) return 0 ;; esac
+  role="$(fleet_resolve_role "$(basename "$(tmux display-message -p -t "$p" '#{pane_current_path}' 2>/dev/null)")")"
+  pleft="$(tmux display-message -p -t "$p" '#{pane_left}' 2>/dev/null)"
+  case "$pleft" in ''|*[!0-9]*) pleft=0 ;; esac
+
+  # TOOL-MAIN, ALREADY CONVERGED: in FL_CELL_MAIN=companion a lane agent's claude pane is not
+  # leftmost — the tool holds the main slot. Every builder below assumes claude-left (the seed
+  # targets "top-right", which in this state IS the claude pane), so re-running them would key
+  # the tool command into the agent's chat. Keep the ratio and stop.
+  if [ "$FL_CELL_MAIN" = "companion" ] && [ "$role" != "team-lead" ] && [ "$pleft" -gt 0 ]; then
+    if [ "$(tmux list-panes -t "$win" -F x 2>/dev/null | wc -l | tr -d ' ')" -gt 1 ]; then
+      _rw resize-pane -t "$p" -x "$(( w * (100 - FL_LEAD_WIDTH_PCT) / 100 ))" 2>/dev/null || true
+      _rw resize-pane -t "$p" -y "$(( h * FL_LEAD_HEIGHT_PCT / 100 ))" 2>/dev/null || true
+    fi
+    return 0
+  fi
+
   # Width first: it decides the left column. Only widen when there IS another column, otherwise
   # tmux clamps and the call is noise.
   if [ "$(tmux list-panes -t "$win" -F x 2>/dev/null | wc -l | tr -d ' ')" -gt 1 ]; then
@@ -1406,10 +1465,27 @@ _normalize_agent_window() {  # <lead-pane>
   _seed_companion "$win" "$p"
   # Seed FIRST, then split beneath it: _seed_companion picks the top-right pane, and adding the
   # shell before it would just mean seeding into a pane that is about to be halved.
-  _ensure_cwd_pane "$p"
+  # The LEAD can opt out of the cwd shell (FL_LEAD_CWD_PANE=0): only the TUI beside the chat.
+  if [ "$role" = "team-lead" ] && [ "$FL_LEAD_CWD_PANE" = "0" ]; then :; else
+    _ensure_cwd_pane "$p"
+  fi
   # Last, so both column panes exist and get an equal share. This is what stops the shell from
   # arriving as a sliver — `split-window -v` halves the companion, and nothing rebalances after.
   _even_companion_heights "$p"
+
+  # TOOL-MAIN FLIP (lane agents only): swap the seeded companion into the main slot, then hand
+  # the claude pane the side column's share. swap-pane exchanges positions, not pane ids, so
+  # the agent's identity (its pane id) is untouched.
+  if [ "$FL_CELL_MAIN" = "companion" ] && [ "$role" != "team-lead" ]; then
+    local comp
+    comp="$(tmux list-panes -t "$win" -F '#{pane_id} #{pane_left} #{pane_top}' 2>/dev/null \
+      | awk -v lead="$p" '$1!=lead { if ($2>bl || ($2==bl && $3<bt)) { bl=$2; bt=$3; id=$1 } } END{ if (id) print id }')"
+    if [ -n "$comp" ]; then
+      _rw swap-pane -d -s "$p" -t "$comp" 2>/dev/null || true
+      _rw resize-pane -t "$p" -x "$(( w * (100 - FL_LEAD_WIDTH_PCT) / 100 ))" 2>/dev/null || true
+      _rw resize-pane -t "$p" -y "$(( h * FL_LEAD_HEIGHT_PCT / 100 ))" 2>/dev/null || true
+    fi
+  fi
 }
 
 # Is <pane> sitting at a bare shell prompt — i.e. running nothing of its own?
