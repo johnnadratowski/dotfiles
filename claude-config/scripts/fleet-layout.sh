@@ -457,6 +457,11 @@ EOF
     [ -n "$names" ] || continue
     # shellcheck disable=SC2086
     base="$(window_name_from_names $names)"
+    # THE LEAD'S WINDOW IS ALWAYS `team-lead`, whoever else is visiting. The durable-role
+    # filter already drops review/test/other, but any future role class that slips past it
+    # would rename the one window the human always looks for (other-team-lead, 2026-08-14;
+    # John's condition on keeping the labeler, 2026-08-18). Pin it outright.
+    case " $names " in *team-lead*) base="team-lead" ;; esac
     [ -n "$base" ] || continue
     # shellcheck disable=SC2086
     rows="${rows}${win}${TAB}$(_min_agent_num $names)${TAB}${base}
