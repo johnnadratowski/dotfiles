@@ -64,6 +64,7 @@ import fleet_tui  # noqa: E402
 # someone retunes the constant, while asserting about a boundary that no longer exists.
 from _agent_facts import ASK_KINDS, STATUS_STALE_AFTER, ask_deferral  # noqa: E402
 from rich.cells import cell_len  # noqa: E402
+from textual.events import Key  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
 PASS = FAIL = 0
@@ -1527,6 +1528,112 @@ async def main():
             for _ in range(3):
                 await pilot.pause()
 
+        # ── CTRL+HJKL: MOVE INSIDE THE TUI, THEN HAND OFF TO TMUX AT THE EDGE ───────────
+        # BOTH BRANCHES OF EVERY DIRECTION are asserted, because each alone passes against a
+        # different broken implementation: internal-only never leaves the pane, hand-off-only
+        # never moves between the panels, and either one looks correct from the other's tests.
+        #
+        # `select_pane` is stubbed at the seam. What is under test is that the TUI decides to
+        # hand off and in which direction — that tmux moves a pane is tmux's business, and it
+        # was verified against a real nested client separately.
+        moves = []
+        real_select = fleet_tui.select_pane
+        fleet_tui.select_pane = lambda d: (moves.append(d) or True)
+        try:
+            lanes.focus()
+            await pilot.pause()
+
+            def focused():
+                return next((w.id for w in (app.query_one("#lanes", ListView),
+                                            app.query_one("#fleet", ListView))
+                             if w.has_focus), None)
+
+            await pilot.press("ctrl+j")
+            await pilot.pause()
+            ok("ctrl+j from the FLEET panel moves down into 4ME",
+               focused() == "fleet", focused())
+            ok("…and does NOT leave the pane, because there was somewhere to go",
+               moves == [], moves)
+            await pilot.press("ctrl+k")
+            await pilot.pause()
+            ok("ctrl+k moves back up into FLEET", focused() == "lanes", focused())
+            ok("…still without leaving the pane", moves == [], moves)
+
+            # THE EDGES. Focus must NOT move, and the movement must go to tmux instead.
+            await pilot.press("ctrl+k")
+            await pilot.pause()
+            ok("ctrl+k at the top edge hands the movement to tmux", moves == ["U"], moves)
+            ok("…and leaves focus where it was", focused() == "lanes", focused())
+            moves.clear()
+            app.query_one("#fleet", ListView).focus()
+            await pilot.pause()
+            await pilot.press("ctrl+j")
+            await pilot.pause()
+            ok("ctrl+j at the bottom edge hands the movement to tmux", moves == ["D"], moves)
+            ok("…and leaves focus where it was", focused() == "fleet", focused())
+
+            # LEFT AND RIGHT ALWAYS HAND OFF — the panels are stacked, not columned, so there
+            # is no such thing as an internal horizontal move to try first.
+            moves.clear()
+            await pilot.press("ctrl+l")
+            await pilot.pause()
+            ok("ctrl+l always hands off, there being no panel to its right",
+               moves == ["R"], moves)
+
+            # CTRL+H ARRIVES AS `backspace`, NOT AS A KEY OF ITS OWN. Posted as the real
+            # event — key name plus the 0x08 character tmux forwards — because a pilot press
+            # of "ctrl+h" would synthesise an event the terminal never produces, and the
+            # whole difficulty of this direction is that the byte is shared with Backspace.
+            moves.clear()
+            app.post_message(Key("backspace", "\x08"))
+            await pilot.pause()
+            await pilot.pause()
+            ok("ctrl+h hands off to the left, recognised by its byte", moves == ["L"], moves)
+            # THE NEGATIVE THAT MAKES THAT SAFE. A real Backspace is 0x7F and must not
+            # navigate — binding the key NAME rather than the byte would move the pane every
+            # time the user hit backspace.
+            moves.clear()
+            app.post_message(Key("backspace", "\x7f"))
+            await pilot.pause()
+            await pilot.pause()
+            ok("…and a real Backspace, which shares that key name, does not",
+               moves == [], moves)
+
+            # NEVER SWALLOWED. Every state that cannot move internally still hands off; a key
+            # that does nothing at all is indistinguishable from the terminal eating it.
+            moves.clear()
+            lanes.focus()
+            await pilot.pause()
+            await pilot.press("enter")           # the lane dialog: one region, not two
+            for _ in range(3):
+                await pilot.pause()
+            await pilot.press("ctrl+j")
+            await pilot.pause()
+            ok("with a dialog open the movement goes to tmux rather than nowhere",
+               moves == ["D"], moves)
+            await pilot.press("escape")
+            await pilot.pause()
+
+            moves.clear()
+            app.editing = {"key": "x"}           # as if a knob edit were open
+            await pilot.press("ctrl+j")
+            await pilot.pause()
+            ok("…and so does one arriving mid-edit", moves == ["D"], moves)
+            app.editing = None
+
+            moves.clear()
+            lanes.focus()
+            await pilot.pause()
+            await pilot.press("f")               # fullscreen: the other panel is gone
+            await pilot.pause()
+            await pilot.press("ctrl+j")
+            await pilot.pause()
+            ok("…and so does one with the neighbouring panel hidden", moves == ["D"], moves)
+            await pilot.press("f")
+            await pilot.pause()
+        finally:
+            fleet_tui.select_pane = real_select
+
         # ── the trailer format itself ────────────────────────────────────────────────────
         # Driven against the readers directly: this is where the FILE FORMAT is decided, and
         # the lead writes that file by hand, so the edges are what matter.
@@ -2098,6 +2205,78 @@ async def main():
         {"linear_base": "https://linear.app/acme"})
     ok("…and a ticket id inside that path is not linkified inside its own href",
        "[link='file:///tmp/SRV-24.md']/tmp/SRV-24.md[/link]" in _dlg_id, _dlg_id)
+
+    # ── THE NAME TMUX MATCHES THIS PANE BY ──────────────────────────────────────────────
+    # The tmux condition keys off this string, so a change here silently stops the forwarding
+    # rule from ever firing — the feature would simply never be reached, with nothing on
+    # screen to say why. Pinned so that edit cannot be made accidentally on one side only.
+    class _Sink:
+        def __init__(self, tty=True):
+            self.wrote, self._tty = "", tty
+
+        def isatty(self):
+            return self._tty
+
+        def write(self, s):
+            self.wrote += s
+
+        def flush(self):
+            pass
+
+    _real_env = fleet_tui.os.environ
+    try:
+        fleet_tui.os.environ = {"TMUX": "/tmp/tmux-501/default,1,0"}
+        _sink = _Sink()
+        ok("the pane is named with the OSC sequence tmux reads a title from",
+           fleet_tui.set_pane_title(stream=_sink) is True
+           and _sink.wrote == "\033]2;fleet-tui\007", repr(_sink.wrote))
+        # NOT A PIPE. `--json`-style callers and the test harness redirect stdout; an escape
+        # written there is corruption of someone's data, not a title.
+        _pipe = _Sink(tty=False)
+        ok("…and nothing is written when stdout is not a terminal",
+           fleet_tui.set_pane_title(stream=_pipe) is False and _pipe.wrote == "",
+           repr(_pipe.wrote))
+        fleet_tui.os.environ = {}
+        _out = _Sink()
+        ok("…nor outside tmux, where the title would name nothing",
+           fleet_tui.set_pane_title(stream=_out) is False and _out.wrote == "",
+           repr(_out.wrote))
+    finally:
+        fleet_tui.os.environ = _real_env
+
+    # ── THE TMUX HALF OF THE HAND-OFF ───────────────────────────────────────────────────
+    # Driven against the argv, not against tmux: a wrong flag would move the user in the
+    # wrong direction, which is the one failure here that looks like the feature working.
+    _calls = []
+
+    class _Ran:
+        returncode = 0
+
+    _real_run, fleet_tui.subprocess.run = fleet_tui.subprocess.run, \
+        lambda argv, **kw: (_calls.append(argv), _Ran)[1]
+    _real_env = fleet_tui.os.environ
+    try:
+        fleet_tui.os.environ = {"TMUX": "/tmp/tmux-501/default,1,0", "TMUX_PANE": "%42"}
+        ok("each direction becomes tmux's own flag for it, on OUR pane",
+           all(fleet_tui.select_pane(d) for d in ("L", "D", "U", "R"))
+           and _calls == [["tmux", "select-pane", f, "-t", "%42"]
+                          for f in ("-L", "-D", "-U", "-R")], _calls)
+        # A DIRECTION THAT IS NOT ONE cannot become a bare `select-pane`, which would move
+        # the user somewhere they did not ask to go.
+        _calls.clear()
+        ok("…and an unknown direction issues no command at all",
+           fleet_tui.select_pane("X") is False and _calls == [], _calls)
+        # OUTSIDE TMUX THERE IS NOTHING TO HAND OFF TO. Both halves are required: TMUX_PANE
+        # survives in the environment of a process that has left tmux behind.
+        for _env, _why in (({}, "no tmux at all"),
+                           ({"TMUX_PANE": "%42"}, "a stale pane id with no live tmux"),
+                           ({"TMUX": "x"}, "tmux with no pane of our own")):
+            fleet_tui.os.environ = _env
+            _calls.clear()
+            ok("no hand-off with %s" % _why,
+               fleet_tui.select_pane("L") is False and _calls == [], _calls)
+    finally:
+        fleet_tui.subprocess.run, fleet_tui.os.environ = _real_run, _real_env
 
     # ── THE ORDER OF THE AGENT LIST IS FIXED, NOT DISCOVERED (item 7) ────────────────────
     # Driven with the input DELIBERATELY SHUFFLED into the order fleet-status actually

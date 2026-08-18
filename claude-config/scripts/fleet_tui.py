@@ -693,6 +693,69 @@ def monocle_pane(name):
     return ""
 
 
+# ── CTRL+HJKL: ONE MOVEMENT, WHETHER THE NEXT THING IS A PANEL OR A PANE ─────────────────
+# John navigates tmux with ctrl+hjkl under the vim-tmux-navigator contract: the key moves
+# inside the focused APPLICATION first, and only hands off to tmux when there is nothing
+# further in that direction. Before this the TUI was never asked — tmux's root-table binding
+# forwards these keys only to vim-like commands and navigated for everything else, so moving
+# between the FLEET and 4ME panels needed `tab` while moving out of the pane needed ctrl+hjkl.
+# One gesture, two rules, decided by which thing you happened to be looking at.
+#
+# THIS HALF DOES NOT WORK ALONE, AND MUST NOT BE MISTAKEN FOR WORKING. Until the tmux
+# condition is extended to forward these keys to this pane, tmux still swallows them and
+# nothing here is reachable. The two changes ship together; landing the tmux side FIRST would
+# break moving out of the pane entirely, because tmux would stop navigating and this code
+# would not yet exist to do it instead.
+NAV_FLAG = {"L": "-L", "D": "-D", "U": "-U", "R": "-R"}
+
+# THE NAME TMUX WILL MATCH THIS PANE BY, and the reason it is a TITLE rather than a command.
+# The tmux side has to recognise "this pane forwards ctrl+hjkl instead of navigating", and
+# the only thing it can see is `pane_current_command` — which for this app is `uv`, because
+# it is launched through `uv run`. Matching `uv` would forward the keys to EVERY `uv run`
+# pane, and an app that does not implement the hand-off traps the cursor inside it: the same
+# swallowed-key failure this feature exists to remove, just moved somewhere else.
+#
+# `pane_title` is settable and specific. Textual's own `TITLE` does not reach the terminal
+# (measured: the pane title stayed the hostname), so the escape is written directly, before
+# Textual takes the screen — measured to survive its startup.
+TMUX_TITLE = "fleet-tui"
+
+
+def set_pane_title(name=TMUX_TITLE, stream=None):
+    """Name this pane for tmux. Silent no-op anywhere the name could not be used or seen."""
+    stream = stream or sys.stdout
+    if not os.environ.get("TMUX"):
+        return False
+    try:
+        if not stream.isatty():
+            return False
+        stream.write("\033]2;%s\007" % name)
+        stream.flush()
+    except (OSError, ValueError, AttributeError):
+        return False
+    return True
+
+
+def select_pane(direction):
+    """Hand the movement to tmux. False when there is no tmux to hand it to.
+
+    INLINE, NOT ON A WORKER, unlike the monocle jump beside it: that is three round trips
+    plus a config read, this is one, and it sits on the keystroke path where a worker's
+    scheduling delay would be felt as a sticky key. The timeout is the guard instead.
+
+    `TMUX_PANE` rather than tmux's own idea of the current pane: they agree today, and
+    naming the pane we are actually in costs nothing to be certain of.
+    """
+    pane = os.environ.get("TMUX_PANE") or ""
+    if not os.environ.get("TMUX") or not pane or direction not in NAV_FLAG:
+        return False
+    try:
+        return subprocess.run(["tmux", "select-pane", NAV_FLAG[direction], "-t", pane],
+                              capture_output=True, timeout=2).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def focus_pane(pane):
     """Put `pane` in front of the client: window selected, pane selected, zoomed. True on OK.
 
@@ -1723,6 +1786,12 @@ class FleetTUI(App):
         Binding("underscore", "shrink", "", show=False),
         Binding("escape", "unfullscreen", "", show=False),
         Binding("tab", "focus_next", "switch panel", show=False),
+        # ctrl+h is ABSENT FROM THIS LIST ON PURPOSE — see on_key. Textual reports the byte
+        # tmux forwards for it (0x08) as `backspace` with no ctrl+h alias, so there is no
+        # binding to declare; it is separated from a real Backspace (0x7F) by character.
+        Binding("ctrl+j", "nav('D')", "", show=False),
+        Binding("ctrl+k", "nav('U')", "", show=False),
+        Binding("ctrl+l", "nav('R')", "", show=False),
         Binding("j", "cursor_down", "", show=False),
         Binding("k", "cursor_up", "", show=False),
     ]
@@ -2037,6 +2106,65 @@ class FleetTUI(App):
             if w.has_focus:
                 return w
         return self.query_one("#lanes", ListView)
+
+    def on_key(self, event):
+        """CTRL+H, which does not arrive as a key of its own.
+
+        MEASURED, NOT ASSUMED. A probe app fed the four bytes tmux forwards reported
+        `ctrl+j` (with a `newline` alias), `ctrl+k` and `ctrl+l` cleanly — and 0x08 as
+        **`backspace`, carrying no ctrl+h alias at all**. So three of the four are ordinary
+        bindings and the fourth has to be recognised here, by the character: 0x08 is ctrl+h,
+        0x7F is the Backspace key. The same probe confirmed Enter arrives as 0x0D
+        (`enter`/`ctrl+m`), so ctrl+j is NOT the Enter collision it looks like — the two are
+        distinct events and binding one cannot fire the other.
+
+        THE FIELD KEEPS IT WHILE YOU ARE TYPING. During a knob edit the Input has focus and
+        consumes backspace before this handler ever runs, so ctrl+h deletes a character —
+        which is the reflex a vim user brings to a text field anyway.
+
+        A terminal configured to send 0x08 for its Backspace key would navigate instead of
+        deleting. John's does not (measured: 0x7F), and this is the only signal there is —
+        the byte is all that distinguishes them.
+        """
+        if event.key == "backspace" and event.character == "\x08":
+            event.stop()
+            event.prevent_default()
+            self.action_nav("L")
+
+    def _nav_regions(self):
+        """The panels a ctrl-move travels between, top to bottom.
+
+        EMPTY WHILE AN OVERLAY IS UP, and while a panel is fullscreened there is only one.
+        A dialog is a single region: the user opened it to read one thing, and "moving
+        within" it would mean moving inside something they are holding still. Both cases
+        therefore hand straight off to tmux, which is the behaviour that keeps the gesture
+        meaning one thing everywhere.
+        """
+        if self._overlay_owns_keys():
+            return []
+        return [w for wid in ("#lanes", "#fleet")
+                for w in (self.query_one(wid, ListView),) if w.display]
+
+    def action_nav(self, direction):
+        """Move within the TUI if there is somewhere to go; otherwise hand off to tmux.
+
+        NEVER SWALLOWED. Every path that does not move focus inside this app ends in the
+        tmux call — no region in that direction, an overlay open, a panel fullscreened, an
+        edit in progress. A key that silently does nothing is the one failure the user
+        cannot tell from a terminal eating it, and it is indistinguishable from this
+        feature being broken.
+
+        Left and right never move internally because the panels are stacked, not columned.
+        """
+        if self.editing is None and direction in ("U", "D"):
+            regions = self._nav_regions()
+            here = self._focused_list()
+            if here in regions:
+                i = regions.index(here) + (1 if direction == "D" else -1)
+                if 0 <= i < len(regions):
+                    regions[i].focus()
+                    return
+        select_pane(direction)
 
     def action_cursor_down(self):
         if self._ask_scroll("down"):
@@ -3042,4 +3170,5 @@ if __name__ == "__main__":
         every = float(sys.argv[1]) if len(sys.argv) > 1 else 5.0
     except ValueError:
         every = 5.0
+    set_pane_title()
     FleetTUI(interval=every).run()
