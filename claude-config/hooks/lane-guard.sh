@@ -34,12 +34,17 @@ set -u
 # DERIVED, never a project name — this hook lives in dotfiles and runs in every repo, so a
 # hardcoded product path silently measured one product's lanes against another's writes.
 # Unresolvable leaves it empty, which the fail-open contract above already handles.
-_lanes_dir() {
+_clone_root() {
   local common parent
   common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
   [ -n "$common" ] || return 1
   parent="$(dirname "$common")"          # the MAIN CLONE, from any linked worktree
   case "$parent" in ''|'/'|'.') return 1 ;; esac
+  printf '%s' "$parent"
+}
+_lanes_dir() {
+  local parent
+  parent="$(_clone_root)" || return 1
   printf '%s/.claude/worktrees' "$parent"
 }
 # Machine-local layout (see the long note in scripts/_fleet.sh). Sourced DIRECTLY rather than
@@ -50,6 +55,50 @@ _lanes_dir() {
 # exit 0: the guard would be off and nothing would say so.
 [ -r "$HOME/.claude/fleet.env" ] && . "$HOME/.claude/fleet.env"
 LANES_DIR="${WORKFLOW_LANES_DIR:-$(_lanes_dir 2>/dev/null || true)}"
+
+# AGENT NAMES ARE PREFIXED; LANE DIRECTORIES ARE NOT.
+#
+# A project may prefix every agent NAME it registers (goals-onchain sets
+# WORKFLOW_AGENT_NAME_PREFIX="g-") so that several fleets can share this machine's
+# name-keyed stores — ~/.claude/agents/<name>.*, agent-busy/, running-agents/ — without
+# one fleet's cleanup deregistering another's identically-named agent. LANE names are
+# deliberately NOT prefixed: a lane is a directory/branch/tmux-window inside ONE clone and
+# cannot collide. So the live pairing is agent `g-feature-2` living in lane `feature-2`.
+#
+# That split made this guard INERT for the entire fleet the day the prefix rolled out:
+# `$LANES_DIR/g-feature-2` does not exist, every agent looked unprovisioned, and the
+# unknown-name fail-open below fired for all of them — WITHOUT the loud INERT branch, since
+# the lanes dir itself was fine. Silent, fleet-wide, and indistinguishable from protection.
+#
+# Read from the project's config FILES rather than the environment, for the same reason the
+# lanes dir is: a hook's environment is whichever one its claude process was launched with,
+# so a prefix introduced (or changed) after boot would not be visible here. An exported
+# value still wins, matching _config.sh's env-wins contract.
+_config_root() {
+  case "$LANES_DIR" in
+    */.claude/worktrees) printf '%s' "${LANES_DIR%/.claude/worktrees}" ;;
+    *) _clone_root ;;
+  esac
+}
+_agent_name_prefix() {
+  local root
+  if [ -n "${WORKFLOW_AGENT_NAME_PREFIX:-}" ]; then
+    printf '%s' "$WORKFLOW_AGENT_NAME_PREFIX"; return 0
+  fi
+  root="$(_config_root 2>/dev/null || true)"
+  [ -n "$root" ] || return 0
+  # Subshell: the config files are shell snippets, so they neither leak assignments into the
+  # guard nor get to write on its stdout. `set +u` because they are not written for it, and
+  # the committed file is sourced BEFORE the gitignored .local one so per-machine wins —
+  # the same order _config.sh uses.
+  (
+    set +u
+    { [ -r "$root/.claude/workflow.config" ] && . "$root/.claude/workflow.config"
+      [ -r "$root/.claude/workflow.config.local" ] && . "$root/.claude/workflow.config.local"
+    } >/dev/null 2>&1
+    printf '%s' "${WORKFLOW_AGENT_NAME_PREFIX:-}"
+  )
+}
 
 # Walk up the process tree to find the claude process and read its --agent-name.
 # The hook runs as a grandchild (claude -> shell -> this), and the depth is not
@@ -71,6 +120,25 @@ done
 [ -n "$agent_name" ] || exit 0
 
 expected="$LANES_DIR/$agent_name"
+
+# THE RAW NAME IS TRIED FIRST, and the stripped one only as a fallback. Order matters both
+# ways: a fleet with no prefix (names and dirs coincide) is untouched, and a fleet WITH one
+# cannot be made to resolve some other lane, because a directory that literally matches the
+# agent's own name always wins. It also means this fix can never start refusing a write that
+# used to pass: it only ADDS a resolution where there was none, and a write from inside the
+# lane it resolves to is allowed.
+if [ ! -d "$expected" ]; then
+  _prefix="$(_agent_name_prefix)"
+  if [ -n "$_prefix" ]; then
+    case "$agent_name" in
+      # `?*` so a name that is nothing BUT the prefix cannot strip to the lanes dir itself.
+      "$_prefix"?*)
+        _bare="${agent_name#"$_prefix"}"
+        [ -d "$LANES_DIR/$_bare" ] && expected="$LANES_DIR/$_bare"
+        ;;
+    esac
+  fi
+fi
 
 # No lane provisioned under this name: we cannot say where it SHOULD be, so we do
 # not get to say it is in the wrong place.

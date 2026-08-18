@@ -35,11 +35,15 @@ as_teammate() { # as_teammate <name> <cwd> [lanes-dir]
   # `${3-…}`, NOT `${3:-…}`: row 6b passes an explicitly EMPTY lanes dir, and the colon form
   # substitutes the default for empty as well as unset — so that row silently ran against the
   # real $LANES, found the lane, and reported BLOCKED instead of exercising the branch it names.
-  local name="$1" dir="$2" lanes="${3-$LANES}" home="${4:-$HOME}"
+  # `${5-}` is the AGENT NAME PREFIX, and it is passed set-but-EMPTY by default on purpose:
+  # that is the shape the guard sees in production (no exported prefix), so the default rows
+  # exercise the config-FILE lookup rather than the env short-circuit.
+  local name="$1" dir="$2" lanes="${3-$LANES}" home="${4:-$HOME}" prefix="${5-}"
   cat > "$TMP/fake-claude.sh" <<EOF
 #!/bin/bash
 cd "$dir" || exit 99
-HOME="$home" WORKFLOW_LANES_DIR="$lanes" "$GUARD" </dev/null 2>"$TMP/err.txt"
+HOME="$home" WORKFLOW_LANES_DIR="$lanes" WORKFLOW_AGENT_NAME_PREFIX="$prefix" \
+  "$GUARD" </dev/null 2>"$TMP/err.txt"
 EOF
   chmod +x "$TMP/fake-claude.sh"
   /bin/bash "$TMP/fake-claude.sh" --agent-name "$name"
@@ -145,6 +149,69 @@ if grep -q 'INERT' "$TMP/err.txt"; then
 else
   pass=$((pass+1)); echo "  ok   …and stays quiet when only the NAME is unknown"
 fi
+
+# 7 — PREFIXED AGENT NAME, BARE LANE DIRECTORY. The live shape since goals-onchain set
+# WORKFLOW_AGENT_NAME_PREFIX="g-": the agent is `g-feature-2`, its lane is `feature-2`.
+# Measured before the fix: EVERY row in this block exited 0 — the guard resolved
+# `$LANES/g-feature-2`, found nothing, and took row 4's fail-open, silently, for the whole
+# fleet. These rows are the regression pin: they redden if prefix handling is ever dropped.
+as_teammate g-lgt-alpha "$TMP/elsewhere" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+check "PREFIXED name outside its (bare-named) lane is BLOCKED" 2 "$?"
+
+as_teammate g-lgt-alpha "$LANES/lgt-beta" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+check "PREFIXED name sitting in another lane is BLOCKED" 2 "$?"
+
+# The paired positive: the fix must not start refusing CORRECT writes. Four live lane agents
+# depend on this the moment it goes live.
+as_teammate g-lgt-alpha "$LANES/lgt-alpha" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+check "PREFIXED name INSIDE its bare-named lane is allowed" 0 "$?"
+
+as_teammate g-lgt-alpha "$LANES/lgt-alpha/server/models" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+check "PREFIXED name in a subdir of its lane is allowed" 0 "$?"
+
+# The block must name the LANE, not the prefixed agent name, or the remedy it prints is an
+# EnterWorktree path that does not exist.
+as_teammate g-lgt-alpha "$TMP/elsewhere" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+# Matched by SHAPE, not by "$LANES/lgt-alpha": the guard prints the symlink-resolved path
+# (`pwd -P`), so on macOS the fixture's /var/… becomes /private/var/… and a literal compare
+# fails on correct output. The `/lgt-alpha"` tail is what carries the claim — it reddens if
+# the guard ever prints the prefixed name.
+if grep -q 'path: "[^"]*/lgt-alpha"' "$TMP/err.txt"; then
+  pass=$((pass+1)); echo "  ok   …and the remedy names the BARE lane path"
+else
+  fail=$((fail+1)); echo "  FAIL the remedy path is not the bare lane"
+  sed 's/^/       /' "$TMP/err.txt"
+fi
+
+# 7c — a prefix being CONFIGURED must not disturb a name that does not carry it. The raw
+# name is tried first, so an unprefixed agent resolves exactly as it did before.
+as_teammate lgt-alpha "$TMP/elsewhere" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+check "unprefixed name still resolves when a prefix IS configured" 2 "$?"
+
+# 7d — a name that is NOTHING BUT the prefix must not strip to the lanes dir itself, which
+# every lane is inside — i.e. it would allow writes from anywhere in the fleet.
+as_teammate g- "$TMP/elsewhere" "$LANES" "$HOME" "g-" >/dev/null 2>&1
+check "a name that is only the prefix does not resolve to the lanes dir" 0 "$?"
+
+# 8 — THE PREFIX COMES FROM THE PROJECT'S CONFIG FILE, not the environment. That is the only
+# path that runs in production: a hook inherits the environment its claude process was
+# launched with, so a prefix added or changed after boot is invisible there. Rows above pass
+# it via env; if only those existed, the live-shaped lookup would be untested.
+ROOT="$TMP/clone"
+mkdir -p "$ROOT/.claude/worktrees/lgt-gamma" "$ROOT/.claude"
+echo 'WORKFLOW_AGENT_NAME_PREFIX="zz-"' > "$ROOT/.claude/workflow.config"
+as_teammate zz-lgt-gamma "$TMP/elsewhere" "$ROOT/.claude/worktrees" >/dev/null 2>&1
+check "prefix read from workflow.config: outside lane is BLOCKED" 2 "$?"
+as_teammate zz-lgt-gamma "$ROOT/.claude/worktrees/lgt-gamma" "$ROOT/.claude/worktrees" >/dev/null 2>&1
+check "prefix read from workflow.config: inside lane is allowed" 0 "$?"
+
+# 8b — the gitignored per-machine file wins over the committed one, matching _config.sh's
+# sourcing order. Without this, a machine-local prefix would be read as the committed one and
+# the guard would resolve the wrong lane name.
+mkdir -p "$ROOT/.claude/worktrees/lgt-delta"
+echo 'WORKFLOW_AGENT_NAME_PREFIX="yy-"' > "$ROOT/.claude/workflow.config.local"
+as_teammate yy-lgt-delta "$TMP/elsewhere" "$ROOT/.claude/worktrees" >/dev/null 2>&1
+check "workflow.config.local overrides the committed prefix" 2 "$?"
 
 echo
 echo "  passed=$pass failed=$fail"
