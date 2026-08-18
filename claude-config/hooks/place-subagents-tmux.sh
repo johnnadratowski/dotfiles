@@ -30,6 +30,36 @@
 
 set -u
 
+# THE EXECUTABLE, NEVER THE ARGUMENTS. This was `case "$(ps -o command= …)" in *claude*)`,
+# a substring test against the WHOLE command line — so any process whose arguments merely
+# mentioned a claude-ish path was read as a claude session. That is not a corner case on this
+# machine: every agent's scratchpad lives under `/private/tmp/claude-501/…`, so an ordinary
+# `tmux split-window` running anything out of a scratchpad was identified as the window's
+# resident agent, and this hook then relocated every live subagent pane into that window.
+# Measured twice, reproducibly, with four teammate panes moved into a throwaway session.
+#
+# `ps -o comm=` is the executable PATH and nothing else, so no argument can reach this test.
+# Two spellings are legitimate, because the fleet launches claude two ways: the lead gets the
+# `claude` launcher on PATH, and every teammate gets the versioned binary the launcher execs
+# (`~/.local/share/claude/versions/<version>` — whose basename is the VERSION, which is why
+# `pane_current_command` on a teammate pane reads `2.1.233` and a basename test alone would
+# miss all of them).
+claude_exe() {  # claude_exe <executable path> -> 0 when it is a claude session's
+  case "${1:-}" in
+    claude|*/claude) return 0 ;;
+    */claude/versions/*) return 0 ;;
+  esac
+  return 1
+}
+is_claude_pid() { claude_exe "$(ps -o comm= -p "${1:-}" 2>/dev/null)"; }
+
+# SOURCEABLE FOR TEST. Everything above is definitions; everything below acts. The test
+# suite sources this file to drive `claude_exe` against paths it can fabricate, which is the
+# only way to assert the NEGATIVE case — that a command merely mentioning `claude` is not a
+# claude process — without standing up a real agent to prove it.
+[ "${PLACE_SUBAGENTS_LIB:-}" = "1" ] && return 0
+
+
 LOG="$HOME/.claude/debug/place-subagents.log"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 plog() { printf '%s [tmux] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "$LOG" 2>/dev/null || true; }
@@ -75,9 +105,7 @@ for p in $(tmux list-panes -t "$WIN" -F '#{pane_id}' 2>/dev/null); do
   # even when ps plainly shows the child — which silently skipped the LEAD's pane (whose
   # pane_pid is the zsh that claude runs under) and handed the job to the first reviewer.
   for k in $ppid $(ps -axo pid=,ppid= 2>/dev/null | awk -v pp="$ppid" '$2==pp{print $1}' | head -4); do
-    case "$(ps -o command= -p "$k" 2>/dev/null)" in
-      *claude*) agent_pane="$p"; break ;;
-    esac
+    if is_claude_pid "$k"; then agent_pane="$p"; break; fi
   done
   [ -n "$agent_pane" ] && break
 done
