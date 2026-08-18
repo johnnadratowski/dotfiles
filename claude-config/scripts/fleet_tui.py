@@ -17,11 +17,13 @@ WHAT IT DOES NOT DO: it invents no facts. Every lane field comes from `fleet-sta
 --json`, so the TUI and the table cannot disagree about who is up — and the table stays the
 fallback for anywhere textual cannot run (a hook, a CI check, a pipe).
 
-EVERY ROW CARRIES ONE FACT NOBODY MAINTAINS. The status line is written by the lead, so it is
-only ever as current as the lead's memory — every lane's froze for four days once, beside
-numbers that kept moving. So the row also shows when that agent last wrote its transcript
-(`active 2m ago`), which needs nobody: the text says WHAT the lane is doing and the mtime
-says WHETHER THAT IS STILL CURRENT.
+NO STATUS PROSE ON A ROW (John, 2026-08-14). The status line was written by an agent, so it
+was only ever as current as that agent's memory — every lane's froze for four days once,
+beside numbers that kept moving, and the fix by decoration (an age marker, a transcript-mtime
+`active 2m ago`) still spent two lines per lane on a claim nobody maintained. The row is now
+one line of facts that maintain themselves — state, ctx%, uptime, tickets, PRs — and 4ME
+carries what needs a person. The prose is still read, and still shown IN FULL by the detail
+overlay, which is a surface the reader chose to open.
 
 THE HEADER SAYS WHEN IT LAST HEARD ANYTHING (`refreshed 14:32:07`). Every number on this
 screen can sit unchanged for a perfectly good reason, so a view that has STOPPED refreshing
@@ -52,8 +54,8 @@ at sixty characters, so the rest of the question was unreachable. The dialog als
 ask's bracket TRAILERS — ticket, who raised it, when, what it unblocks — as labelled fields,
 marks it when its ticket is one the standing goal names, and hides those trailers from the row.
 
-ENTER ON AN AGENT ROW opens the detail overlay: that lane's status IN FULL — the row's column
-clips it to sixty characters, and this is the surface with room for the whole thing — its
+ENTER ON AN AGENT ROW opens the detail overlay: that lane's status IN FULL — the row shows
+none of it, and this is the surface with room for the whole thing — its
 branch and distance from the base (local and origin, unfetched), what its session is running
 right now, and the config knobs, editable in place. It re-reads itself on the same tick the
 panel does, so it is a live view rather than a snapshot of the moment Enter was pressed. The
@@ -98,6 +100,43 @@ STATE_STYLE = {"busy": "green", "quiet": "yellow", "idle": "dim", "down": "red"}
 # beside exactly the three lanes that owed an answer — a marker nobody can read is worse than
 # no marker. The text form takes the surrounding style, so it is coloured rather than drawn.
 LANE_ASK = "⚠"
+
+
+# ── A REVIEW STAGED FOR THE HUMAN ────────────────────────────────────────────────────────
+# A lane that has staged a diff or a plan in the Monocle engine is BLOCKED ON A PERSON, and
+# nothing on the row said so: it renders `idle`, which is what a lane with nothing to do also
+# renders. The two are opposite facts about whose turn it is.
+#
+# READ FROM A FLAG FILE THE LANE WRITES, never by probing an engine. `review_status` answers
+# "no feedback pending" whether or not an engine is even up, so a TUI that polled it would
+# report "nothing staged" identically for a quiet fleet and a dead one — an instrument that
+# cannot say "I don't know" is worse here than no instrument, because this row is what the
+# user checks INSTEAD of looking.
+#
+# THE TIMESTAMP IS THE FILE'S MTIME rather than a line inside it. A stamp written into the
+# body is a second thing to keep true, and it goes stale silently the first time a lane
+# rewrites the file without touching it; mtime is maintained by the act of writing. Same
+# reasoning as the transcript mtime the `active Xm ago` clock already rides on.
+REVIEW_FILE = "monocle-staged"   # <lane>/.claude/monocle-staged
+REVIEW = "🔍"                    # already this TUI's word for review — `review:` asks wear it
+
+
+def staged_review(path):
+    """{"name", "age"} for a lane with a review staged, else None.
+
+    An EMPTY file still means staged. The name is a courtesy for the dialog; the fact the
+    user acts on is the file's existence, so a lane that writes nothing into it must not
+    thereby report that it is waiting on nobody.
+    """
+    if not path:
+        return None
+    try:
+        st = os.stat(path)
+        with open(path) as f:
+            name = f.readline().strip()
+    except OSError:
+        return None
+    return {"name": name, "age": max(0, _now() - st.st_mtime)}
 
 
 def _ask_lines(path):
@@ -572,6 +611,9 @@ def detail_data(row):
         "tickets": tpairs,
         "ticket_mismatch": tmismatch,
         "branch_ticket": branch_ticket_for(path) if path else "",
+        # The row can only afford the glyph; the reader who opens this dialog gets the
+        # review's name and how long it has been waiting on them.
+        "review": staged_review(os.path.join(path, ".claude", REVIEW_FILE)) if path else None,
         "live": live_tuning(name),
         "cfg": config_rows(path, name),
         "local_path": os.path.join(path, ".claude", "workflow.config.local"),
@@ -645,6 +687,12 @@ def snapshot():
         r["ask_path"] = os.path.join(r["path"], ".claude", "needs-input")
         r["raw_asks"] = _ask_lines(r["ask_path"])
 
+    # LANES AND SUBS ALIKE. A subagent staging a review is the same fact about whose turn it
+    # is, and it is the row the user is least likely to go looking at unprompted.
+    for r in lanes + subs:
+        if r.get("path"):
+            r["review"] = staged_review(os.path.join(r["path"], ".claude", REVIEW_FILE))
+
     # The tracker's base URL is LEARNED from a real link the tracker itself produced, so ids
     # that have no recorded URL of their own still resolve — and if the fleet has no tracked
     # work at all, nothing is linked rather than linked to a guess.
@@ -671,20 +719,19 @@ def snapshot():
 
 
 # ── how much room the agent list needs, in rows ──────────────────────────────────────────
-# Lane.compose draws two lines — the head and the status — plus one per ask, and the ListItem
-# rule leaves a blank row under each item.
+# Lane.compose draws one line — the head — plus one per ask, and the ListItem rule leaves a
+# blank row under each item. (The status line is gone; see the note by head_markup.)
 #
 # COUNTED, NOT MEASURED. A widget's real height only exists after a layout pass, so sizing
 # from the measurement means drawing the panel at the wrong height once per change to learn
 # the right one — and, once the panel is clamped, a scrollbar narrowing the content can change
 # the measurement that set the width, which is a loop.
 #
-# BUT A COUNTED LINE STILL WRAPS. Counting one row per line was true only while every line fit
-# its column, and it stopped being true the moment the status grew two dim suffixes — `(4d
-# old)` and `· active 2m ago` add some twenty-five columns to a status already clipped at
-# sixty, which is wider than the 64 columns a lane row gets in a 72-column pane. Every lane
-# then drew four rows where the arithmetic counted three, so `=` sized the panel six rows
-# short of a five-lane fleet and reported "all 5 visible" over a list that scrolled.
+# BUT A COUNTED LINE STILL WRAPS. Counting one row per line is true only while every line
+# fits its column: a head line carrying several ticket links, or a long ask, overruns the 64
+# columns a lane row gets in a 72-column pane. When that happened on the old status line every
+# lane drew four rows where the arithmetic counted three, so `=` sized the panel six rows short
+# of a five-lane fleet and reported "all 5 visible" over a list that scrolled.
 #
 # So the count is now WIDTH-AWARE: each line is wrapped by rich's own algorithm — the one
 # Static uses — at the width that line will actually get.
@@ -701,7 +748,7 @@ def snapshot():
 # was CLIPPED has one, plus the cursor's gutter on whichever row it sits on, so the note that
 # says how much of it landed reserves both: that number must undercount rather than promise a
 # row the reader has to scroll to reach. Neither reservation feeds back into the width.
-ITEM_ROWS = 3         # an UNWRAPPED card: head + status + the blank the ListItem rule leaves
+ITEM_ROWS = 2         # an UNWRAPPED card: head + the blank the ListItem rule leaves
 ASK_ROWS = 2          # a 4ME row is one line, plus the blank the same ListItem rule leaves
 ITEM_BLANK = 1        # that blank row, on its own — the part of ITEM_ROWS that cannot wrap
 PANEL_BORDER = 2      # the round border takes a row off the top and one off the bottom
@@ -710,7 +757,7 @@ FLEET_MIN = 4         # rows 4ME keeps however many lanes there are — its bord
 PANEL_PAD = 2         # `#lanes, #fleet { padding: 0 1 }` — a column either side
 SCROLLBAR = 2         # taken only once the list overflows, which is when the note is drawn
 CURSOR_GUTTER = 2     # the highlighted row's `border-left: thick` + `padding-left: 1`
-LANE_INDENT = 4       # `.lane-status`, `.lane-ask` — `padding-left: 4`
+LANE_INDENT = 4       # `.lane-ask` — `padding-left: 4`
 # What a CLIPPED list has taken off its lines that a fitting one has not. See above: the fit
 # reserves nothing, the "how much of it landed" note reserves this.
 CLIPPED_RESERVE = SCROLLBAR + CURSOR_GUTTER
@@ -748,12 +795,11 @@ def wrapped_rows(markup, width):
 
 
 def lane_rows(row, width=0, ctx=None, reserve=0):
-    """Rows one agent card occupies: its head, its status, one per ask — each of them wrappable
-    — plus the blank the ListItem rule leaves under the item."""
+    """Rows one agent card occupies: its head, one per ask — each of them wrappable — plus the
+    blank the ListItem rule leaves under the item."""
     body = text_width(width, reserve)
     indented = max(1, body - LANE_INDENT) if body else 0
     n = wrapped_rows(head_markup(row, ctx), body)
-    n += wrapped_rows(status_markup(row, ctx), indented)
     for raw in row.get("raw_asks") or []:
         n += wrapped_rows(lane_ask_markup(raw, ctx), indented)
     return n + ITEM_BLANK
@@ -905,6 +951,88 @@ def pr_markup(row):
     return "  " + " ".join(out)
 
 
+# ── FIXED COLUMN WIDTHS ──────────────────────────────────────────────────────────────────
+# The head line is a TABLE, and until now only its minimums were pinned (`:<11` pads a short
+# name but a long one just pushes everything right). So every column after the widest name on
+# screen sat at a different offset per row, and the columns appeared to resize as agents came
+# and went — `manual-test-audit` alone shifted state, context and uptime six columns right on
+# its row only. Each cell is now CUT to its width as well as padded to it, so a column starts
+# at the same offset on every row of the panel whatever is in it.
+#
+# NAMES ARE CUT IN THE MIDDLE, not at the end. Fleet names share long prefixes AND long
+# suffixes (`g-feature-1` / `g-feature-2`, `manual-test-audit` / `machinery-ship`), so a
+# trailing cut is exactly the cut that makes two rows read the same. `manua..audit` keeps
+# both ends, which is what a reader identifies the agent by.
+NAME_W = 12           # `manual-test-audit` -> `manua..audit`; `g-feature-1` fits whole.
+                      # The CELL is one wider — see the separator space in the f-string.
+LABEL_W = 4
+STATE_W = 7
+CTX_W = 5             # ">100%", the widest context_markup() returns
+UP_W = 6
+TICKETS_W = 14        # "SRV-24 ≠branch" exactly, or two plain ids.
+                      # MEASURED AGAINST THE REAL PANE, not chosen for headroom. The
+                      # fleet runs in a 70-column panel and this column is padded, so
+                      # every column of slack here is one the PR badges spend: at 22
+                      # a lane with one ticket and one PR wrapped onto a second row —
+                      # a line per lane, paid to align a column nobody was misreading.
+NAME_CUT = ".."       # not "…": one glyph would leave an odd budget to split
+REVIEW_W = 2          # DISPLAY columns of the magnifier, which is not len(REVIEW):
+                      # the glyph is emoji-presentation and the terminal draws it two
+                      # cells wide, so padding it by character count would push every
+                      # column right of it one place on staged rows only — the exact
+                      # drift the fixed widths exist to remove.
+
+
+def fit_name(name, width=NAME_W):
+    """`name` in at most `width` columns, cut in the MIDDLE — `prefix..suffix`.
+
+    The head half takes the odd column, because the leading characters are what the eye scans
+    a column of names by.
+    """
+    name = name or ""
+    if len(name) <= width:
+        return name
+    if width <= len(NAME_CUT):
+        return name[:width]
+    keep = width - len(NAME_CUT)
+    head = (keep + 1) // 2
+    return name[:head] + NAME_CUT + name[len(name) - (keep - head):]
+
+
+def fit_cell(text, width):
+    """A plain cell cut to `width`, with a trailing … so the cut is visible."""
+    text = text or ""
+    if len(text) <= width:
+        return text
+    return text[:max(0, width - 1)] + "…" if width else ""
+
+
+def fit_ids(cells, width=TICKETS_W):
+    """`(markup, visible width)` for as many `(visible, markup)` ticket cells as fit.
+
+    WHOLE CELLS ARE DROPPED, never cut: half a ticket id is a different id that still looks
+    like one, and this column is read for exactly that string. What was dropped is counted
+    (`+2`) rather than left to be inferred from an absence.
+
+    The single-cell case is the exception — with nothing to count it cuts, because "+1" alone
+    would tell the reader less than a clipped id does.
+    """
+    if not cells:
+        return "", 0
+    vis = [v for v, _ in cells]
+    taken = len(cells)
+    while taken:
+        more = "" if taken == len(cells) else "+%d" % (len(cells) - taken)
+        w = (sum(len(v) for v in vis[:taken]) + max(0, taken - 1)
+             + (len(more) + 1 if more else 0))
+        if w <= width:
+            parts = [m for _, m in cells[:taken]] + ([more] if more else [])
+            return " ".join(parts), w
+        taken -= 1
+    one = fit_cell(vis[0], width)
+    return one, len(one)
+
+
 def head_markup(r, ctx=None):
     """The identity line: state, label, name, context gauge, uptime, tickets, PRs."""
     ctx = ctx or {}
@@ -916,69 +1044,50 @@ def head_markup(r, ctx=None):
     # The recorded URL wins over the learned base — it is what the tracker actually
     # returned, slug and all. linkify() is the fallback for ids that have none.
     links = r.get("issue_links") or []
-    ids = " ".join("[link='%s']%s[/link]" % (linear_uri(u), i) if u
-                   else linkify(i, ctx)
-                   for i, u in links) or linkify(r.get("issue") or "—", ctx)
+    # (visible, markup) per id, so the column can be measured before it is joined — the
+    # markup carries link tags whose length is not what the reader sees.
+    cells = [(i, "[link='%s']%s[/link]" % (linear_uri(u), i) if u else linkify(i, ctx))
+             for i, u in links]
+    if not cells:
+        one = r.get("issue") or "—"
+        cells = [(one, linkify(one, ctx))]
     # ≠branch MEANS "THIS IS `.claude/current-work`'S ANSWER AND THE BRANCH NAMES ANOTHER
     # TICKET". The id shown is the one the agent is working; the marker is there because the
     # branch has been left behind on finished work and someone may want to fix it. It TRAILS
     # the id — it is a note about the id, not part of it — and the branch's own id is in the
     # detail dialog rather than the column, which has one line and a job already.
     if r.get("ticket_mismatch"):
-        ids += " [b yellow]≠branch[/]"
+        cells.append(("≠branch", "[b yellow]≠branch[/]"))
+    ids, ids_w = fit_ids(cells)
+    prs = pr_markup(r)
+    # Padded ONLY when something follows it. A trailing pad would widen the line for the
+    # wrapper (a card's height is the rows its lines wrap to) to buy an alignment nobody can
+    # see, and every lane without a PR would get a taller card in a narrow panel.
+    if prs and ids_w < TICKETS_W:
+        ids += " " * (TICKETS_W - ids_w)
     return (
         f"[{icolor}]{icon}[/] "
-        f"[b]{escape(r.get('label') or ''):<4}[/]"
-        f"[dim]{escape(r['name']):<11}[/]"
-        f"[{STATE_STYLE.get(state, 'white')}]{state:<7}[/]"
-        f"[{pcolor}]{pcs:>5}[/]  "
-        f"[dim]{up:>6}[/]   "
+        f"[b]{escape(fit_cell(r.get('label') or '', LABEL_W)):<{LABEL_W}}[/]"
+        # The trailing space is the column SEPARATOR: a name that fills its budget
+        # exactly (`manua..audit`) would otherwise run straight into the state word.
+        f"[dim]{escape(fit_name(r.get('name') or '')):<{NAME_W}}[/] "
+        f"[{STATE_STYLE.get(state, 'white')}]{fit_cell(state, STATE_W):<{STATE_W}}[/]"
+        f"[{pcolor}]{fit_cell(pcs, CTX_W):>{CTX_W}}[/]  "
+        f"[dim]{fit_cell(up, UP_W):>{UP_W}}[/] "
+        f"[b cyan]{REVIEW if r.get('review') else ' ' * REVIEW_W}[/] "
         f"[cyan]{ids}[/]"
-        f"{pr_markup(r)}"
+        f"{prs}"
     )
 
 
-def status_markup(row, ctx=None):
-    """The lane's status, WEARING ITS AGE once the line is too old to mean "now", and the
-    agent's own last sign of life beside it.
-
-    This is the one line on the row that nothing refreshes — a human writes it — so it is
-    the one line that can freeze while every number beside it keeps moving. That is what
-    made it dangerous rather than merely stale: linkify turns any `#N` in it into a live
-    hyperlink, so a four-day-old "PR #130 open; awaiting your merge" rendered exactly like
-    PR data fetched a second ago, beside a correct uptime and a correct context%.
-
-    TWO CLOCKS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. `(4d old)` is when the LEAD last
-    wrote this claim; `active 2m ago` is when the AGENT last did anything, taken from the
-    mtime of the transcript it stamps by working — nobody maintains it, which is exactly
-    why it is trustworthy in a way the status text is not. So the text says WHAT the lane
-    is doing and the mtime says WHETHER THAT IS STILL CURRENT, and neither substitutes for
-    the other: a busy lane can wear a status from Friday, and a status written this minute
-    can describe a lane that died an hour ago.
-
-    Both suffixes are dim and sit OUTSIDE the italic: they are facts about the line, not
-    part of the claim, and must not read as something the lead wrote. The activity suffix
-    shows even with no status at all — that is the row where it is the ONLY thing known.
-
-    THE SUFFIXES ARE ALSO WHY THE FIT IS WIDTH-AWARE: together they add some twenty-five
-    columns to a status already clipped at sixty, so this line wraps in any pane narrower
-    than about ninety columns. See the row-height block above.
-    """
-    ctx = ctx or {}
-    status = row.get("status") or ""
-    age = fmt_age(row.get("status_age"))
-    ago = fmt_ago(row.get("last_active"))
-    head = (f"[i]{linkify(status, ctx)}[/]" if status
-            else "[dim i]— no status —[/]")
-    if status and age:
-        head += f" [dim]({escape(age)} old)[/]"
-    if ago:
-        head += f" [dim]· active {escape(ago)} ago[/]"
-    return head
+# PER-LANE STATUS PROSE REMOVED (John 2026-08-14) — stale agent-written text; 4ME + the
+# ticket column carry the truth. `status` / `status_age` / `last_active` are still read
+# and still rendered by the detail dialog (`detail_status_markup`), which is where the
+# full text now lives.
 
 
 def lane_ask_markup(raw, ctx=None):
-    """One of a lane's own asks, as it appears under the lane's status."""
+    """One of a lane's own asks, as it appears under the lane's head line."""
     icon, text = ask_kind(raw)
     return f"{icon} {linkify(clip(text), ctx or {})}"
 
@@ -1056,7 +1165,11 @@ def filter_label(kind):
 
 
 class Lane(ListItem):
-    """One lane: the identity row, its status, then its asks. Selectable as a unit."""
+    """One lane: the identity row, then its asks. Selectable as a unit.
+
+    Per-lane status prose removed (John 2026-08-14) — stale agent-written text; 4ME + the
+    ticket column carry the truth; the data is still available to the detail dialog.
+    """
 
     def __init__(self, row, ctx=None):
         super().__init__()
@@ -1066,21 +1179,17 @@ class Lane(ListItem):
     def head_markup(self):
         return head_markup(self.row, self.ctx)
 
-    def status_markup(self):
-        return status_markup(self.row, self.ctx)
-
     def compose(self):
         yield Static(self.head_markup(), classes="lane-head")
-        yield Static(self.status_markup(), classes="lane-status")
         for raw in self.row.get("raw_asks") or []:
             yield Static(lane_ask_markup(raw, self.ctx), classes="lane-ask")
 
     def refresh_volatile(self, row):
         """Update everything that is CONFINED TO A LINE, in place — never a rebuild.
 
-        Uptime, context%, the state word and its icon all live on the head line; the status
-        lives on its own line. None of them changes the shape of this item, so none of them
-        needs the list torn down. Folding them into the redraw signature is what produced the
+        Uptime, context%, the state word and its icon all live on the head line. None of them
+        changes the shape of this item, so none of them needs the list torn down. Folding them
+        into the redraw signature is what produced the
         periodic full repaint: uptime moves every tick and `state` flips whenever any lane
         starts or finishes a turn, so on a working fleet the signature was rarely stable for
         two consecutive refreshes.
@@ -1091,8 +1200,7 @@ class Lane(ListItem):
         panel and one that twitches.
         """
         self.row = row
-        for sel, markup in ((".lane-head", self.head_markup()),
-                            (".lane-status", self.status_markup())):
+        for sel, markup in ((".lane-head", self.head_markup()),):
             try:
                 w = self.query_one(sel, Static)
             except Exception:
@@ -1298,7 +1406,6 @@ class FleetTUI(App):
         border-left: thick $accent;
         padding-left: 1;
     }
-    .lane-status { padding-left: 4; color: $text; }
     .lane-ask { padding-left: 4; }
     """
 
@@ -1553,7 +1660,10 @@ class FleetTUI(App):
         if d["subs"]:
             bits.append(f"{len(d['subs'])} sub")
         if n_ask:
-            bits.append(f"[b yellow]{ASK} {n_ask} needs you[/]")
+            # TWO SPACES after the umbrella, and they are not a typo. ASK is the VS16
+            # emoji form, which the terminal draws double-width in a single cell — so
+            # one space renders as none and the glyph reads as part of the number.
+            bits.append(f"[b yellow]{ASK}  {n_ask} needs you[/]")
         bits.append(mark)
         # Written only when changed, for the same reason the lane lines are: an unconditional
         # update() on a timer repaints, and a repaint of the header is as visible as any other.
@@ -1764,6 +1874,16 @@ class FleetTUI(App):
         else:
             line = ("  [dim]no live session in this lane — config and git only[/]  ·  %s"
                     % ctx)
+        rev = data.get("review")
+        if rev:
+            # fmt_ago, not fmt_age: the wait is the point of the line, and fmt_age returns
+            # "" below its staleness threshold — a review staged five minutes ago would have
+            # rendered with no clock at all, which reads as one staged at an unknown time.
+            age = fmt_ago(rev.get("age"))
+            line += "  ·  [b cyan]%s staged%s%s[/]" % (
+                REVIEW,
+                " '%s'" % escape(rev["name"]) if rev.get("name") else "",
+                " · %s ago" % escape(age) if age else "")
         return ("[b]%s[/] [dim]%s[/]  [dim]%s[/]\n%s"
                 % (escape(data["name"]), escape(data["label"]),
                    escape(data["path"]), line))

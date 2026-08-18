@@ -28,7 +28,7 @@ What it locks in — each is a way this view could lie or lose work:
   - a value outside the allowed vocabulary is refused before it is written, because these
     strings are later typed into a live agent's pane
   - the overlay tells the user whether an edit reached the running agent or waits for a spawn
-  - …and it shows the agent's update IN FULL — the row's 60-char clip is the column's
+  - …and it shows the agent's update IN FULL — the snapshot's 60-char clip is the column's
     constraint, and the dialog goes back to the file rather than trying to widen bytes that
     no longer exist
   - the overlay RE-READS ITSELF on the same tick the panel does, so `r` and a resize reflow it
@@ -44,7 +44,7 @@ What it locks in — each is a way this view could lie or lose work:
   - the fleet's STANDING GOAL is on the header while one is set, re-read on the same tick as
     everything else, and occupies no row at all when no goal file exists
   - enter on a 4ME row opens THAT ASK, not whatever lane the other panel was left on — and
-    shows it in full, since the row clips it at sixty characters
+    shows it in full, since the snapshot carries it clipped at sixty characters
   - …with its bracket trailers as labelled fields, hidden from the row, unknown keys kept,
     and a marker when the standing goal names the same ticket
   - …and prose containing a bracketed id renders instead of taking the whole app down
@@ -62,6 +62,7 @@ import fleet_tui  # noqa: E402
 # The threshold by NAME, not a literal: a test that hard-codes 7200 goes on passing after
 # someone retunes the constant, while asserting about a boundary that no longer exists.
 from _agent_facts import STATUS_STALE_AFTER, ask_deferral  # noqa: E402
+from rich.cells import cell_len  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
 PASS = FAIL = 0
@@ -184,15 +185,25 @@ async def main():
         await pilot.pause()
         text = screen_text(app)
 
-        ok("the lane's status is rendered", "uncommitted" in text, text)
-        ok("…with tag-shaped brackets escaped, so markup cannot eat them",
-           r"\[b]2 GREEN\[/b]" in text, text)
+        # THE STATUS LINE IS GONE (John 2026-08-14). The row is one line — head only — and the
+        # agent-written prose lives in the detail dialog, which is the only place it is shown.
+        ok("the lane row does NOT carry the status prose",
+           "uncommitted" not in text, text)
+        ok("…nor the agent's last-active clock, which travelled with it",
+           "active " not in text, text)
         # The id inside it is a link by now, so match around it rather than through it.
         ok("a review: ask carries the review glyph", "🔍 the [link=" in text, text)
         ok("…and the words after the linked id survive", "[/link] diff" in text, text)
         ok("an untyped ask is a general action item", "✅ something untyped" in text, text)
         ok("the kind token is consumed, not printed", "review:" not in text, text)
         ok("the header counts every ask", "3 needs you" in text, text)
+        # A GAP THE GLYPH CANNOT SWALLOW. The umbrella is the VS16 emoji form, which the
+        # terminal draws double-width in one cell, so the single space that used to follow it
+        # rendered as none and the count read as part of the glyph.
+        ok("…with a gap after the umbrella, which is drawn double-width",
+           "%s  3 needs you" % fleet_tui.ASK
+           in str(app.query_one("#head", Static).content),
+           str(app.query_one("#head", Static).content))
 
         # ── the panel the user calls "4me", and the numbers they call its rows by ─────────
         # "4me 1" is only unambiguous if the row wears the 1. The panel's own title carries
@@ -208,8 +219,8 @@ async def main():
            "[link='https://example.invalid/DX-6']DX-6[/link]" in text, text)
         ok("a ticket id inside an ASK is linked too",
            "[link='linear://acme/issue/DX-6']DX-6[/link]" in text, text)
-        ok("a ticket id inside a STATUS is linked too",
-           text.count("[link='linear://acme/issue/SRV-11']SRV-11[/link]") == 1, text)
+        ok("a ticket id that appears ONLY in a status reaches no row — the line is gone",
+           text.count("[link='linear://acme/issue/SRV-11']SRV-11[/link]") == 0, text)
         ok("a ticket link uses the linear:// app scheme, never https",
            "https://linear.app" not in text, text)
         ok("…but a PR link stays https, since GitHub registers no scheme",
@@ -252,7 +263,8 @@ async def main():
         await pilot.pause()
         await pilot.pause()
         ok("a changed status does NOT rebuild either", lanes.children[0] is before)
-        ok("…but the new status is shown", "now something else entirely" in screen_text(app))
+        ok("…and does not reach the row at all", 
+           "now something else entirely" not in screen_text(app), screen_text(app))
         ok("…and the lane's open PR is on the row while it is open",
            "#133" in screen_text(app), screen_text(app))
         ok("a status written a minute ago wears no age",
@@ -269,16 +281,13 @@ async def main():
         app.load()
         await pilot.pause()
         await pilot.pause()
-        ok("a four-day-old status is marked as old", "(4d old)" in screen_text(app),
-           screen_text(app))
-        ok("…and says so without a rebuild", lanes.children[0] is before)
-        ok("…while the line itself is kept, not blanked",
-           "awaiting your merge" in screen_text(app), screen_text(app))
-        # Blanking is what the PR cache does past PR_STALE_AFTER; it refreshes itself, so
-        # silence there means broken. Here silence is normal, and blanking would delete the
-        # only description of the lane the panel has.
-        ok("the age is a fact ABOUT the line, dim and outside the lead's italic",
-           "[/] [dim](4d old)[/]" in screen_text(app), screen_text(app))
+        # THE FIX FOR IT IS NOW REMOVAL, not decoration: a four-day-old claim cannot mislead
+        # from a row that never shows it. The age marker still exists for the detail dialog.
+        ok("a stale status reaches neither the row nor its age marker",
+           "(4d old)" not in screen_text(app)
+           and "awaiting your merge" not in screen_text(app), screen_text(app))
+        ok("…and the snapshot change still lands without a rebuild",
+           lanes.children[0] is before)
 
         # Crossing the threshold is the only thing that decorates. Just under it, nothing.
         volatile["status_age"] = STATUS_STALE_AFTER - 1
@@ -441,27 +450,21 @@ async def main():
            fleet_tui.fleet_goal_path("") == "")
         os.remove(goal_path)
 
-        # THE OTHER CLOCK. The status text is only ever as current as the lead's memory —
-        # that is what let every lane's line freeze for four days. The transcript mtime needs
-        # nobody, so the row carries both: what the lane is doing, and when it last did
-        # anything. They must be separable on screen, and the activity one must survive the
-        # no-rebuild path exactly like uptime does.
-        ok("the row says when the agent was last active",
-           "active 2m ago" in screen_text(app), screen_text(app))
-        ok("…as a fact about the row, dim and outside the lead's italic",
-           "[dim]· active 2m ago[/]" in screen_text(app), screen_text(app))
+        # THE OTHER CLOCK travelled with the status line and left the row with it: the row's
+        # own uptime and state say whether a lane is alive, and the detail dialog keeps
+        # `active Xm ago` for the reader who opens it. The FIELD must still be collected —
+        # deleting the render must not quietly kill the data the dialog reads.
+        ok("no last-active clock on the row",
+           "active 2m ago" not in screen_text(app), screen_text(app))
         volatile["last_active"] = 3 * 3600
         app.load()
         await pilot.pause()
         await pilot.pause()
-        ok("a lane gone quiet for hours says so, without a rebuild",
-           "active 3h ago" in screen_text(app) and lanes.children[0] is before,
+        ok("…and a lane gone quiet for hours still does not say so on the row",
+           "active 3h ago" not in screen_text(app) and lanes.children[0] is before,
            screen_text(app))
-        # The two clocks are INDEPENDENT: a fresh status on a silent agent and a stale status
-        # on a busy one are different problems, so neither field may imply the other.
-        ok("a fresh status and a silent agent are shown as the different facts they are",
-           "old)" not in screen_text(app) and "active 3h ago" in screen_text(app),
-           screen_text(app))
+        ok("…while the value itself is still carried in the snapshot for the dialog",
+           fleet_tui.fmt_ago(3 * 3600) == "3h", fleet_tui.fmt_ago(3 * 3600))
         volatile["last_active"] = 120
 
         # THE STALE-PR REGRESSION. The PR merges, so the snapshot stops carrying it. Nothing
@@ -524,26 +527,30 @@ async def main():
 
         # ── THE WRAP REGRESSION: a counted row is not a drawn row ────────────────────────
         # `=` broke without a single test reddening, because every fixture here was WIDER
-        # than its content. Live, the fleet runs in a 72-column tmux pane, and the status
-        # line grew two dim suffixes — `(4d old)` and `· active 2m ago` — on top of text
-        # already clipped at sixty. Every lane then drew four rows where the arithmetic
-        # counted three: the panel came out six rows short of a five-lane fleet and `=` said
-        # "all 5 visible" over a list that scrolled.
+        # than its content. Live, the fleet runs in a 72-column tmux pane, and a lane row can
+        # still outrun it — the head line carries a ticket column and every open PR. A lane
+        # that then draws two rows where the arithmetic counts one leaves the panel short and
+        # `=` saying "all 5 visible" over a list that scrolled.
         #
         # So the assertion is COUNTED-VS-MEASURED at a width narrow enough to wrap. It is
         # not a restatement of the arithmetic: content_rows() is what Textual laid out, and
         # nothing under test contributes to it.
-        # The fixture is the live shape: a status at the source's own 60-character clip, in a
-        # pane narrower than that plus its suffixes.
-        short_status = volatile["status"]
-        volatile["status"] = "SRV-11 rebased onto master; gates green; awaiting a merge"
-        await pilot.resize_terminal(66, 24)
+        # THE WRAPPING LINE IS NOW THE HEAD, since the status line was removed — and the PR
+        # list is the part of it that grows, which is also the part that is line-confined and
+        # so must move the panel WITHOUT a rebuild.
+        short_prs = volatile["prs"]
+        volatile["prs"] = [(130 + i, "https://gh/x/pull/%d" % (130 + i), False)
+                           for i in range(6)]
+        # TALL ENOUGH THAT THE FIT IS THE FIT. A 24-row terminal leaves the panel clamped at
+        # 4ME's floor, and a clamped panel cannot show a growth — the assertion below would
+        # pass on a panel that never moved.
+        await pilot.resize_terminal(66, 32)
         app.load()
         await pilot.pause()
         await pilot.pause()
         narrow_w = app._width()
         counted = fleet_tui.fit_height(app._rows(), narrow_w, app.data.get("ctx"))
-        ok("in a pane too narrow for the status line, the fit counts the WRAPPED rows",
+        ok("in a pane too narrow for the head line, the fit counts the WRAPPED rows",
            counted == content_rows() + fleet_tui.PANEL_BORDER,
            "counted %d, drawn %d (+border), width %d"
            % (counted, content_rows(), narrow_w))
@@ -557,18 +564,18 @@ async def main():
            "panel %d, counted %d, avail %d"
            % (panel_rows(), counted, panels.size.height))
 
-        # THE STATUS IS NOW PART OF THE HEIGHT, and it is not part of the rebuild signature —
-        # it moves on ticks nobody wants a rebuild for. So a status that grows past its
-        # column has to move the panel down the NO-REBUILD path, or the panel keeps a height
-        # that was right for the shorter line.
+        # THE HEAD LINE IS PART OF THE HEIGHT, and its PR list is not part of the rebuild
+        # signature — PRs move on ticks nobody wants a rebuild for. So a head that grows past
+        # its column has to move the panel down the NO-REBUILD path, or the panel keeps a
+        # height that was right for the shorter line.
         before_item = lanes.children[0]
         grew_from = panel_rows()
-        volatile["status"] = (volatile["status"] + " — and then some, past the column's end "
-                              "and well into a second wrapped line")
+        volatile["prs"] = [(130 + i, "https://gh/x/pull/%d" % (130 + i), False)
+                           for i in range(26)]
         app.load()
         await pilot.pause()
         await pilot.pause()
-        ok("a status that grows past its column grows the panel, without a rebuild",
+        ok("a head that grows past its column grows the panel, without a rebuild",
            panel_rows() > grew_from and lanes.children[0] is before_item,
            "panel %d, was %d" % (panel_rows(), grew_from))
         ok("…and the grown panel still matches what was drawn",
@@ -592,7 +599,13 @@ async def main():
 
         # A wrapped list that does NOT fit must be reported as partly shown. This is the
         # half the user actually saw: `=` claiming a fit over a list it had just clipped.
-        roster["extra"] = 5
+        #
+        # THE ROSTER IS OVERSIZED ON PURPOSE. At 5 extras the list overflowed by a single row,
+        # so the row asserted a real property from a fixture that only just satisfied it —
+        # one card growing a line (fixed-width columns did exactly that) flipped it to a
+        # legitimate fit and reddened a row about clipping. 14 cards in a panel that can hold
+        # at most 26 content rows overflows by a margin no layout tweak closes.
+        roster["extra"] = 13
         app.load()
         await pilot.pause()
         await pilot.pause()
@@ -605,32 +618,33 @@ async def main():
                 for r in app._rows()],
                panel_rows() - fleet_tui.PANEL_BORDER) < len(app._rows()),
            note)
-        volatile["status"] = short_status
+        volatile["prs"] = short_prs
         roster["extra"] = 0
         await pilot.resize_terminal(80, 24)
         app.load()
         await pilot.pause()
         await pilot.pause()
-        ok("…and a pane wide enough for every line is back to three rows a card",
+        ok("…and a pane wide enough for every line is back to the unwrapped fit",
            panel_rows() == fitted, "%d vs %d" % (panel_rows(), fitted))
 
         # The row arithmetic on its own, away from any terminal: one line per line, until a
         # line is too long for its column.
-        # No clocks on this row: the two dim suffixes are the very thing that made the
-        # status wrap, and a unit test of the arithmetic wants ONE variable in the line.
-        wide_row = {"name": "n", "label": "l", "state": "idle", "status": "short",
-                    "status_age": None, "last_active": None, "raw_asks": []}
+        # The head is kept short here: a unit test of the arithmetic wants ONE variable in
+        # the card, and that variable is the ask.
+        wide_row = {"name": "n", "label": "l", "state": "idle", "raw_asks": []}
         ok("with no width known, a card counts its lines unwrapped",
            fleet_tui.lane_rows(wide_row) == fleet_tui.ITEM_ROWS,
            fleet_tui.lane_rows(wide_row))
-        # An unbreakable 200-character token has no word boundary to wrap at, so the row
-        # count it costs is plain division — an expectation this file can state without
-        # borrowing the wrapper under test.
+        # An unbreakable 200-character token has no word boundary to wrap at, so the row count
+        # it costs is stateable without borrowing the wrapper under test: the ask is clipped
+        # to LINE_MAX at render, the glyph keeps the first row to itself because a word longer
+        # than the column cannot start on it, and the rest is plain division.
         col = fleet_tui.text_width(60) - fleet_tui.LANE_INDENT
-        ok("…and a status too long for the column costs the card the rows it overflows by",
-           fleet_tui.lane_rows(dict(wide_row, status="x" * 200), 60)
-           == fleet_tui.ITEM_ROWS - 1 + -(-200 // col),
-           (fleet_tui.lane_rows(dict(wide_row, status="x" * 200), 60), col))
+        clipped = len(fleet_tui.clip("x" * 200))
+        ok("…and an ask too long for the column costs the card the rows it overflows by",
+           fleet_tui.lane_rows(dict(wide_row, raw_asks=["x" * 200]), 60)
+           == fleet_tui.ITEM_ROWS + 1 + -(-clipped // col),
+           (fleet_tui.lane_rows(dict(wide_row, raw_asks=["x" * 200]), 60), col, clipped))
         ok("a 4ME item wraps by the same rule, and an int still counts the old way",
            fleet_tui.asks_fit_height(2) == fleet_tui.PANEL_BORDER + 2 * fleet_tui.ASK_ROWS
            and fleet_tui.asks_fit_height(["todo: " + "y" * 200], 40)
@@ -650,7 +664,7 @@ async def main():
 
         # More agents than the terminal has rows: the panel stops at 4ME's floor
         # instead of pushing it off the bottom of the screen.
-        roster["extra"] = 20
+        roster["extra"] = 40
         app.load()
         await pilot.pause()
         await pilot.pause()
@@ -993,7 +1007,7 @@ async def main():
         # Matched from AFTER the ticket id: linkify has turned that id into a hyperlink by
         # now, exactly as it does on the row, so the assertion reads around it rather than
         # through it — the same convention the ask tests above use.
-        ok("the overlay shows the agent's update IN FULL, not the row's 60-char clip",
+        ok("the overlay shows the agent's update IN FULL, not the snapshot's 60-char clip",
            long_status.split(" ", 1)[1] in text, text)
         ok("…including the words past the cap, with no ellipsis where the column cut it",
            "operator CLI decision" in text
@@ -1671,6 +1685,142 @@ async def main():
        "[b red]" in over, over)
     fine = fleet_tui.head_markup(dict(lane_row, context_pct=45, issue_links=[]))
     ok("a percentage in range is still printed plainly", " 45%" in fine, fine)
+
+    # ── THE HEAD LINE IS A TABLE, so every column starts at the same offset on every row ──
+    # Until fixed widths landed, only the MINIMUM of each column was pinned (`:<11` pads a
+    # short name and lets a long one push everything right), so `manual-test-audit` shifted
+    # state, context and uptime six columns right ON ITS ROW ONLY and the panel read as
+    # columns that resize as agents come and go.
+    def plain(markup):
+        return fleet_tui.Text.from_markup(markup).plain
+
+    long_name = dict(lane_row, name="manual-test-audit", issue_links=[("SRV-24", "")])
+    short_name = dict(lane_row, name="a", issue_links=[("SRV-24", "")])
+    ok("a name past its budget is cut in the MIDDLE, keeping both ends",
+       fleet_tui.fit_name("manual-test-audit") == "manua..audit",
+       fleet_tui.fit_name("manual-test-audit"))
+    ok("…and a name that fits is untouched, not padded into a cut",
+       fleet_tui.fit_name("g-feature-1") == "g-feature-1",
+       fleet_tui.fit_name("g-feature-1"))
+    # The cut must be a middle cut rather than a tail cut, because fleet names share their
+    # prefixes: two lanes cut at the tail read as the same agent.
+    ok("…so two names sharing a long prefix stay distinguishable",
+       fleet_tui.fit_name("machinery-findings-a")
+       != fleet_tui.fit_name("machinery-findings-b"),
+       (fleet_tui.fit_name("machinery-findings-a"),
+        fleet_tui.fit_name("machinery-findings-b")))
+    ok("no rendered name can be wider than its column",
+       all(len(fleet_tui.fit_name(n)) <= fleet_tui.NAME_W
+           for n in ("manual-test-audit", "g-feature-1", "a", "x" * 80, "")),
+       [fleet_tui.fit_name(n) for n in ("manual-test-audit", "x" * 80)])
+
+    # THE ASSERTION THAT CATCHES A WIDENING COLUMN: the same field starts at the same index
+    # whatever is in the row before it. Measured on the PLAIN text, which is what the reader
+    # sees — the markup's length is link tags nobody renders.
+    ok("the state column starts at one offset whatever the name's length",
+       plain(fleet_tui.head_markup(long_name)).index("idle")
+       == plain(fleet_tui.head_markup(short_name)).index("idle"),
+       (plain(fleet_tui.head_markup(long_name)),
+        plain(fleet_tui.head_markup(short_name))))
+    ok("…and so does the ticket column",
+       plain(fleet_tui.head_markup(long_name)).index("SRV-24")
+       == plain(fleet_tui.head_markup(short_name)).index("SRV-24"),
+       (plain(fleet_tui.head_markup(long_name)),
+        plain(fleet_tui.head_markup(short_name))))
+    ok("…and a full-width name still has a space before the next column",
+       " idle" in plain(fleet_tui.head_markup(long_name)),
+       plain(fleet_tui.head_markup(long_name)))
+
+    # The ticket column is the LAST fixed one, so the PR list is what a widening ticket cell
+    # would push around. Whole ids are dropped rather than cut in half — half an id is a
+    # different id that still looks like one — and the count of the dropped ones is shown.
+    one_id = dict(lane_row, issue_links=[("SRV-24", "")],
+                  open_prs=[("88", "https://gh/x/pull/88", False)])
+    many_ids = dict(one_id, issue_links=[("SRV-24", ""), ("MON-10", ""), ("FEAT-9", ""),
+                                         ("DX-16", ""), ("SRV-118", "")])
+    ok("the PR column starts at one offset however many tickets the lane carries",
+       plain(fleet_tui.head_markup(one_id)).index("#88")
+       == plain(fleet_tui.head_markup(many_ids)).index("#88"),
+       (plain(fleet_tui.head_markup(one_id)), plain(fleet_tui.head_markup(many_ids))))
+    # The count is derived from what actually rendered rather than written as a literal, so
+    # the row states the invariant (every dropped id is counted) instead of restating the
+    # column width — which is a number that moves when the pane does.
+    _shown = plain(fleet_tui.head_markup(many_ids))
+    _dropped = sum(1 for i, _ in many_ids["issue_links"] if i not in _shown)
+    ok("…and the ids that did not fit are COUNTED, not silently dropped",
+       _dropped and "+%d" % _dropped in _shown, (_dropped, _shown))
+    ok("…while no id is cut into a different, valid-looking id",
+       "SRV-1" not in plain(fleet_tui.head_markup(many_ids)).replace("SRV-118", ""),
+       plain(fleet_tui.head_markup(many_ids)))
+    ok("a single over-long id is clipped rather than replaced by a bare count",
+       fleet_tui.fit_ids([("VERYLONGPROJECT-1234567890123456789012345", "x")])[0]
+       .endswith("…"),
+       fleet_tui.fit_ids([("VERYLONGPROJECT-1234567890123456789012345", "x")]))
+    # ── 🔍 A REVIEW STAGED FOR THE HUMAN ────────────────────────────────────────────────
+    # A lane waiting on a person renders `idle`, which is also what a lane with nothing to do
+    # renders — opposite facts about whose turn it is, drawn identically. The marker is read
+    # from a flag file the lane writes, never by probing an engine that answers "nothing
+    # pending" whether or not it is even up.
+    with tempfile.TemporaryDirectory() as td:
+        flag = os.path.join(td, fleet_tui.REVIEW_FILE)
+        ok("no flag file means nothing is staged, rather than an unknown",
+           fleet_tui.staged_review(flag) is None)
+        with open(flag, "w") as fh:
+            fh.write("SRV-28 diff\n")
+        got = fleet_tui.staged_review(flag)
+        ok("a flag file names the review and how long it has waited",
+           got and got["name"] == "SRV-28 diff" and got["age"] < 5, got)
+        # The age rides on the FILE's mtime, so it cannot go stale the way a stamp written
+        # into the body does — and a lane that rewrites the file re-dates it by writing.
+        # Dated against fleet_tui's OWN clock seam, which earlier rows in this suite hold
+        # still — time.time() here would measure the distance to a frozen now.
+        old = fleet_tui._now() - 3600
+        os.utime(flag, (old, old))
+        ok("…and the age is the file's own mtime, not a line inside it",
+           3500 < fleet_tui.staged_review(flag)["age"] < 3700,
+           fleet_tui.staged_review(flag))
+        # An empty file is the shape a lane writes when it has no name handy. It must not
+        # read as "waiting on nobody" — the fact the user acts on is that a review exists.
+        with open(flag, "w") as fh:
+            fh.write("")
+        ok("an EMPTY flag file still means staged", fleet_tui.staged_review(flag) is not None,
+           fleet_tui.staged_review(flag))
+
+    staged = dict(lane_row, issue_links=[("SRV-24", "")], review={"name": "d", "age": 60})
+    unstaged = dict(lane_row, issue_links=[("SRV-24", "")])
+    ok("a staged lane wears the magnifier on its row",
+       fleet_tui.REVIEW in plain(fleet_tui.head_markup(staged)),
+       plain(fleet_tui.head_markup(staged)))
+    ok("…and an unstaged one does not",
+       fleet_tui.REVIEW not in plain(fleet_tui.head_markup(unstaged)),
+       plain(fleet_tui.head_markup(unstaged)))
+    # THE POINT OF A FIXED SLOT: measured in DISPLAY CELLS, because the glyph is
+    # emoji-presentation and occupies two of them while len() calls it one. Padding it by
+    # character count would shift every column right of it on staged rows only.
+    ok("…and the columns after it do not move when it appears",
+       cell_len(plain(fleet_tui.head_markup(staged)).split("SRV-24")[0])
+       == cell_len(plain(fleet_tui.head_markup(unstaged)).split("SRV-24")[0]),
+       (plain(fleet_tui.head_markup(staged)), plain(fleet_tui.head_markup(unstaged))))
+
+    # The row affords one glyph; the dialog is where the name and the wait go.
+    class _StubApp:
+        data = {"ctx": {}}
+
+    detail = {"name": "feature-2", "label": "ott", "path": "/lanes/feature-2",
+              "state": "idle", "context_pct": 40, "live": None,
+              "review": {"name": "SRV-28 diff", "age": 900}}
+    head = fleet_tui.FleetTUI.detail_head_markup(_StubApp(), detail)
+    ok("the dialog names the staged review and how long it has been waiting",
+       "SRV-28 diff" in head and "15m" in head, head)
+    ok("…and says nothing at all when none is staged",
+       fleet_tui.REVIEW not in fleet_tui.FleetTUI.detail_head_markup(
+           _StubApp(), dict(detail, review=None)),
+       fleet_tui.FleetTUI.detail_head_markup(_StubApp(), dict(detail, review=None)))
+
+    ok("…and a row with no PRs is NOT padded, which would cost it a wrapped line",
+       not plain(fleet_tui.head_markup(
+           dict(lane_row, issue_links=[("SRV-24", "")]))).endswith(" "),
+       repr(plain(fleet_tui.head_markup(dict(lane_row, issue_links=[("SRV-24", "")])))))
 
     # ── the PR list is never stickier than the cache it came from ────────────────────────
     # The cache has a max age on the WRITE path only; nothing bounded the READ. A `gh` that
