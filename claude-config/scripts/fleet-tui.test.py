@@ -56,12 +56,13 @@ import os
 import sys
 import tempfile
 import time
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fleet_tui  # noqa: E402
 # The threshold by NAME, not a literal: a test that hard-codes 7200 goes on passing after
 # someone retunes the constant, while asserting about a boundary that no longer exists.
-from _agent_facts import STATUS_STALE_AFTER, ask_deferral  # noqa: E402
+from _agent_facts import ASK_KINDS, STATUS_STALE_AFTER, ask_deferral  # noqa: E402
 from rich.cells import cell_len  # noqa: E402
 from textual.widgets import ListView, Static  # noqa: E402
 
@@ -126,11 +127,15 @@ async def main():
         # A PR list is volatile too: it disappears the moment the PR merges. It rides the
         # head line rather than a shape change, so it has to survive the no-rebuild path.
         "prs": [(133, "https://gh/x/pull/133", False)],
+        # Whether this lane has a review staged for the user — the fact ctrl+click acts on.
+        # snapshot() reads it from the lane's flag file; the fixture sets it directly, since
+        # what is under test here is what the ROW does with it.
+        "review": None,
     }
 
     # The roster the SIZING tests drive: how many agents beyond the fixture lane, and whether
     # that lane is there at all — a fleet can be empty, and the panel still has to be a panel.
-    roster = {"extra": 0, "base": True}
+    roster = {"extra": 0, "base": True, "subs": []}
 
     # Every call to the data source, counted. `r` had never been tested as a KEY — only
     # app.load() was, which cannot fail the way the user suspected it was failing.
@@ -149,13 +154,14 @@ async def main():
             "last_active": volatile["last_active"],
             "open_prs": volatile["prs"],
             "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
+            "review": volatile["review"],
         }
         extra = [dict(base, name="extra-%d" % i, label="e%d" % i, issue_links=[],
                       status="", raw_asks=[], open_prs=[])
                  for i in range(roster["extra"])]
         return {
             "lanes": ([base] if roster["base"] else []) + extra,
-            "subs": [],
+            "subs": list(roster["subs"]),
             "fleet": fleet_tui._ask_lines(fleet_path),
             "fleet_path": fleet_path,
             # Read through the REAL reader on every call, exactly as snapshot() does, so the
@@ -860,7 +866,7 @@ async def main():
         ok("? opens it", legend.has_class("-show"))
         ok("…and it names every glyph on screen",
            all(g in str(legend.content) for g in
-               ("🔍", "📋", "💬", "🏷️", "🚀", "✅", "●", "◔", "○")), str(legend.content))
+               (*ASK_KINDS.values(), "●", "◔", "○")), str(legend.content))
         # The footer structurally CANNOT advertise enter — the focused ListView's own hidden
         # binding is what it renders — so the legend is the only place that key exists.
         ok("…and the keys the footer cannot show",
@@ -1340,6 +1346,187 @@ async def main():
         await pilot.pause()
         os.remove(goal_path)
 
+        # ── A SNAPSHOT APPLIED WHILE THE PANELS ARE NOT IN THE TREE ──────────────────────
+        # Appending a row to a detached ListView raises MountError and kills the app. Seen in
+        # the wild during SHUTDOWN — the `c` filter key landing as the app tore down, which
+        # becomes a full rebuild — and reachable at startup too, since `load()` hands its
+        # result back from a worker thread.
+        _requeued = []
+        _real_q, _real_after = app.query_one, app.call_after_refresh
+
+        class _NotAttached:
+            is_attached = False
+            # THE PROPERTY THE FIRST FIX GUARDED ON, kept here because it is the whole trap:
+            # Textual's own Widget.mount tests `is_attached`, so a guard written on
+            # `is_mounted` passes at exactly the moment the mount is about to raise.
+            is_mounted = True
+
+        app.query_one = lambda *a, **k: _NotAttached()
+        app.call_after_refresh = lambda *a, **k: _requeued.append(a)
+        _before = app.data
+        try:
+            app.apply(fake_snapshot())
+        finally:
+            app.query_one, app.call_after_refresh = _real_q, _real_after
+        ok("a snapshot arriving before the panels are attached is re-queued, not mounted",
+           _requeued and _requeued[0][0] == app.apply, _requeued)
+        ok("…and nothing of it is applied early, so the retry draws the whole first frame",
+           app.data is _before)
+
+        # ── EVERY DIALOG IS CENTRED ON THE SCREEN ────────────────────────────────────────
+        # They were pinned to the top-left corner: each is `height: auto` with a fixed
+        # `margin`, and a margin is an offset from the corner, not a position. Asserted in
+        # BOTH axes against the screen's own size, because the horizontal half was the one
+        # that looked deliberate — a full-width dialog is centred by accident, and stops
+        # being so the moment it is given a width.
+        def centred(sel):
+            r, scr = app.query_one(sel).region, app.screen.size
+            # max(0, …) because a dialog TALLER than the screen is centred at the top edge,
+            # not at a negative offset — that is the small-terminal case, and it must read as
+            # centred rather than as a failure.
+            return (abs(r.x - max(0, (scr.width - r.width) // 2)) <= 1
+                    and abs(r.y - max(0, (scr.height - r.height) // 2)) <= 1)
+
+        fleet.focus()
+        fleet.index = 0
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        ok("the 4ME dialog is centred on screen, both axes", centred("#ask-detail"),
+           (app.query_one("#ask-detail").region, app.screen.size))
+
+        # ── ENTER TOGGLES: the key that opened a dialog closes it ────────────────────────
+        # It used to open only, so the reflex of pressing it again did nothing at all and
+        # `esc` — a different key, on the other side of the keyboard — was the only way out.
+        await pilot.press("enter")
+        await pilot.pause()
+        ok("enter closes the 4ME dialog it opened", app.ask is None)
+        ok("…and does not open something else on the way out", app.detail is None)
+
+        await pilot.press("question_mark")
+        await pilot.pause()
+        ok("the legend is centred too", centred("#legend"),
+           (app.query_one("#legend").region, app.screen.size))
+        await pilot.press("enter")
+        await pilot.pause()
+        # ENTER USED TO REACH THE LIST BEHIND THE LEGEND, opening the lane dialog under a
+        # panel covering it — the second assertion is that failure, not a restatement.
+        ok("enter closes the legend", not app.query_one("#legend").has_class("-show"))
+        ok("…rather than acting on the list it is covering", app.detail is None)
+
+        lanes.focus()
+        lanes.index = 0
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        ok("the lane dialog is centred as well", app.detail is not None
+           and centred("#detail"), (app.query_one("#detail").region, app.screen.size))
+        # THE ONE EXCEPTION, and it is checked before the toggle: inside the lane dialog the
+        # cursor sits on a knob and enter EDITS it, which is that dialog's whole purpose.
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # ── ENTER ON THE AGGREGATE OPENS THE SUBAGENTS (item 8) ─────────────────────────
+        # Driven through the LIST, not through toggle_subs(): what is under test is that the
+        # collapsed row is reachable, that enter reaches it rather than the detail dialog,
+        # and that the rebuild the toggle forces actually lands in the panel.
+        roster["subs"] = [
+            {"name": "reviewer-a", "kind": "subagent", "state": "idle", "context_pct": 41},
+            {"name": "reviewer-b", "kind": "subagent", "state": "busy", "context_pct": 78},
+        ]
+        app.load()
+        for _ in range(3):
+            await pilot.pause()
+
+        def lane_names():
+            return [w.row.get("name") for w in app.query_one("#lanes", ListView).children]
+
+        ok("the collapsed fleet ends in one aggregate row, not two subagent rows",
+           lane_names()[-1] == fleet_tui.SUBAGG_NAME
+           and "reviewer-a" not in lane_names(), lane_names())
+        ok("…and the panel says how many it stands for and how hot the hottest is",
+           "2 running" in screen_text(app) and "max ctx 78%" in screen_text(app),
+           screen_text(app))
+        lanes.focus()
+        lanes.index = len(lane_names()) - 1
+        await pilot.pause()
+        await pilot.press("enter")
+        for _ in range(3):
+            await pilot.pause()
+        ok("enter on the aggregate row expands it", "reviewer-a" in lane_names(),
+           lane_names())
+        # ENTER IS NOT "OPEN THE DIALOG" HERE. The aggregate has no path, no branch and no
+        # config, so a detail dialog on it would be a panel of blanks.
+        ok("…rather than opening a detail dialog on a row that is not an agent",
+           app.detail is None, app.detail)
+        await pilot.press("enter")
+        for _ in range(3):
+            await pilot.pause()
+        ok("…and enter again collapses it, the same way it closes every other overlay",
+           "reviewer-a" not in lane_names(), lane_names())
+        roster["subs"] = []
+        app.load()
+        for _ in range(3):
+            await pilot.pause()
+
+        # ── CTRL+CLICK ON A ROW WITH A REVIEW STAGED → that lane's Monocle ───────────────
+        # Both halves are stubbed at the seam: what is under test is that the gesture is
+        # received with its modifier and dispatched to the right lane, not that tmux works.
+        jumps = {"looked": [], "focused": []}
+        real_pane, real_focus = fleet_tui.monocle_pane, fleet_tui.focus_pane
+        fleet_tui.monocle_pane = lambda n: (jumps["looked"].append(n) or "%42")
+        fleet_tui.focus_pane = lambda p: (jumps["focused"].append(p) or True)
+        try:
+            volatile["review"] = {"name": "SRV-28 diff", "age": 60}
+            app.load()
+            for _ in range(3):
+                await pilot.pause()
+            row = app.query_one("#lanes", ListView).children[0]
+            await pilot.click(row, control=True)
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            ok("ctrl+click on a staged row asks for THAT lane's monocle pane",
+               jumps["looked"] == ["feature-1"], jumps)
+            ok("…and focuses the pane tmux named, rather than a guess",
+               jumps["focused"] == ["%42"], jumps)
+            # THE SAME GESTURE ARRIVES TWICE — a modified click still selects the row under
+            # it. Leaving the lane dialog open behind a window the user has just been sent
+            # away from is what this drops.
+            ok("…and the click's own selection does not also open the lane dialog",
+               app.detail is None, app.detail)
+
+            # A PLAIN click must be untouched by that suppression, or the guard has traded
+            # one broken gesture for another.
+            await pilot.click(row)
+            await pilot.pause()
+            ok("an UNmodified click still opens the lane dialog",
+               app.detail is not None)
+            await pilot.press("escape")
+            await pilot.pause()
+
+            # A ROW WITH NOTHING STAGED SAYS SO. A silent no-op here is indistinguishable
+            # from a click the terminal swallowed, which is the failure mode this feature is
+            # most likely to hit.
+            jumps["looked"].clear()
+            volatile["review"] = None
+            app.load()
+            for _ in range(3):
+                await pilot.pause()
+            await pilot.click(app.query_one("#lanes", ListView).children[0], control=True)
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            ok("ctrl+click on a lane with no review staged jumps nowhere",
+               jumps["looked"] == [], jumps)
+            ok("…and says so rather than doing nothing",
+               any("no review staged" in str(n.message) for n in app._notifications),
+               [str(n.message) for n in app._notifications])
+        finally:
+            fleet_tui.monocle_pane, fleet_tui.focus_pane = real_pane, real_focus
+            volatile["review"] = None
+            app.load()
+            for _ in range(3):
+                await pilot.pause()
+
         # ── the trailer format itself ────────────────────────────────────────────────────
         # Driven against the readers directly: this is where the FILE FORMAT is decided, and
         # the lead writes that file by hand, so the edges are what matter.
@@ -1817,6 +2004,247 @@ async def main():
            _StubApp(), dict(detail, review=None)),
        fleet_tui.FleetTUI.detail_head_markup(_StubApp(), dict(detail, review=None)))
 
+    # ── EVERY KIND ICON IS A GLYPH THE TERMINAL CAN ACTUALLY DRAW ───────────────────────
+    # `triage` was U+1F3F7 + U+FE0F and drew a GREY BOX on the machine this list is written
+    # for: U+1F3F7 has Emoji_Presentation=No, so it needs the variation selector to be emoji
+    # at all — and a codepoint that rare is the one an emoji font is missing. The same rarity
+    # made it MEASURE wrong (rich reports two cells; the terminal drew one box), which is why
+    # the prose after it started a column early in every row and in the dialog head.
+    #
+    # THE INVARIANT IS STRUCTURAL, not a cell count: cell_len already believed the broken
+    # glyph was two wide, so a width assertion alone passes on the defect. One codepoint,
+    # already Wide, no variation selector — that is what would have caught it.
+    for _kind, _icon in ASK_KINDS.items():
+        ok("the %s icon is one already-emoji codepoint, needing no VS16" % _kind,
+           len(_icon) == 1 and unicodedata.east_asian_width(_icon) == "W",
+           (_icon, [hex(ord(c)) for c in _icon]))
+    _prefix = {k: plain(fleet_tui.ask_row_markup(1, "%s: PROSE" % k, {})).split("PROSE")[0]
+               for k in ASK_KINDS}
+    ok("…so every 4ME row starts its prose at the same display column",
+       len({cell_len(v) for v in _prefix.values()}) == 1, _prefix)
+
+    class _AskApp:
+        ask = {"n": 1}
+        data = {"ctx": {}}
+
+    _head = {k: plain(fleet_tui.FleetTUI.ask_head_markup(
+        _AskApp(), fleet_tui.ask_detail("%s: x" % k))) for k in ASK_KINDS}
+    ok("…and the dialog head puts every kind's label at the same column, which is the "
+       "misalignment beside `triage`",
+       len({cell_len(v.split(k)[0]) for k, v in _head.items()}) == 1, _head)
+
+    # ── A DOC REFERENCE IN A 4ME ROW BECOMES ONE CLICKABLE PAGE GLYPH ────────────────────
+    # The live ask this was built for, verbatim in shape: the path is longer than the column
+    # and the prose runs past sixty characters BEFORE reaching it, so an in-place glyph alone
+    # would have vanished in exactly the case that motivated the feature.
+    DOCPATH = ("/Users/john/git/goals-onchain/.claude/worktrees/team-lead/.claude/plans/"
+               "findings-consolidated-2026-08-17.md")
+    FINDINGS = ("triage: CONSOLIDATED FINDINGS — 12 items merged, needs your triage — "
+                "file://%s — pick the P0s" % DOCPATH)
+    _row = fleet_tui.ask_row_markup(3, FINDINGS, {})
+    ok("a doc reference in a 4ME row is a link to the file, not a path in the prose",
+       "[link='file://%s']%s[/link]" % (DOCPATH, fleet_tui.DOC) in _row, _row)
+    ok("…and the path itself is off the row, which is the width it was eating",
+       ".claude/plans" not in plain(_row), plain(_row))
+    ok("…and the glyph is the LAST thing on the row (John 2026-08-18)",
+       plain(_row).rstrip().endswith(fleet_tui.DOC), plain(_row))
+    # THE BADGE IS PAID FOR OUT OF THE PROSE. Appended to a row already filling its column it
+    # wraps the list item onto a second line — a whole row of the panel spent on one glyph,
+    # which is what the live 4ME list did before the budget settled.
+    # Measured against the column's OWN ceiling — a row of unbroken text, which clips to the
+    # full budget — rather than against another ask, whose width is one character short for
+    # the incidental reason that clip trims the space it cut at.
+    _widest = fleet_tui.ask_row_markup(3, "triage: " + "x" * 200, {})
+    ok("…without spending more than the column's budget, which would wrap the row",
+       cell_len(plain(_row)) <= cell_len(plain(_widest)),
+       (cell_len(plain(_row)), cell_len(plain(_widest))))
+    _short = fleet_tui.ask_row_markup(4, "plan: read /tmp/a.md before the gate", {})
+    ok("a bare absolute .md path is a doc reference too",
+       "[link='file:///tmp/a.md']%s[/link]" % fleet_tui.DOC in _short, _short)
+    # THE SHORT ASK IS WHERE THE POSITION IS DECIDABLE. On the long one the clip puts the
+    # glyph at the end whatever the rule is, so only a row whose path would have FIT can tell
+    # end-of-line from in-place — and this one used to render `read 📄 before the gate`.
+    ok("…and it rides the end of the line even when it would have fitted in the sentence",
+       plain(_short).rstrip().endswith("before the gate " + fleet_tui.DOC), plain(_short))
+    # ASSERTED ON THE SHORT ASK, where the path would otherwise have FIT. On the long one the
+    # clip removes it either way, so the same words there prove nothing about this change.
+    ok("…and the path is replaced rather than shown beside the glyph",
+       "/tmp/a.md" not in plain(_short), plain(_short))
+    # THE GAP THE PATH LEFT IS CLOSED. Dropping the mark alone left `read  before the gate` —
+    # a double space where a word had been, which reads as a typo rather than as a link.
+    ok("…and the prose closes over the gap the path left",
+       "read before the gate" in plain(_short), plain(_short))
+    # THE ORDER IS THE POINT: the mark is substituted before the clip and linked after it, so
+    # a path containing an id cannot have a ticket link inserted INSIDE the href.
+    ok("a path containing a ticket id is not linkified inside its own href",
+       "[link='file:///tmp/SRV-24.md']" in fleet_tui.ask_row_markup(
+           5, "plan: /tmp/SRV-24.md", {"linear_base": "https://linear.app/acme"}),
+       fleet_tui.ask_row_markup(5, "plan: /tmp/SRV-24.md",
+                                {"linear_base": "https://linear.app/acme"}))
+    ok("prose carrying no doc reference passes through untouched",
+       fleet_tui.doc_markup("plain [b]text[/]", []) == "plain [b]text[/]")
+    # THE DIALOG KEEPS THE PATH. The row trades it for a glyph because the row is a column;
+    # the surface with room is where the location itself has to stay readable and copyable.
+    _dlg = fleet_tui.FleetTUI.ask_text_markup(_AskApp(), fleet_tui.ask_detail(FINDINGS), {})
+    ok("the 4ME dialog still shows the path in full", DOCPATH in _dlg, _dlg)
+    # …AND OPENS IT (John 2026-08-18). Readable but not clickable made the dialog the one
+    # surface where you could see where the document lived and not go there.
+    ok("…and the path in the dialog is itself the link",
+       "[link='file://%s']file://%s[/link]" % (DOCPATH, DOCPATH) in _dlg, _dlg)
+    # THE SAME ORDERING GUARANTEE AS THE ROW, on the surface that renders the path rather
+    # than a glyph: the id inside the path must not become a ticket link inside the href.
+    _dlg_id = fleet_tui.FleetTUI.ask_text_markup(
+        _AskApp(), fleet_tui.ask_detail("plan: /tmp/SRV-24.md"),
+        {"linear_base": "https://linear.app/acme"})
+    ok("…and a ticket id inside that path is not linkified inside its own href",
+       "[link='file:///tmp/SRV-24.md']/tmp/SRV-24.md[/link]" in _dlg_id, _dlg_id)
+
+    # ── THE ORDER OF THE AGENT LIST IS FIXED, NOT DISCOVERED (item 7) ────────────────────
+    # Driven with the input DELIBERATELY SHUFFLED into the order fleet-status actually
+    # produces — alphabetical — because a test fed an already-correct list cannot fail for
+    # the defect: it would pass against a sort function that does nothing at all.
+    def _agent(name, kind="lane"):
+        return {"name": name, "kind": kind}
+
+    _mixed = [_agent(n) for n in ("feature-2", "manual-testing-audit", "feature-10",
+                                  "tester", "merge-fst", "feature-1", "team-lead")]
+    ok("the lead leads, then the numbered lanes, then the tester, then everything else",
+       [r["name"] for r in fleet_tui.order_agents(_mixed)]
+       == ["team-lead", "feature-1", "feature-2", "feature-10", "tester",
+           "manual-testing-audit", "merge-fst"],
+       [r["name"] for r in fleet_tui.order_agents(_mixed)])
+    # NUMERICALLY, which alphabetical order gets wrong at exactly ten lanes — the point at
+    # which a name sort puts feature-10 between feature-1 and feature-2 and nobody notices
+    # because a fleet that size is rare.
+    ok("…and lane 10 sorts after lane 2, not between 1 and 2",
+       [r["name"] for r in fleet_tui.order_agents(
+           [_agent("feature-10"), _agent("feature-2")])] == ["feature-2", "feature-10"])
+    # A LANE NAMED `feature-1-old` IS NOT LANE 1. The rank is matched on the whole name, so a
+    # retired lane cannot displace the live one it was named after.
+    ok("…and a name that merely starts like a lane is not ranked as one",
+       fleet_tui.agent_rank(_agent("feature-1-old"))[0] == fleet_tui.RANK_LANE,
+       fleet_tui.agent_rank(_agent("feature-1-old")))
+    # THE KIND DECIDES BEFORE THE NAME. A subagent may be named exactly like a lane (the
+    # standing tester runs as one), and ranking it by name would file it among the lanes.
+    ok("a subagent ranks below every lane whatever it is called",
+       fleet_tui.agent_rank(_agent("team-lead", "subagent"))[0] == fleet_tui.RANK_SUB,
+       fleet_tui.agent_rank(_agent("team-lead", "subagent")))
+
+    # ── THE SUBAGENTS COLLAPSE TO ONE ROW (item 8) ───────────────────────────────────────
+    _subs = [{"name": "reviewer-a", "kind": "subagent", "state": "idle", "context_pct": 41},
+             {"name": "reviewer-b", "kind": "subagent", "state": "busy", "context_pct": 78},
+             {"name": "planner-c", "kind": "subagent", "state": "down", "context_pct": 12}]
+    _agg = fleet_tui.subagg_row(_subs)
+    _aggplain = plain(fleet_tui.subagg_markup(_agg))
+    ok("the aggregate row counts the LIVE subagents, not every registration",
+       "2 running" in _aggplain, _aggplain)
+    ok("…and reports the highest context, which is the runaway it exists to catch",
+       "max ctx 78%" in _aggplain, _aggplain)
+    ok("…and says the dead one is dead rather than only omitting it from the count",
+       "1 down" in _aggplain, _aggplain)
+    # ABSENT, NOT ZERO. A subagent whose transcript cannot be attributed reports no context
+    # at all, and "max ctx 0%" would be a measurement where there is none.
+    ok("…and with nothing measurable it omits the context clause rather than printing 0%",
+       "max ctx" not in plain(fleet_tui.subagg_markup(fleet_tui.subagg_row(
+           [{"name": "x", "kind": "subagent", "state": "idle", "context_pct": None}]))),
+       plain(fleet_tui.subagg_markup(fleet_tui.subagg_row(
+           [{"name": "x", "kind": "subagent", "state": "idle", "context_pct": None}]))))
+    # THE COLLAPSE MUST NOT BE THE REASON YOU MISSED SOMETHING. Everything that made an
+    # individual row shout is counted here, or hiding the rows would hide the exceptions.
+    _loud = fleet_tui.subagg_row([
+        {"name": "a", "kind": "subagent", "state": "idle", "needs_input": "which one?"},
+        {"name": "b", "kind": "subagent", "state": "idle", "review": 1_700_000_000.0}])
+    ok("an ask owed to the user bubbles up to the collapsed row",
+       fleet_tui.LANE_ASK in plain(fleet_tui.subagg_markup(_loud)),
+       plain(fleet_tui.subagg_markup(_loud)))
+    ok("…and so does a staged review",
+       fleet_tui.REVIEW in plain(fleet_tui.subagg_markup(_loud)),
+       plain(fleet_tui.subagg_markup(_loud)))
+    ok("the caret says which way the row will go",
+       plain(fleet_tui.subagg_markup(fleet_tui.subagg_row(_subs, True))).startswith(
+           fleet_tui.SUBAGG_NAME) and fleet_tui.CARET_OPEN
+       in plain(fleet_tui.subagg_markup(fleet_tui.subagg_row(_subs, True))),
+       plain(fleet_tui.subagg_markup(fleet_tui.subagg_row(_subs, True))))
+    # THE CARETS ARE HELD TO THE SAME GLYPH RULE AS THE KIND ICONS — one codepoint and no
+    # U+FE0F — which is what stopped `triage:` from rendering as a grey box.
+    for _c in (fleet_tui.CARET_SHUT, fleet_tui.CARET_OPEN):
+        ok("caret %r is one codepoint carrying no variation selector" % _c,
+           len(_c) == 1 and "\ufe0f" not in _c, repr(_c))
+    # ONE LIST, ONE ORDER. `apply` rebuilds from display_rows and `_rows` measures from it,
+    # so a disagreement between them would zip the in-place refresh against the wrong rows.
+    _rows_shut = fleet_tui.display_rows([_agent("feature-1"), _agent("team-lead")], _subs)
+    ok("collapsed, the subagents are one row below the lanes",
+       [r["name"] for r in _rows_shut] == ["team-lead", "feature-1", "subagents"],
+       [r["name"] for r in _rows_shut])
+    _rows_open = fleet_tui.display_rows([_agent("feature-1"), _agent("team-lead")],
+                                        _subs, True)
+    ok("…and expanded it is followed by them, in their own fixed order",
+       [r["name"] for r in _rows_open]
+       == ["team-lead", "feature-1", "subagents", "planner-c", "reviewer-a", "reviewer-b"],
+       [r["name"] for r in _rows_open])
+    # NO SUBAGENTS, NO ROW. An aggregate standing for nothing is a line of panel spent to
+    # say "0 running", on the fleet that needs its rows most.
+    ok("a fleet with no subagents grows no aggregate row",
+       [r["name"] for r in fleet_tui.display_rows([_agent("team-lead")], [])]
+       == ["team-lead"])
+    # THE ROW RENDERS THROUGH THE SAME head_markup EVERY AGENT ROW DOES, which is what lets
+    # it live in the list as an ordinary item — measured, refreshed and drawn like the rest.
+    ok("the aggregate row renders through head_markup, not a second renderer",
+       plain(fleet_tui.head_markup(_agg)) == _aggplain, plain(fleet_tui.head_markup(_agg)))
+
+    # ── FROM THE 🔍 TO THE REVIEW: resolving the lane's monocle pane ─────────────────────
+    # Driven against tmux's OUTPUT rather than tmux: what is under test is that the window is
+    # derived from the agent's own pane (a window is NAMED for a nickname the harness renames)
+    # and that an unresolvable jump is reported instead of landing somewhere plausible.
+    class _Run:
+        def __init__(self, out="", rc=0):
+            self.stdout, self.returncode = out, rc
+
+    def _tmux_stub(panes_out, win="@3"):
+        def run(argv, **kw):
+            _tmux.append(argv)
+            if argv[1] == "display-message" and argv[-1] == "#{window_id}":
+                return _Run(win)
+            if argv[1] == "display-message":
+                return _Run(_zoomed["flag"])
+            if argv[1] == "list-panes":
+                return _Run(panes_out)
+            return _Run()
+        return run
+
+    _tmux, _zoomed = [], {"flag": "0"}
+    _real_run, _real_panes = fleet_tui.subprocess.run, fleet_tui._team_panes
+    fleet_tui._team_panes = lambda: {"feature-1": "%279"}
+    try:
+        fleet_tui.subprocess.run = _tmux_stub("%279 node\n%158 monocle\n%173 zsh")
+        ok("the monocle pane is found in the window holding the agent's own pane",
+           fleet_tui.monocle_pane("feature-1") == "%158", _tmux)
+        ok("…and the window is asked for BY PANE ID, never by the nickname it is named for",
+           ["tmux", "display-message", "-p", "-t", "%279", "#{window_id}"] in _tmux, _tmux)
+        fleet_tui.subprocess.run = _tmux_stub("%279 node\n%173 zsh")
+        ok("a window with no monocle running resolves to nothing, not to another pane",
+           fleet_tui.monocle_pane("feature-1") == "")
+        fleet_tui._team_panes = lambda: {}
+        ok("…and so does an agent the team config does not place in a pane",
+           fleet_tui.monocle_pane("feature-1") == "")
+
+        # `resize-pane -Z` TOGGLES. Run unconditionally it would un-zoom the very pane it was
+        # asked to enlarge, on every second press — so the flag is read after the selection.
+        _tmux.clear()
+        _zoomed["flag"] = "0"
+        fleet_tui.subprocess.run = _tmux_stub("")
+        ok("focusing a pane selects its window, then the pane, then zooms",
+           fleet_tui.focus_pane("%158") is True
+           and [a[1:3] for a in _tmux if a[1] != "display-message"]
+           == [["select-window", "-t"], ["select-pane", "-t"], ["resize-pane", "-Z"]], _tmux)
+        _tmux.clear()
+        _zoomed["flag"] = "1"
+        fleet_tui.focus_pane("%158")
+        ok("…and does NOT re-zoom an already-zoomed window, which would un-zoom it",
+           not any(a[1] == "resize-pane" for a in _tmux), _tmux)
+    finally:
+        fleet_tui.subprocess.run, fleet_tui._team_panes = _real_run, _real_panes
+
     ok("…and a row with no PRs is NOT padded, which would cost it a wrapped line",
        not plain(fleet_tui.head_markup(
            dict(lane_row, issue_links=[("SRV-24", "")]))).endswith(" "),
@@ -2043,6 +2471,23 @@ async def main():
 
             ok("an agent with no sidecars and no cwd resolves to nothing, not a guess",
                _agent_facts.agent_transcript("never-booted", "") == "")
+
+            # THE EXACT HALF, ALONE. A SUBAGENT shares its spawner's cwd, so steps 2 and 3
+            # above would hand it the LEAD's transcript and report the lead's context on a
+            # reviewer's row — which is why the subagent rows carried no context at all
+            # until this split let them ask for step 1 without the fallbacks.
+            with open(os.path.join(agents, "feature-9.transcript"), "w") as fh:
+                fh.write(exact + "\n")
+            ok("the exact resolver returns the per-agent sidecar",
+               _agent_facts.agent_transcript_exact("feature-9") == exact,
+               _agent_facts.agent_transcript_exact("feature-9"))
+            # THE WHOLE POINT OF THE SPLIT, and the one assertion that separates it from
+            # agent_transcript: with the sidecar gone, the cwd fallback must NOT fire.
+            os.remove(os.path.join(agents, "feature-9.transcript"))
+            ok("…and refuses to fall back to the newest file in the cwd, which is a guess",
+               _agent_facts.agent_transcript_exact("feature-9") == "",
+               (_agent_facts.agent_transcript_exact("feature-9"),
+                _agent_facts.agent_transcript("feature-9", cwd)))
         finally:
             _agent_facts.os.path.expanduser = real_expand
 

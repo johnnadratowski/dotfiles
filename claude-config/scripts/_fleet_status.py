@@ -15,8 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
-    ASK, agent_transcript, ask_kind, ask_trailers, branch_ticket_for, clip, context_for,
-    fleet_goal,
+    ASK, agent_transcript, agent_transcript_exact, ask_kind, ask_trailers,
+    branch_ticket_for, clip, context_for, fleet_goal,
     fleet_goal_path, fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items,
     open_prs_for, status_age, status_line, tickets_for,
 )
@@ -155,10 +155,26 @@ def rows():
             # last_active is per-TRANSCRIPT, so it is the one per-agent fact a subagent row
             # could carry — but only from a session-exact path. Falling back to the cwd would
             # report its spawner's activity, which is the same misattribution as the rest.
+            #
+            # …AND THE SIDECAR IS THE OTHER EXACT PATH. `parent_session_for` yields nothing
+            # for a subagent (it resolves a PARENT), so `tpath` is always empty here and both
+            # fields below were structurally None. agent_transcript_exact is step 1 of the
+            # normal resolution and only step 1: it reads the per-agent `.transcript` written
+            # for THIS name, and returns "" rather than falling back to the newest file in
+            # the cwd — which for a subagent is its spawner's, the misattribution above.
+            #
+            # CONTEXT IS PER-TRANSCRIPT TOO, and was blanked with the cwd-derived fields when
+            # it did not have to be: context_for ignores the cwd entirely once handed an
+            # explicit path. Without this the TUI's aggregate subagent row — whose whole
+            # point is "which of them is quietly burning its window" — had nothing to report.
+            sub_t = tpath or agent_transcript_exact(name)
+            sub_used, sub_win = context_for(path, sub_t) if sub_t else (None, None)
             yield {"name": name, "path": path, "state": state, "uptime": fmt_uptime(up),
-                   "kind": kind, "label": label, "tokens": None, "context_pct": None,
+                   "kind": kind, "label": label, "tokens": sub_used,
+                   "context_pct": (round(100 * sub_used / (sub_win * 0.8))
+                                   if sub_used and sub_win else None),
                    "issue": "", "needs_input": "", "status": "", "status_age": None,
-                   "last_active": last_active(tpath) if tpath else None}
+                   "last_active": last_active(sub_t) if sub_t else None}
             continue
 
         used, win = context_for(path, tpath or None)

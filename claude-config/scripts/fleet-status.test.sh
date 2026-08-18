@@ -244,7 +244,7 @@ printf 'review: the DX-6 diff\nproduct: fold MON-10 in?\nship: merge #124\ntriag
 has "a review: ask carries the review glyph"    "🔍 the DX-6 diff"      "$(row chas)"
 has "a product: ask carries the product glyph"  "💬 fold MON-10 in?"    "$(row chas)"
 has "a ship: ask carries the ship glyph"        "🚀 merge #124"         "$(row chas)"
-has "a triage: ask carries the triage glyph"    "🏷️ whose is this?"     "$(row chas)"
+has "a triage: ask carries the triage glyph"    "🔖 whose is this?"     "$(row chas)"
 has "an untyped ask is a general action item"   "✅ something else"     "$(row chas)"
 hasnt "the kind token itself is consumed, not printed" "review:"        "$(row chas)"
 has "the umbrella glyph still counts them all"  "⚠️ 6 needs you"        "$(run | head -1)"

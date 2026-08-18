@@ -411,11 +411,21 @@ _ASK_ENUM = re.compile(r"\s*\(\d+\)\s*")
 #
 # An ask is typed by a leading `<kind>:` token, which is stripped before display. An untyped
 # ask is a general action item; that is the honest default, not a fallback to apologise for.
+#
+# EVERY ICON IS ONE CODEPOINT THAT IS ALREADY EMOJI, and that is an invariant, not a
+# coincidence — `fleet-tui.test.py` asserts it. `triage` was 🏷 + U+FE0F, and it drew a
+# grey box on the machine that reads this list: U+1F3F7 has Emoji_Presentation=No, so it needs
+# the variation selector to be drawn as emoji at all, and a codepoint that rare is the one the
+# terminal's emoji font is missing. The same rarity is why it MEASURED wrong — rich reports two
+# cells for the pair, the terminal drew one box — so the prose after it started a column early
+# in every row and in the dialog head. A marker nobody can read is worse than no marker (see
+# fleet_tui.LANE_ASK, which lost its VS16 for the same reason); 🔖 is a single
+# Emoji_Presentation codepoint and says "label" without needing one.
 ASK_KINDS = {
     "review":  "🔍",   # a diff, a PR, a bundle — something to read and green-light
     "plan":    "📋",   # a plan awaiting its gate, before any code exists
     "product": "💬",   # a product / business / scoping call only the user can make
-    "triage":  "🏷️",   # a tracker question — is this an issue, whose is it, what priority
+    "triage":  "🔖",   # a tracker question — is this an issue, whose is it, what priority
     "ship":    "🚀",   # a merge, deploy or publish gate
     "fleet":   "🔧",   # the machinery itself — hooks, scripts, skills, the lanes' own tooling
     "todo":    "✅",   # explicit general action — same as untyped, spelled out
@@ -617,6 +627,26 @@ def transcript_for(cwd):
         return ""
 
 
+def agent_transcript_exact(name):
+    """ONLY step 1 of the resolution below — the per-agent sidecar, or "".
+
+    SEPARATE BECAUSE THE THREE STEPS ARE NOT EQUALLY ATTRIBUTABLE. Steps 2 and 3 end in
+    "newest file in a project dir", which for a SUBAGENT is its spawner's transcript: a
+    subagent shares its spawner's cwd, so that fallback reports the lead's activity on a
+    reviewer's row. The sidecar is written per session for that agent by name and carries no
+    such ambiguity, so a caller that must not guess can ask for this half alone.
+    """
+    if not isinstance(name, str) or not name:
+        return ""
+    try:
+        with open(os.path.join(os.path.expanduser("~/.claude/agents"),
+                               name + ".transcript")) as fh:
+            p = fh.read().strip()
+    except OSError:
+        return ""
+    return p if p and os.path.isfile(p) else ""
+
+
 def agent_transcript(name, cwd=""):
     """This agent's live transcript, resolved WITHOUT tmux and without the harness.
 
@@ -635,14 +665,10 @@ def agent_transcript(name, cwd=""):
     """
     if not isinstance(name, str) or not name:
         return transcript_for(cwd)
+    exact = agent_transcript_exact(name)
+    if exact:
+        return exact
     base = os.path.expanduser("~/.claude/agents")
-    try:
-        with open(os.path.join(base, name + ".transcript")) as fh:
-            p = fh.read().strip()
-        if p and os.path.isfile(p):
-            return p
-    except OSError:
-        pass
     try:
         with open(os.path.join(base, name + ".cwd")) as fh:
             rec = fh.read().strip()

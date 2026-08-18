@@ -74,7 +74,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
-from _agent_facts import (ASK, ASK_GENERAL, ASK_KINDS, ask_detail, ask_kind,  # noqa: E402
+from _agent_facts import (ASK, ASK_GENERAL, ASK_KINDS, LINE_MAX,  # noqa: E402
+                          ask_detail, ask_kind,
                           ask_trailers, branch_for, branch_ticket_for, clip, fleet_goal,
                           fleet_goal_path, fmt_age, fmt_ago, refresh_open_prs, status_text,
                           tickets_for)
@@ -85,6 +86,8 @@ from rich.text import Text  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
 from textual.containers import Vertical, VerticalScroll  # noqa: E402
+from textual.css.query import NoMatches  # noqa: E402
+from textual.widget import MountError  # noqa: E402
 from textual.widgets import Footer, Input, ListItem, ListView, Static  # noqa: E402
 from textual.worker import get_current_worker  # noqa: E402
 
@@ -222,6 +225,105 @@ def linkify(text, ctx):
         text = _PR.sub(
             lambda m: "[link='%s/pull/%s']#%s[/link]" % (repo, m.group(1), m.group(1)), text)
     return text
+
+
+# ── A DOC REFERENCE IN AN ASK ────────────────────────────────────────────────────────────
+# An ask that points at a written artefact — a findings doc, a plan — carries its whole
+# absolute path, and the path is longer than the 60-char row: `triage: CONSOLIDATED FINDINGS
+# — file:///Users/john/git/goals-onchain/.claude/worktrees/team-lead/.claude/plans/…` spent
+# the entire column on a location and clipped away the question. So the ROW shows one
+# clickable page glyph instead; the dialog, which has room, shows the path itself — and
+# links THAT, so the location is readable, copyable and openable on the one surface that
+# has room for all three.
+#
+# THE GLYPH RIDES THE END OF THE LINE, ALWAYS (John 2026-08-18). It used to sit where the
+# path had stood, which put it mid-sentence on a short ask and at the tail on a long one —
+# two positions for one meaning, and on a row near its budget the in-place glyph pushed the
+# prose past the column and wrapped the item onto a second line. One position, always the
+# last thing on the row, and the prose is clipped to leave room for it.
+#
+# THE MARK IS SUBSTITUTED BEFORE CLIPPING AND LINKED AFTER. Clipping first would cut the path
+# mid-way and leave a broken link; linking first would hand `linkify` a bracket to escape (and
+# a `.../SRV-24.md` path an id to insert a link INSIDE). One char stands in during both, and
+# U+FFFC is the character whose meaning is exactly that — a human writing an ask cannot type
+# it, so nothing in prose can be mistaken for one. The marks are dropped from the prose at
+# render time (with the whitespace that fenced them), because the glyph they stood for is no
+# longer rendered in their place.
+DOC = "\U0001F4C4"
+_DOC_MARK = "\ufffc"
+# A `file://` URL of any kind, or a bare absolute path to a .md. Bounded by whitespace and by
+# the bracket/quote characters that fence a path in prose, so a trailing `]` or `"` is not
+# eaten into the href.
+_DOC_REF = re.compile(r"file://(?:localhost)?(/[^\s\]\[<>\"']+)"
+                      r"|(?<![\w/])(/[^\s\]\[<>\"']+\.md)\b")
+# A mark and the whitespace that fenced it, collapsed to one space: the path is gone from the
+# prose, and the two spaces and the dangling em-dash that surrounded it should not stay behind.
+_DOC_GAP = re.compile(r"\s*\ufffc\s*")
+
+
+def doc_spans(text):
+    """(text with every doc reference replaced by one mark, [(url, as-written) per mark])."""
+    spans = []
+
+    def take(m):
+        spans.append(("file://" + (m.group(1) or m.group(2)), m.group(0)))
+        return _DOC_MARK
+
+    return _DOC_REF.sub(take, text or ""), spans
+
+
+def doc_refs(text):
+    """(text with every doc reference replaced by one mark, [file:// url per mark])."""
+    marked, spans = doc_spans(text)
+    return marked, [url for url, _raw in spans]
+
+
+# What one tail badge costs the prose: the glyph's two display cells plus the space before
+# it. Spent BEFORE clipping — a badge appended to a row already filling its column wraps the
+# list item onto a second line, which costs a whole row of the panel to say one glyph.
+_DOC_COST = 3
+
+
+def fit_ask(text, urls, width=LINE_MAX):
+    """Clip an ask's prose, leaving room for the badges that will ride its tail.
+
+    EVERY ref is a badge now, not just the ones the clip drops, so the budget is known up
+    front rather than settled against the clip. The floor keeps a row of nothing but
+    references from clipping the prose out of existence.
+    """
+    return clip(text, max(8, width - _DOC_COST * len(urls)))
+
+
+def _doc_link(url):
+    return "[link='%s']%s[/link]" % (url, DOC) if url else DOC
+
+
+def doc_markup(markup, urls):
+    """Drop the marks from the prose and hang one clickable page glyph per ref off the end.
+
+    Pure, and text carrying no mark passes through untouched.
+    """
+    out = _DOC_GAP.sub(" ", markup or "").strip()
+    for url in urls:
+        out += " " + _doc_link(url)
+    return out
+
+
+def doc_text_markup(text, link_text):
+    """The ask IN FULL with each doc reference linked IN PLACE — the dialog's rendering.
+
+    `link_text` renders the surviving prose (escaping, ticket links); it is applied to the
+    marked text so it can neither eat a path nor put a ticket link inside one, exactly as on
+    the row. The path is then written back as the link's LABEL, so the dialog stays the
+    surface where the location is readable and copyable as well as clickable.
+    """
+    marked, spans = doc_spans(text)
+    parts = link_text(marked).split(_DOC_MARK)
+    out = parts[0]
+    for i, part in enumerate(parts[1:]):
+        url, raw = spans[i] if i < len(spans) else ("", "")
+        out += ("[link='%s']%s[/link]" % (url, escape(raw)) if url else "") + part
+    return out
 
 
 _LINEAR_URL = re.compile(r"https?://linear\.app/([^/]+)/issue/([A-Za-z]{2,5}-\d+)")
@@ -551,6 +653,67 @@ def _team_panes():
             if nm and pane.startswith("%") and pane in live:
                 out[nm] = pane
     return out
+
+
+# ── JUMPING TO A LANE'S MONOCLE ─────────────────────────────────────────────────────────
+# The 🔍 on a row says a review is staged for the user; the review itself is in the lane's
+# Monocle pane, in another tmux window. Ctrl+click on the row takes them there.
+#
+# THE WINDOW IS DERIVED FROM THE AGENT'S OWN PANE, never from a lane -> window table. A lane's
+# window is NAMED for its nickname ("vii (1)"), which is a human label the harness renames at
+# will; the pane id in the team config is the one identifier this view and tmux already agree
+# on, and it is the same one `live_tuning` reads the model out of.
+MONOCLE_CMD = "monocle"
+
+
+def monocle_pane(name):
+    """The pane running Monocle in the window that holds this agent's pane, or "".
+
+    "" for every honest failure — no pane in the config, the window gone, no Monocle running
+    in it. The caller SAYS so rather than jumping somewhere plausible: this action moves the
+    user's eyes to another window, and landing on the wrong one is worse than not moving.
+    """
+    pane = _team_panes().get(name)
+    if not pane:
+        return ""
+    try:
+        win = subprocess.run(["tmux", "display-message", "-p", "-t", pane, "#{window_id}"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+        if not win:
+            return ""
+        out = subprocess.run(["tmux", "list-panes", "-t", win, "-F",
+                              "#{pane_id} #{pane_current_command}"],
+                             capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    for line in out.splitlines():
+        pid, _, cmd = line.partition(" ")
+        if MONOCLE_CMD in cmd and pid.startswith("%"):
+            return pid
+    return ""
+
+
+def focus_pane(pane):
+    """Put `pane` in front of the client: window selected, pane selected, zoomed. True on OK.
+
+    THE ZOOM IS CONDITIONAL ON THE WINDOW NOT ALREADY BEING ZOOMED, because `resize-pane -Z`
+    TOGGLES — run unconditionally it would un-zoom the very pane it was asked to enlarge on
+    every second press. `select-pane` inside an already-zoomed window un-zooms tmux-side, so
+    the flag is read AFTER the selection rather than before it.
+    """
+    try:
+        for args in (["select-window", "-t", pane], ["select-pane", "-t", pane]):
+            if subprocess.run(["tmux"] + args, capture_output=True, timeout=5).returncode:
+                return False
+        zoomed = subprocess.run(["tmux", "display-message", "-p", "-t", pane,
+                                 "#{window_zoomed_flag}"],
+                                capture_output=True, text=True, timeout=5).stdout.strip()
+        if zoomed != "1":
+            subprocess.run(["tmux", "resize-pane", "-Z", "-t", pane],
+                           capture_output=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return True
 
 
 def live_tuning(name):
@@ -1033,8 +1196,122 @@ def fit_ids(cells, width=TICKETS_W):
     return one, len(one)
 
 
+# ── THE ORDER OF THE AGENT LIST ─────────────────────────────────────────────────────────────
+# FIXED, NOT DISCOVERED (John 2026-08-17). fleet-status sorts by name, so the list read
+# `feature-1 … merge-fst, team-lead` — the lead last, and an ad-hoc lane wedged between the
+# numbered ones. The reader's model of this fleet is positional: the lead is where decisions
+# land, the numbered lanes are the standing staff, everything else is transient. A list whose
+# order changes as lanes are created and retired makes that model something you re-derive on
+# every glance.
+#
+# RANK, NOT A SORTED NAME LIST. The rank is the CLASS an agent belongs to, which is what
+# item 8's aggregate row also needs — "the subagents" is rank 4 by the same function that
+# puts the lead first, so grouping by class costs a `groupby`, not a second ordering.
+LEAD_NAME = "team-lead"
+TESTER_NAME = "tester"
+_FEATURE_LANE = re.compile(r"feature-(\d+)\Z")
+
+RANK_LEAD, RANK_FEATURE, RANK_TESTER, RANK_LANE, RANK_SUB = 0, 1, 2, 3, 4
+
+
+def agent_rank(row):
+    """(class, ordinal, name) — the sort key, and the class is the useful half.
+
+    Ad-hoc lanes keep their alphabetical order among themselves rather than being ranked
+    against each other: they are named for whatever they were spun up to do, so any ordering
+    of THEM would be a claim about importance that nothing on the row supports.
+    """
+    name = row.get("name") or ""
+    if row.get("kind") == "subagent":
+        return (RANK_SUB, 0, name)
+    if name == LEAD_NAME:
+        return (RANK_LEAD, 0, "")
+    m = _FEATURE_LANE.match(name)
+    if m:
+        return (RANK_FEATURE, int(m.group(1)), "")
+    if name == TESTER_NAME:
+        return (RANK_TESTER, 0, "")
+    return (RANK_LANE, 0, name)
+
+
+def order_agents(rows):
+    return sorted(rows or [], key=agent_rank)
+
+
+# ── THE SUBAGENTS, AS ONE ROW ───────────────────────────────────────────────────────────────
+# COLLAPSED BY DEFAULT (John 2026-08-18). A per-subagent row cost a line of a short panel to
+# say almost nothing: a subagent shares its spawner's cwd, so tickets, PRs and status are all
+# blank by construction (see _fleet_status.rows) — the columns that made a LANE row worth its
+# height are structurally empty here. What the rows did carry, across all of them, is one
+# signal: a subagent quietly burning its context. That is a MAX, so one row says it.
+#
+# EXCEPTIONS BUBBLE, because a collapsed list that hides a problem is worse than the rows it
+# replaced. Anything that would have made an individual row shout — it owes you an answer, it
+# is dead, it has a review staged — is counted on the aggregate, so the collapse can never be
+# the reason you did not see it.
+#
+# "FAILED" IS NOT A STATE THIS FLEET HAS. The states are busy/quiet/idle/down, so the failure
+# that bubbles is `down`; there is nothing upstream to read a stuck-vs-crashed distinction
+# from, and inventing one on this row would be the surface asserting past its evidence.
+SUBAGG_KIND = "subagg"
+SUBAGG_NAME = "subagents"
+# Single-codepoint, no variation selector — the same rule the kind icons follow, and the
+# reason `triage:` stopped being a grey box. Ambiguous-width like the ⚠ already on these
+# rows, which is safe here because this line is prose, not a padded column.
+CARET_SHUT, CARET_OPEN = "▸", "▾"
+
+
+def subagg_row(subs, expanded=False):
+    """The one row that stands for every subagent. Carries them, so nothing is re-fetched."""
+    return {"kind": SUBAGG_KIND, "name": SUBAGG_NAME,
+            "subs": list(subs or []), "expanded": bool(expanded)}
+
+
+def subagg_markup(r):
+    subs = r.get("subs") or []
+    live = sum(1 for s in subs if s.get("state") != "down")
+    facts = ["%d running" % live]
+    pcts = [s.get("context_pct") for s in subs
+            if isinstance(s.get("context_pct"), (int, float))]
+    # OMITTED, NEVER ZEROED, when no subagent reports one: "max ctx 0%" is a measurement and
+    # "we could not attribute a transcript to any of them" is the absence of one.
+    if pcts:
+        facts.append("max ctx %d%%" % max(pcts))
+    out = "[dim]%s  %s[/]" % (CARET_OPEN if r.get("expanded") else CARET_SHUT,
+                              escape(" · ".join(facts)))
+    asks = sum(1 for s in subs if s.get("needs_input"))
+    if asks:
+        out += "[b yellow] · %d %s[/]" % (asks, LANE_ASK)
+    dead = sum(1 for s in subs if s.get("state") == "down")
+    if dead:
+        out += "[red] · %d down[/]" % dead
+    revs = sum(1 for s in subs if s.get("review"))
+    if revs:
+        out += "[b cyan] · %d %s[/]" % (revs, REVIEW)
+    return "[b]%-*s[/] %s" % (NAME_W + LABEL_W + 2, SUBAGG_NAME, out)
+
+
+def display_rows(lanes, subs, expanded=False):
+    """Every row of the agent list, in the order it is drawn — the one place that decides.
+
+    Pure and total: `apply` rebuilds from it, `_rows` measures the panel from it, and the two
+    cannot disagree about how many rows there are, which is what the in-place refresh zips
+    children against.
+    """
+    rows = order_agents(lanes)
+    subs = order_agents(subs)
+    if subs:
+        rows.append(subagg_row(subs, expanded))
+        if expanded:
+            rows.extend(subs)
+    return rows
+
+
+
 def head_markup(r, ctx=None):
     """The identity line: state, label, name, context gauge, uptime, tickets, PRs."""
+    if r.get("kind") == SUBAGG_KIND:
+        return subagg_markup(r)
     ctx = ctx or {}
     state = r.get("state", "?")
     icon = LANE_ASK if r.get("raw_asks") else STATE_ICON.get(state, "?")
@@ -1102,7 +1379,9 @@ def ask_row_markup(n, raw, ctx=None):
     """
     icon, text = ask_kind(raw)
     text, _trailers = ask_trailers(text)
-    return "[dim]%2d[/]  %s %s" % (n, icon, linkify(clip(text), ctx or {}))
+    text, urls = doc_refs(text)
+    return "[dim]%2d[/]  %s %s" % (
+        n, icon, doc_markup(linkify(fit_ask(text, urls), ctx or {}), urls))
 
 
 # ── the 4ME category filter ──────────────────────────────────────────────────────────────
@@ -1288,7 +1567,14 @@ class Panels(Vertical):
 
 class FleetTUI(App):
     CSS = """
-    Screen { background: $surface; layers: base overlay; }
+    /* CENTRED OVERLAYS, AND THE BASE LAYER UNMOVED. Textual arranges each LAYER
+       separately, so an `align` on the screen centres the overlay dialogs without touching
+       the header/panels/footer stack — those fill the width and end in a `1fr` panel, so
+       there is no slack for the alignment to take. Every dialog was pinned to the TOP-LEFT
+       before this: they are `height: auto`, and a fixed `margin` is an offset from the
+       corner, not a position. Each one therefore needs an explicit width (below) — a
+       dialog left at the default `1fr` fills the row and centring it is a no-op. */
+    Screen { background: $surface; layers: base overlay; align: center middle; }
     #head { padding: 0 1; height: 1; color: $text-muted; }
     /* The standing goal. Absent file ⇒ no widget on screen at all: a fleet with no goal is
        the ordinary case, and a permanent row saying "no goal" would cost a line to say
@@ -1304,7 +1590,7 @@ class FleetTUI(App):
     #legend {
         layer: overlay;
         display: none;
-        margin: 2 6;
+        width: 90%;
         padding: 1 2;
         height: auto;
         border: heavy $accent;
@@ -1318,7 +1604,7 @@ class FleetTUI(App):
     #detail {
         layer: overlay;
         display: none;
-        margin: 1 3;
+        width: 90%;
         padding: 1 2;
         height: auto;
         max-height: 100%;
@@ -1352,11 +1638,11 @@ class FleetTUI(App):
     /* The 4ME overlay. Every rule here is the agent dialog's, restated for a different id
        rather than shared through a class — the two are the same KIND of surface and are
        meant to stay that way, so when one grows a convention the other is next to it in the
-       file. Narrower margins: an ask is prose, and prose wants a column, not a full screen. */
+       file. Narrower than the lane dialog: an ask is prose, and prose wants a column. */
     #ask-detail {
         layer: overlay;
         display: none;
-        margin: 2 5;
+        width: 84%;
         padding: 1 2;
         height: auto;
         max-height: 100%;
@@ -1453,6 +1739,12 @@ class FleetTUI(App):
         self.detail = None         # the open overlay's assembled data, or None
         self.ask = None            # the open 4ME overlay's {raw, n}, or None
         self.ask_filter = ""       # 4ME category filter: "" = every kind, else a kind name
+        self._ctrl_lane = None     # the Lane a ctrl+click just acted on; see on_mouse_down
+        # Collapsed on boot: the aggregate exists BECAUSE the individual rows were
+        # costing more panel than they said. Opening it is a deliberate act, and it
+        # is not remembered across restarts — the drill-down answers a question you
+        # have now, not a preference.
+        self.subs_open = False
         self.editing = None        # the cfg entry currently being edited, or None
         self._fitted_want = None   # rows the cards wanted at the last fit, clamp aside
         self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
@@ -1573,12 +1865,42 @@ class FleetTUI(App):
                 for r in data["lanes"] + data["subs"]]
         return json.dumps([rows, data["fleet"]], sort_keys=True, default=str)
 
+    def _display_rows(self, data=None):
+        """The agent list as drawn — ordering (item 7) and the subagent collapse (item 8).
+
+        The expansion is UI state, not fleet state, which is why it is threaded in HERE and
+        not built into the snapshot: nothing on disk changes when the row is opened.
+        """
+        data = self.data if data is None else data
+        return display_rows(data.get("lanes") or [], data.get("subs") or [], self.subs_open)
+
     def apply(self, data):
         """Rebuild only on a STRUCTURAL change; otherwise update the moving numbers in place.
 
         A ListView rebuilt on a timer throws away the cursor and repaints the screen, which
         makes the view unusable exactly while you are reading it.
         """
+        # APPLY CAN RUN WHEN THE PANELS ARE NOT IN THE TREE, and appending a row then kills
+        # the app outright: `MountError: Can't mount widget(s) before ListView(id='lanes') is
+        # mounted`. The case actually caught in the wild was a rebuild during SHUTDOWN — the
+        # `c` filter key arriving as the app tore down, which `action_cycle_category` turns
+        # into a full rebuild — and the same hole is open at the other end, since `load()` runs
+        # on a worker thread and its result is handed back by `call_from_thread`.
+        #
+        # `is_attached` IS THE PROPERTY, because it is the precondition Textual's own
+        # `Widget.mount` tests. `is_mounted` is a different one and reads True here while the
+        # mount still raises, so a guard written on it passes and the app dies anyway.
+        #
+        # RE-QUEUED, NEVER DROPPED: this may be the load that draws the first frame, and
+        # skipping it would leave both panels empty for a whole tick.
+        try:
+            ready = (self.query_one("#lanes").is_attached
+                     and self.query_one("#fleet").is_attached)
+        except NoMatches:
+            ready = False
+        if not ready:
+            self.call_after_refresh(self.apply, data)
+            return
         sig = self.structure_sig(data)
         self.data = data
         self.refreshed_at = _now()
@@ -1587,7 +1909,7 @@ class FleetTUI(App):
         self.refresh_detail()
         self.refresh_ask()
 
-        rows = data["lanes"] + data["subs"]
+        rows = self._display_rows(data)
         lanes = self.query_one("#lanes", ListView)
         if sig == self.sig:
             for item, r in zip(lanes.children, rows):
@@ -1603,21 +1925,33 @@ class FleetTUI(App):
         self.sig = sig
 
         ctx = data.get("ctx") or {}
-        keep = lanes.index
-        lanes.clear()
-        for r in rows:
-            lanes.append(Lane(r, ctx))
-        if keep is not None and 0 <= keep < len(rows):
-            lanes.index = keep
+        try:
+            keep = lanes.index
+            lanes.clear()
+            for r in rows:
+                lanes.append(Lane(r, ctx))
+            if keep is not None and 0 <= keep < len(rows):
+                lanes.index = keep
 
-        fleet = self.query_one("#fleet", ListView)
-        keepf = fleet.index
-        fleet.clear()
-        shown = filter_asks(data["fleet"], self.ask_filter)
-        for i, raw in shown:
-            fleet.append(Ask(i, raw, data.get("fleet_path", ""), ctx))
-        if keepf is not None and 0 <= keepf < len(shown):
-            fleet.index = keepf
+            fleet = self.query_one("#fleet", ListView)
+            keepf = fleet.index
+            fleet.clear()
+            shown = filter_asks(data["fleet"], self.ask_filter)
+            for i, raw in shown:
+                fleet.append(Ask(i, raw, data.get("fleet_path", ""), ctx))
+            if keepf is not None and 0 <= keepf < len(shown):
+                fleet.index = keepf
+        except MountError:
+            # THE SAME HAZARD, CAUGHT AT THE CALL THAT ACTUALLY RAISES. The probe above closes
+            # the window it can SEE; nothing stops a widget detaching between that probe and
+            # this mount, which is precisely what a teardown does.
+            #
+            # THE SIGNATURE IS CLEARED, and that is the load-bearing half: it was set above,
+            # so a retry would otherwise take the nothing-changed path and leave both panels
+            # permanently empty — a silent version of the same failure.
+            self.sig = None
+            self.call_after_refresh(self.apply, data)
+            return
 
         # The roster just changed shape — an agent came or went, or one grew an ask — which is
         # the only thing the panel's height depends on. Nothing here runs on the tick that
@@ -1753,13 +2087,90 @@ class FleetTUI(App):
         """
         self._enter(event.list_view.id, event.item)
 
+    # ── ctrl+click: from the 🔍 to the review itself ──────────────────────────────────────
+    def on_mouse_down(self, event):
+        """CTRL+CLICK ON AN AGENT ROW JUMPS TO THAT LANE'S MONOCLE, zoomed.
+
+        THE WHOLE ROW IS THE TARGET, not the two cells the glyph occupies. Asking for a hit
+        on a 2-cell emoji makes the feature a game of aim, and the row already IS the lane —
+        every other key on this screen acts on the row under the cursor, not on a character
+        within it. A row with nothing staged says so instead of doing nothing, because a
+        silent no-op is indistinguishable from a click the terminal ate.
+
+        A modified click still selects the row underneath, and that selection is NOT a request
+        for the lane dialog — it is the same gesture, counted twice. `_enter` drops exactly the
+        one it belongs to.
+
+        THE TMUX WORK GOES TO A WORKER. It is three round trips plus a config read, which is
+        far too much to do on the UI thread of a view that repaints on a five-second tick.
+        """
+        if not event.ctrl:
+            return
+        lane = self._lane_of(event.widget)
+        if lane is None:
+            return
+        self._ctrl_lane, row = lane, lane.row
+        name = row.get("name") or "?"
+        # THE AGGREGATE HAS NO PANE. It stands for a group, and `monocle_pane` resolves a
+        # NAME to a tmux pane — handed "subagents" it would search a window that does not
+        # exist and report a failure the user cannot act on. Expanding is the useful answer:
+        # the rows underneath are the ones that can have a review staged.
+        if row.get("kind") == SUBAGG_KIND:
+            self.toggle_subs()
+            return
+        if not row.get("review"):
+            self.notify("%s has no review staged" % name, severity="warning")
+            return
+        self.run_worker(lambda: self._to_monocle(name), thread=True, group="monocle")
+
+    @staticmethod
+    def _lane_of(widget):
+        """The agent row a clicked widget sits inside, or None — the click was elsewhere."""
+        while widget is not None:
+            if isinstance(widget, Lane):
+                return widget
+            widget = getattr(widget, "parent", None)
+        return None
+
+    def _to_monocle(self, name):
+        """Off the UI thread. Every failure is REPORTED — see monocle_pane on why not guess."""
+        pane = monocle_pane(name)
+        if not pane:
+            self.call_from_thread(
+                self.notify, "%s: no monocle pane in its window" % name, severity="warning")
+            return
+        if not focus_pane(pane):
+            self.call_from_thread(
+                self.notify, "%s: tmux refused to focus %s" % (name, pane), severity="warning")
+
     def _enter(self, list_id, item):
+        # THE CTRL+CLICK'S OWN SELECTION, dropped. It lives exactly one call: a flag that
+        # outlived its gesture would swallow a later keyboard enter on the same row, which is
+        # the one failure a user cannot tell from a broken key.
+        ctrl_lane, self._ctrl_lane = self._ctrl_lane, None
+        if ctrl_lane is not None and item is ctrl_lane:
+            return
         if list_id == "detail-cfg":
             self.edit_start()
             return
-        if self.detail is not None or self.ask is not None:
-            return                 # an overlay is up; the lists behind it are not the target
+        # ENTER TOGGLES — the key that opened a dialog closes it. It used to open only, so
+        # the reflex of pressing it again did nothing and `esc` was the only way out. This
+        # climbs the SAME ladder escape does rather than a second one beside it, so the two
+        # keys cannot come to disagree about which dialog is "the open one".
+        #
+        # The cfg list above is the one exception, and it is checked first: inside the lane
+        # dialog enter edits the knob under the cursor, which is that dialog's whole purpose.
+        # The lists behind an overlay are never the target either way.
+        if self.close_top_overlay():
+            return
         if list_id == "lanes" and isinstance(item, Lane):
+            # THE AGGREGATE IS NOT AN AGENT, so enter cannot open a detail dialog on it —
+            # there is no path, no branch and no config behind the row. It opens the list it
+            # stands for instead, which is the same promise enter makes everywhere else here:
+            # show me what this row is summarising.
+            if item.row.get("kind") == SUBAGG_KIND:
+                self.toggle_subs()
+                return
             self.open_detail(item.row)
             return
         # A 4ME ROW IS A CARD ABOUT AN ASK, exactly as a lane row is a card about a lane, so
@@ -1772,6 +2183,19 @@ class FleetTUI(App):
             self.open_ask(item)
             return
         self.action_open_ticket()
+
+    def toggle_subs(self):
+        """Expand or collapse the subagent list under its aggregate row.
+
+        `self.sig = None` FORCES the rebuild. The signature is a function of the SNAPSHOT, and
+        nothing in the snapshot moved — so without this the next apply would take the in-place
+        branch and zip the fresh row list against the children of the old one.
+        """
+        self.subs_open = not self.subs_open
+        self.sig = None
+        if self.data:
+            self.apply(self.data)
+        self._fit_lanes()
 
     def open_detail(self, row):
         """Show the overlay at once, fill it from a WORKER.
@@ -2053,9 +2477,16 @@ class FleetTUI(App):
         return head
 
     def ask_text_markup(self, d, ctx):
-        """The ask IN FULL — unclipped, wrapped by the box, ids clickable."""
+        """The ask IN FULL — unclipped, wrapped by the box, ids AND doc paths clickable.
+
+        The row trades a path for a glyph because the row is a column. Here the path stays
+        visible — it is what someone copies into a terminal — and is a link as well, so the
+        dialog is not the one surface where you can read the location but not open it.
+        """
         text = d["text"] or ""
-        return ("[i]%s[/]" % linkify(text, ctx)) if text else "[dim i]— empty —[/]"
+        if not text:
+            return "[dim i]— empty —[/]"
+        return "[i]%s[/]" % doc_text_markup(text, lambda t: linkify(t, ctx))
 
     def ask_fields_markup(self, d, ctx):
         """The trailers as LABELLED fields, one per line.
@@ -2351,7 +2782,7 @@ class FleetTUI(App):
     # ── layout ───────────────────────────────────────────────────────────────────────────
     def _rows(self):
         """The agents on screen — lanes and their subagents, in the order they are drawn."""
-        return self.data["lanes"] + self.data["subs"]
+        return self._display_rows()
 
     def _avail(self, avail=None):
         """Rows the two panels share. 0 before the first layout pass — there is no
@@ -2567,20 +2998,32 @@ class FleetTUI(App):
             self.query_one("#" + target).styles.height = "1fr"
             self.full = target
 
-    def action_unfullscreen(self):
-        """Escape closes ONE thing, innermost first. Closing two at once would make escape
-        unusable for either: an edit abandoned along with the panel it was in is a keypress
-        the user cannot undo by pressing it again."""
+    def close_top_overlay(self):
+        """Close the innermost open overlay; True when something closed.
+
+        THE ORDER IS THE FACT, which is why it lives in one place: escape and enter both
+        climb this ladder, and a dialog that escape closes second while enter closes it first
+        is two different screens. The in-progress EDIT is deliberately not here — enter
+        inside the editor submits it, so only escape may abandon it.
+        """
         legend = self.query_one("#legend")
-        if self.editing is not None:
-            self.edit_cancel()
-        elif self.detail is not None:
+        if self.detail is not None:
             self.close_detail()
         elif self.ask is not None:
             self.close_ask()
         elif legend.has_class("-show"):
             legend.remove_class("-show")
-        elif self.full:
+        else:
+            return False
+        return True
+
+    def action_unfullscreen(self):
+        """Escape closes ONE thing, innermost first. Closing two at once would make escape
+        unusable for either: an edit abandoned along with the panel it was in is a keypress
+        the user cannot undo by pressing it again."""
+        if self.editing is not None:
+            self.edit_cancel()
+        elif not self.close_top_overlay() and self.full:
             self.action_fullscreen()
 
     def action_undo(self):
