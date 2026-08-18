@@ -2,7 +2,13 @@
 # claude-autoscroll.sh [pane-id]
 #
 # Flip Claude Code's Auto-scroll for the claude session in a tmux pane, by typing
-# `/config autoScrollEnabled=<v>` into it.
+# `/config autoScroll=<v>` into it.
+#
+# THE TOKEN IS THE PANEL ROW ID, NOT THE SETTINGS KEY. The shorthand resolves with
+# `rows.find(n => n.id.toLowerCase() === key.toLowerCase())`, and the Auto-scroll row's id is
+# `autoScroll`. The settings key it writes is `autoScrollEnabled` -- passing THAT is rejected
+# with "isn't a /config setting". The two names are not interchangeable; read the value from
+# the settings key, send the row id.
 #
 # WHY TYPE IT RATHER THAN EDIT THE FILE. `autoScrollEnabled` lives in
 # ~/.claude/settings.json, but a running session reads settings into memory at startup and
@@ -47,6 +53,6 @@ fi
 
 if [ "$cur" = true ]; then new=false; else new=true; fi
 
-tmux send-keys -t "$pane" "/config autoScrollEnabled=$new" Enter
+tmux send-keys -t "$pane" "/config autoScroll=$new" Enter
 tmux display-message "autoscroll -> $new"
 exit 0
