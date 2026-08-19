@@ -410,15 +410,22 @@ product: MON-16 — High or Urgent? [MON-16] [from:feature-3] [added:2026-08-19]
 
 ### What the list looks like, and what that obliges
 
-- **Ordered oldest-first by `[added:]`**, undated after dated, deferred last. So **`[added:]` is
-  not optional** — an item without it sorts into the tail among the undated and stops being
-  ranked at all. The row shows the **age**, not the date.
+- **The ORDER is the reader's choice** — `s` in the TUI cycles **latest** (the default),
+  **earliest**, and **goal**, and the panel title always names which is up. Deferred is last in
+  every mode. So **`[added:]` is not optional**: an undated item sinks in both date orders and
+  stops being ranked at all. The row shows the **age**, not the date.
 - **A `🎯` on a row means that ask gates the standing goal** (its ticket is named in
   `fleet-goal`). It is drawn on the row now, not just in the dialog, because it is what decides
   which item to open first.
-- **`#N` is the row number the TUI shows** — i.e. the oldest-first order, *not* the file's line
-  order. Resolve `#N` by re-reading the file **and applying that sort**, never by counting lines
-  and never from memory.
+- **`#N` is the row number the TUI shows**, under **whichever order is currently up** — never
+  the file's line order. Resolve `#N` by re-reading the file and applying that sort, never by
+  counting lines and never from memory. **If you cannot tell which order is showing, ask** —
+  one line costs less than a brief on the wrong item.
+- **A staged Monocle review appears as a `review:` row automatically**, synthesized from the
+  flag files. **Do not write those by hand**: a hand-written one does not clear itself, which
+  is the exact staleness this replaced.
+- **`[cmd:<command>]`** gives a row a badge that copies the command to the clipboard. Use it
+  whenever an ask is "run this" — the user should never have to retype a command out of prose.
 
 **Write what you know about an ask as TRAILERS** — optional bracket fields at the *end* of the
 first line, after any `(deferred …)` stamp:
