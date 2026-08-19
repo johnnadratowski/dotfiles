@@ -780,6 +780,11 @@ def select_pane(direction):
 def focus_pane(pane):
     """Put `pane` in front of the client: window selected, pane selected, zoomed. True on OK.
 
+    UNTESTED: nothing asserts what this returns when tmux REFUSES. Both callers now branch
+    on it — ctrl+click and the 🔎 badge — and the suite drives them through a stub that always
+    succeeds, so a regression that made this return True on a dead pane id would be caught by
+    no test. Covering it means faking a non-zero tmux exit, which nothing here does yet.
+
     THE ZOOM IS CONDITIONAL ON THE WINDOW NOT ALREADY BEING ZOOMED, because `resize-pane -Z`
     TOGGLES — run unconditionally it would un-zoom the very pane it was asked to enlarge on
     every second press. `select-pane` inside an already-zoomed window un-zooms tmux-side, so
