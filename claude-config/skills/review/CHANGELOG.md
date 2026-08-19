@@ -1,5 +1,19 @@
 # base-pr — changelog
 
+- **6.1.0** — **Empty range + dirty tree no longer reports a silent pass.** Step 2 measured
+  only `$ANCHOR..$TARGET`; a lane holding its whole change uncommitted produced an empty
+  range and the skill stopped at "nothing new to review" — read by the caller as a clean
+  pass, having read nothing, with the reviewer never spawned. New step 2a measures the range
+  and `git status --porcelain` together and dispatches on both: 0+clean stops (the only
+  honest stop), 0+dirty **pivots to a working-tree review** with a loud banner, >0+dirty
+  reviews the range and names the uncommitted remainder as out of scope. Detector is
+  `git status --porcelain`, not `git diff` — a change made entirely of NEW files has an empty
+  `git diff` (measured on `team-lead`, 2026-08-19: 0 bytes, 5 untracked files). Step 3 now
+  carries the uncommitted bundle inline (tracked diff **plus** untracked file contents), per
+  `reviewer.md`'s standing contract that an isolation worktree sees SHAs only. Step 5 never
+  advances the anchor off a working-tree review. Pivot rather than refusal: the state fires
+  mid-work, and a gate that refuses in the ordinary state gets routed around.
+
 - **5.0.0** — (DX-jn-cc-005) **Reviewer-subagent cutover.** The audit methodology
   (corpus, dimensions A–E, nemesis escalation, verdict tokens) moved into the
   `.claude/agents/reviewer.md` definition; this skill slims to range-resolution +

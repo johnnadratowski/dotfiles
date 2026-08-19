@@ -60,9 +60,46 @@ One anchor per target (`<target>-review`), so each derives its own.
    > Seeding at the merge base is the other half: an anchor seeded at `$TARGET` makes the
    > FIRST review of a lane's own work empty for the same reason.
 2. **Resolve the range** (purely local — no fetch): `git log --no-merges --oneline
-   $ANCHOR..$TARGET`. Empty ⇒ "nothing new to review", stop. Anchor diverged from the
-   target (not an ancestor) ⇒ surface `git log --left-right --oneline $ANCHOR...$TARGET`
-   and ask. Report upfront: N commits, M files.
+   $ANCHOR..$TARGET`. Anchor diverged from the target (not an ancestor) ⇒ surface
+   `git log --left-right --oneline $ANCHOR...$TARGET` and ask. Report upfront: N commits,
+   M files.
+
+2a. **Measure the working tree in the SAME breath — an empty range is not evidence of
+    nothing to review.** Run both, always:
+   ```bash
+   RANGE_N="$(git log --no-merges --oneline "$ANCHOR..$TARGET" | wc -l | tr -d ' ')"
+   DIRTY="$(git status --porcelain)"        # tracked edits AND untracked files
+   ```
+   > **`git status --porcelain`, never `git diff`.** A lane whose change is entirely NEW
+   > files has an empty `git diff` and real unreviewed content — measured on `team-lead`
+   > 2026-08-19: `git diff` 0 bytes, 5 untracked files. A detector built on `git diff`
+   > returns clean for that lane exactly as it does for a genuinely clean one.
+
+   | `RANGE_N` | tree | what this step does |
+   | --- | --- | --- |
+   | 0 | clean | "nothing new to review", stop. **The only case where stopping is honest.** |
+   | 0 | dirty | **PIVOT to a working-tree review** — go to step 3 with the uncommitted bundle. Never stop. |
+   | >0 | clean | normal range review. |
+   | >0 | dirty | range review **plus** the uncommitted bundle, scope stated out loud (below). |
+
+   **Announce the pivot; never let it be inferred.** Print the reason and the evidence —
+   `git status --porcelain` verbatim, so a tree dirty only with scratch files is visible as
+   such and the caller can say so:
+   ```
+   ⚠ /review: 0 commits in <anchor>..<branch>, but the working tree is DIRTY.
+     Reviewing the WORKING TREE instead. The anchor will NOT advance (no commit to move it to).
+     <porcelain output>
+   ```
+   In the `>0 + dirty` case the banner instead reads **"N commits reviewed; the following
+   is uncommitted and NOT in the reviewed range"** + the porcelain — a GREEN there covers
+   the commits, and the anchor advance covers the commits, nothing more.
+
+   **Why a pivot and not a refusal.** A refusal is the safer-looking choice and the wrong
+   one here: this fires on a lane mid-work, which is the ordinary state, and a gate that
+   refuses in the ordinary state gets routed around — after which it protects nothing at
+   all. The pivot fails safe because it never *reduces* what is read: the tree is strictly
+   more content than the empty range it replaces, and the anchor cannot advance off it. The
+   thing that must not happen is a silent pass, and that is what this step removes.
 3. **Spawn the reviewer** — Agent tool, `subagent_type: reviewer`, **mode 2
    (range/bundle)**: the range `$ANCHOR..$TARGET`, the pin SHA (`git rev-parse $TARGET`),
    any context the caller supplied, **and a mandatory `Spawned by: <your agent name>` line**
@@ -70,6 +107,26 @@ One anchor per target (`<target>-review`), so each derives its own.
    name it was given, never its creator's, so a spawn without that line sends its verdict to
    the lead while you wait for it. The reviewer echoes the line in its verdict header, which is
    what makes a misroute visible.
+
+   > **Carrying uncommitted work (steps 2a rows 2 and 4).** The reviewer runs in an
+   > isolation worktree materialized from a **SHA**: it has tracked files at that commit and
+   > nothing else, so it structurally cannot see the author's tree. `reviewer.md` → First
+   > acts 2 states the contract — *"Uncommitted content (plan docs, working-tree diffs)
+   > arrives inline in the spawn prompt — trust that over the tree for those files."* So the
+   > bundle goes **inline**, and it is two parts, because one of them is invisible to `diff`:
+   > ```bash
+   > git diff HEAD                                 # tracked, staged + unstaged
+   > git ls-files --others --exclude-standard      # untracked — NOT in the diff above
+   > ```
+   > Include each untracked file's contents inline too. (`ls-files --others`, not an `awk`
+   > over the porcelain: the porcelain quotes and escapes paths containing spaces, so a
+   > field-split silently drops exactly the files nobody looks at twice.) On a pivot the pin
+   > SHA is `git rev-parse HEAD` — the **base the working-tree diff applies to**, not a
+   > commit containing the work; say that in the prompt so the reviewer does not read the
+   > tree at that SHA and conclude the change is absent. Give every path absolutely
+   > (never "it is in your worktree" — see the spawn contract). Where the range is non-empty
+   > *and* the tree is dirty, label the two scopes separately so the verdict can be read
+   > against the right one.
 
    > **Placement — leave `run_in_background` at its default (background).** A reviewer is
    > task-scoped, so it belongs **in the current window**, stacked under the pane that spawned
@@ -88,7 +145,11 @@ One anchor per target (`<target>-review`), so each derives its own.
    tokens).
 4. **Relay the verdict** to the user. Findings are **reported, not fixed here** — fixes
    belong to their authors' normal `/todo` flow (or an issue minted for them).
-5. **Advance the anchor on GREEN LIGHT** (skip with `--no-advance`):
+5. **Advance the anchor on GREEN LIGHT** — and **never on a working-tree review**: a
+   pivot (step 2a row 2) reviewed content that is in no commit, so there is nothing the
+   anchor could point at that would represent it. Moving it would mark work as reviewed
+   that the next round must still read. Say so in the report rather than skipping silently.
+   Skip with `--no-advance`:
    ```bash
    git branch -f "$ANCHOR" "$TARGET"   # pointer move only — nothing is checked out
    ```
@@ -114,6 +175,9 @@ Prereq: `gh` authenticated.
 
 ## What this skill will NOT do
 
+- **Report "nothing new to review" without having measured the working tree.** An empty
+  range plus a dirty tree is a pivot (step 2a), never a stop.
+- Advance the anchor after a working-tree review.
 - Check out any branch, apply fixes, merge, push, or fetch.
 - Advance the anchor past a NOT-GREEN review (that requires the user's explicit call).
 - Post anything to GitHub in `--pr` mode.
@@ -126,7 +190,7 @@ Prereq: `gh` authenticated.
 
 ---
 
-**Skill Version**: 6.0.0
+**Skill Version**: 6.1.0
 **Category**: Code Review / Git Workflow
 
 _Version history: see [CHANGELOG.md](./CHANGELOG.md)._
