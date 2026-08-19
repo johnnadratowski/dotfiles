@@ -75,7 +75,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_GENERAL, ASK_KINDS, LINE_MAX,  # noqa: E402
-                          ask_detail, ask_kind, ask_short, ask_sort_key, fold_ask_context,
+                          ASK_SORTS, ask_detail, ask_kind, ask_short, ask_sort_key,
+                          fold_ask_context, goal_mentions,
                           ask_trailers, branch_for, branch_ticket_for, clip, fleet_goal,
                           fleet_goal_path, fmt_age, fmt_ago, refresh_open_prs, status_text,
                           tickets_for)
@@ -415,22 +416,6 @@ def ask_age(added):
         return ""
     return fmt_age(max(0, time.time() - then))
 
-
-def goal_mentions(tid, goal, chain):
-    """Is this ask's ticket named anywhere in the standing goal — objective or chain?
-
-    A WHOLE-ID match, not a substring: `SRV-1` must not light up because the chain names
-    `SRV-11`, which is a different ticket and very often a different lane. The goal file is
-    prose, so the id is found by the same word-boundary regex that linkifies it.
-    """
-    tid = (tid or "").strip()
-    if not tid:
-        return False
-    body = "\n".join([goal or ""] + list(chain or []))
-    pr = _ASK_TICKET_PR.match(tid)
-    if pr:
-        return any(m.group(1) == pr.group(1) for m in _PR.finditer(body))
-    return any(m.group(1) == tid for m in _TICKET.finditer(body))
 
 
 def _repo_url(path):
@@ -914,6 +899,35 @@ def _restore_line(path, raw):
         f.write(body + raw + "\n")
 
 
+# DERIVED, NOT WRITTEN. These rows are computed from the staged-review flag files every tick,
+# so they appear the moment a lane stages one and vanish the moment it is answered — no lead
+# has to remember to write them and, more to the point, none has to remember to clear them.
+# That is the whole reason they are synthesized: every hand-maintained signal in this fleet
+# has gone stale at least once, and a stale "review waiting" is worse than none.
+#
+# `[derived:…]` is what stops `x` pretending to delete one. See action_clear_ask.
+def _review_asks(rows):
+    """One `review:` ask line per agent with a review staged, newest first."""
+    out = []
+    for r in rows or []:
+        rv, path = r.get("review"), r.get("path")
+        if not rv or not path:
+            continue
+        who = r.get("label") or r.get("name") or "an agent"
+        name = (rv.get("name") or "").strip()
+        # The stamp is the FLAG FILE'S OWN AGE, not today: a review staged three days ago
+        # must sort and read as three days old, which is exactly the fact that makes it
+        # urgent. `age` is seconds-since, so subtract rather than stat again.
+        added = time.strftime("%Y-%m-%d",
+                              time.localtime(time.time() - (rv.get("age") or 0)))
+        subject = " — %s" % name if name else ""
+        out.append(
+            "review: %s has a review staged for you%s [from:%s] [added:%s] "
+            "[review:%s] [derived:staged-review] [short:%s — review staged]"
+            % (who, subject, r.get("name") or who, added, path, who))
+    return out
+
+
 def snapshot():
     """Everything on screen, as plain data. Runs OFF the UI thread."""
     try:
@@ -969,13 +983,18 @@ def snapshot():
     return {
         "lanes": lanes,
         "subs": subs,
-        # SORTED OLDEST-FIRST BY `[added:]`, not left in file order (2026-08-19, at the
-        # user's instruction). File order was append order, which is *usually* chronological
-        # and stops being so the moment `/whats-next` moves a deferred row to the bottom or
-        # the lead rewrites the list — so "the top is the oldest" was true by accident and
-        # silently false afterwards. Sorting at READ makes it true by construction, and the
-        # row numbers stay file addresses (see filter_asks) so `4me 3` still resolves.
-        "fleet": sorted(_ask_lines(fleet_path), key=ask_sort_key) if fleet_path else [],
+        # UNSORTED HERE — the ORDER IS UI STATE, chosen with `s` and applied in `_fleet()`.
+        # Baking it into the snapshot would make changing the order require a re-fetch, and
+        # would put the choice on the thread that reads the disk rather than the one that
+        # knows what the reader asked for.
+        #
+        # A STAGED REVIEW IS AN ASK, so it joins the list rather than living only on its
+        # lane's row (John, 2026-08-19: "I would expect reviews from agents to show up there
+        # with the magnifying glass icon"). It is the single most time-critical thing an
+        # agent asks of a human — a lane is stopped while it waits — and it was the one class
+        # of ask 4ME did not show, so the panel's count was answering "how much do I owe"
+        # with the wrong number.
+        "fleet": (_ask_lines(fleet_path) if fleet_path else []) + _review_asks(lanes + subs),
         "fleet_path": fleet_path,
         "goal": goal,
         "goal_chain": goal_chain,
@@ -1477,6 +1496,20 @@ def lane_ask_markup(raw, ctx=None):
     return f"{icon} {linkify(clip(text), ctx or {})}"
 
 
+# The two action glyphs. Single Emoji_Presentation codepoints, for the reason ASK_KINDS
+# records: a codepoint needing U+FE0F draws as a grey box in this terminal AND measures two
+# cells while drawing one, which shifts every column after it.
+REVIEW_BADGE = "🔎"   # deliberately NOT the 🔍 kind icon — one says what the row IS, the
+                      # other is a button. Two identical glyphs on one row, one clickable
+                      # and one not, is a worse puzzle than two similar ones.
+CMD_BADGE = "📋"      # copies the command to the clipboard
+
+
+def _qesc(s):
+    """Make a value safe inside a single-quoted `@click` markup argument."""
+    return (s or "").replace("\\", "\\\\").replace("'", "\\'").replace("[", "(")
+
+
 def ask_row_markup(n, raw, ctx=None):
     """One 4ME row: its number, its kind icon, and the ask clipped to the column.
 
@@ -1488,7 +1521,32 @@ def ask_row_markup(n, raw, ctx=None):
     ctx = ctx or {}
     d = ask_detail(raw)
     text, urls = doc_refs(ask_short(d) + (" (%s)" % d["deferral"] if d["deferral"] else ""))
+
+    # A DOC REFERENCE IN THE **CONTEXT** STILL EARNS ITS BADGE ON THE ROW. Moving the ask's
+    # detail into a context block moved its links there too, and the row silently lost the
+    # page glyph it used to carry — the one thing on the row that is *clicked* rather than
+    # read. The prose is unchanged (`_ctx` is discarded); only the URLs travel up, so the
+    # badge marks "this item has a document" wherever in the item the link happens to sit.
+    # Deduped, in first-seen order: one link cited in both halves is one document.
+    _ctx, ctx_urls = doc_refs(d.get("context") or "")
+    for u in ctx_urls:
+        if u not in urls:
+            urls.append(u)
+
     body = doc_markup(linkify(fit_ask(text, urls), ctx), urls)
+
+    # ACTION BADGES, after the doc glyphs and before the age. Each is CLICKABLE via Textual's
+    # `@click` markup — which dispatches inside this app, unlike `[link=]`, which hands a URL
+    # to the terminal. That distinction is the whole reason these are not links: focusing a
+    # tmux pane and writing the clipboard are things only this process can do.
+    #
+    # The keyboard reaches the same two actions on the highlighted row (`m` and `y`), because
+    # a badge you can only click is unreachable from the keys every other row action uses.
+    t = dict(d["trailers"])
+    if t.get("review"):
+        body += " [@click=app.open_review('%s')]%s[/]" % (_qesc(t["review"]), REVIEW_BADGE)
+    if t.get("cmd"):
+        body += " [@click=app.copy_cmd('%s')]%s[/]" % (_qesc(t["cmd"]), CMD_BADGE)
 
     # THE GOAL MARKER, PROMOTED FROM THE DIALOG TO THE ROW (2026-08-19). It was only visible
     # after opening an ask, which is the wrong way round: whether an item gates the standing
@@ -1836,6 +1894,16 @@ class FleetTUI(App):
         # never DELETES — a filtered-out ask is hidden, and the panel title says so, because a
         # list that silently shows a subset is indistinguishable from a list that shrank.
         Binding("c", "cycle_category", "category"),
+        # `s` CYCLES THE 4ME ORDER — latest, earliest, goal. A sibling of `c` in every way:
+        # it changes how the list READS, never what is in it, and the panel title names the
+        # state so the top row never means something the reader cannot see.
+        Binding("s", "cycle_sort", "sort"),
+        # THE THREE THINGS A ROW CAN OPEN, on the keyboard as well as on their badges. A
+        # badge that is only clickable is unreachable from the keys every other row action
+        # uses, and this panel is driven from the keyboard.
+        Binding("m", "open_review", "monocle"),   # focus the lane's Monocle pane
+        Binding("d", "open_doc", "doc"),          # open the row's document
+        Binding("y", "copy_cmd", "copy cmd"),     # yank the row's command to the clipboard
         Binding("question_mark", "legend", "legend"),
         # `=` USED TO BE an unshifted alias for `+`. It is the coarse version of the same
         # gesture now — one press shows a whole list instead of one more row of one — and a
@@ -1868,6 +1936,11 @@ class FleetTUI(App):
         self.detail = None         # the open overlay's assembled data, or None
         self.ask = None            # the open 4ME overlay's {raw, n}, or None
         self.ask_filter = ""       # 4ME category filter: "" = every kind, else a kind name
+        # 4ME ORDER, cycled with `s`. DEFAULTS TO `latest` at the user's instruction: the
+        # list is opened most often to see what arrived since last time, so the newest ask
+        # is the one that should not need scrolling to. It is deliberately NOT remembered
+        # across restarts — like `subs_open`, it answers a question you have now.
+        self.ask_sort = ASK_SORTS[0]
         self._ctrl_lane = None     # the Lane a ctrl+click just acted on; see on_mouse_down
         # Collapsed on boot: the aggregate exists BECAUSE the individual rows were
         # costing more panel than they said. Opening it is a deliberate act, and it
@@ -1878,6 +1951,20 @@ class FleetTUI(App):
         self._fitted_want = None   # rows the cards wanted at the last fit, clamp aside
         self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
         self.refreshing = False    # a request is in flight right now
+
+    def _fleet(self):
+        """The 4ME asks in the READER'S chosen order. The single place the sort is applied.
+
+        Every surface that touches this list — the panel, the title's count, the fit
+        arithmetic — goes through here, because a row NUMBER is what the user says out loud
+        ("take #2") and two call sites ordering differently would give one number two
+        meanings. See ask_sort_key for the orderings and why deferred is last in all of them.
+        """
+        ctx = self.data.get("ctx") or {}
+        return sorted(self.data.get("fleet") or [],
+                      key=lambda ln: ask_sort_key(ln, self.ask_sort,
+                                                  ctx.get("goal") or "",
+                                                  ctx.get("goal_chain") or []))
 
     def compose(self) -> ComposeResult:
         yield Static("", id="head")
@@ -2065,7 +2152,7 @@ class FleetTUI(App):
             fleet = self.query_one("#fleet", ListView)
             keepf = fleet.index
             fleet.clear()
-            shown = filter_asks(data["fleet"], self.ask_filter)
+            shown = filter_asks(self._fleet(), self.ask_filter)
             for i, raw in shown:
                 fleet.append(Ask(i, raw, data.get("fleet_path", ""), ctx))
             if keepf is not None and 0 <= keepf < len(shown):
@@ -2150,10 +2237,14 @@ class FleetTUI(App):
         # WITH A FILTER UP THE COUNT IS `shown/total`, never `shown` alone: the count is what
         # tells the user whether the list is everything, and a bare "3" on a filtered panel
         # says the fleet has three asks when it has eleven.
-        shown = len(filter_asks(d["fleet"], self.ask_filter))
+        shown = len(filter_asks(self._fleet(), self.ask_filter))
         total = len(d["fleet"])
         count = f"{shown}" if not self.ask_filter else f"{shown}/{total}"
-        title = f"4ME  ({count}){filter_label(self.ask_filter)}"
+        # THE ORDER IS NAMED IN THE TITLE, always — not only when it is not the default.
+        # A list whose order is invisible is a list whose top row means something different
+        # depending on state the reader cannot see, and "why is this one first" is exactly
+        # the question a sorted list invites. It costs one word.
+        title = f"4ME  ({count})  ↓{self.ask_sort}{filter_label(self.ask_filter)}"
         fleet = self.query_one("#fleet")
         if fleet.border_title != title:
             fleet.border_title = title
@@ -2891,6 +2982,114 @@ class FleetTUI(App):
         subprocess.Popen(["open", url])
         self.notify(f"opened {_id}")
 
+    def _row_trailers(self):
+        """The trailers of whatever the user is pointing at — overlay first, then the row.
+
+        Same subject-resolution as action_open_ticket, and for the same reason it was fixed
+        there: while the overlay is up the focused widget is not a list, so acting on the
+        cursor underneath it acts on a row the user is not looking at.
+        """
+        if self.ask is not None:
+            return dict(ask_detail(self.ask["raw"])["trailers"])
+        item = self._focused_list().highlighted_child
+        return dict(ask_detail(item.raw)["trailers"]) if isinstance(item, Ask) else {}
+
+    def open_review(self, path):
+        """Focus the Monocle pane serving `path`. Also the `@click` target on the 🔎 badge.
+
+        THE PANE IS FOUND BY ITS TUI'S cwd, never by pane order or title. Pane ids are not
+        stable and are not ordered by lane — measured, feature-1 was `main:2.1` and feature-2
+        `main:3.1` — and an agent can set its own pane title. The cwd of the monocle process
+        inside the pane is the one identifier that cannot be wrong about which lane it serves.
+        """
+        target = self._monocle_pane(path)
+        if not target:
+            self.notify("no monocle pane found for %s" % os.path.basename(path or ""),
+                        severity="warning")
+            return
+        try:
+            subprocess.run(["tmux", "switch-client", "-t", target.split(".")[0]],
+                           capture_output=True, timeout=5)
+            subprocess.run(["tmux", "select-pane", "-t", target],
+                           capture_output=True, timeout=5)
+        except (OSError, subprocess.SubprocessError) as e:
+            self.notify("could not focus the pane: %s" % e, severity="error")
+            return
+        self.notify("focused monocle · %s" % os.path.basename(path or ""))
+
+    @staticmethod
+    def _monocle_pane(path):
+        """`session:window.pane` of the monocle serving `path`, or "". Pure-ish; no raises."""
+        want = os.path.realpath(path or "")
+        if not want:
+            return ""
+        try:
+            out = subprocess.run(
+                ["tmux", "list-panes", "-a", "-F",
+                 "#{session_name}:#{window_index}.#{pane_index} #{pane_pid} "
+                 "#{pane_current_command} #{pane_current_path}"],
+                capture_output=True, text=True, timeout=5).stdout
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        for ln in out.splitlines():
+            parts = ln.split(None, 3)
+            if len(parts) < 4:
+                continue
+            target, _pid, cmd, cwd = parts
+            if "monocle" not in cmd:
+                continue
+            # `pane_current_path` is the pane SHELL's cwd, which is the lane for a monocle
+            # started in place. Compared by realpath so a symlinked lanes dir still matches.
+            if os.path.realpath(cwd) == want:
+                return target
+        return ""
+
+    def action_open_review(self):
+        t = self._row_trailers()
+        if not t.get("review"):
+            self.notify("no review staged on this row", severity="warning")
+            return
+        self.open_review(t["review"])
+
+    def copy_cmd(self, cmd):
+        """Put `cmd` on the system clipboard. Also the `@click` target on the 📋 badge."""
+        if not cmd:
+            return
+        try:
+            subprocess.run(["pbcopy"], input=cmd, text=True, timeout=5, check=True)
+        except (OSError, subprocess.SubprocessError) as e:
+            self.notify("could not copy: %s" % e, severity="error")
+            return
+        self.notify("copied · %s" % clip(cmd, 48))
+
+    def action_copy_cmd(self):
+        t = self._row_trailers()
+        if not t.get("cmd"):
+            self.notify("no command on this row", severity="warning")
+            return
+        self.copy_cmd(t["cmd"])
+
+    def action_open_doc(self):
+        """Open the first document this row references — its prose OR its context block.
+
+        Both halves are searched because a long ask keeps its links in the context, which is
+        exactly where the row's own doc badge now finds them too. One source, one answer.
+        """
+        raw = self.ask["raw"] if self.ask is not None else None
+        if raw is None:
+            item = self._focused_list().highlighted_child
+            if not isinstance(item, Ask):
+                self.notify("no document on this row", severity="warning")
+                return
+            raw = item.raw
+        d = ask_detail(raw)
+        urls = doc_refs(d["text"])[1] + doc_refs(d.get("context") or "")[1]
+        if not urls:
+            self.notify("no document on this row", severity="warning")
+            return
+        subprocess.Popen(["open", urls[0]])
+        self.notify("opened %s" % os.path.basename(urls[0].split("?")[0]))
+
     def action_clear_ask(self):
         """Tick an item off. Lane panel clears that lane's FIRST ask; fleet panel clears the
         highlighted one. Undoable, because a mis-keyed `x` on someone else's to-do list is a
@@ -2908,6 +3107,13 @@ class FleetTUI(App):
                 return
             path, raw = item.row["ask_path"], asks[0]
         else:
+            return
+        # A DERIVED ROW HAS NOTHING IN THE FILE TO DELETE. Refusing loudly beats letting
+        # `_drop_line` return False and reporting "already gone", which is a lie that would
+        # look like a bug the next tick, when the row reappears.
+        if dict(ask_detail(raw)["trailers"]).get("derived"):
+            self.notify("this row tracks live state — clear it by answering it",
+                        severity="warning")
             return
         if _drop_line(path, raw):
             self.undo = (path, raw)
@@ -2947,6 +3153,10 @@ class FleetTUI(App):
             ("a", "in the detail view: apply the live knobs to the running agent"),
             ("c", "cycle the 4ME category filter — all, then each kind present. The row"),
             ("", "numbers keep their gaps, because a number is an address, not a position"),
+            ("s", "cycle the 4ME order — latest, earliest, goal. Named in the panel title"),
+            ("m", "focus the Monocle pane of the review on this row  (badge: %s)" % REVIEW_BADGE),
+            ("d", "open the document this row references — prose or context"),
+            ("y", "copy this row's command to the clipboard  (badge: %s)" % CMD_BADGE),
         ))
         return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
                 "\n%s\n\n[dim]? or esc to close[/]" % (states, kinds, keys))
@@ -3048,7 +3258,7 @@ class FleetTUI(App):
         avail = self._avail(avail)
         if not avail:
             return natural
-        return min(natural, avail - asks_fit_height(self.data["fleet"], width, ctx))
+        return min(natural, avail - asks_fit_height(self._fleet(), width, ctx))
 
     def _fit_lanes(self, avail=None):
         """Size the FLEET panel to the agents in it, and give 4ME whatever is left.
@@ -3164,12 +3374,27 @@ class FleetTUI(App):
         # never say a row is visible that is not.
         if self.fit_mode == "4ME":
             heights = [ask_rows(i, raw, width, ctx, CLIPPED_RESERVE)
-                       for i, raw in enumerate(self.data["fleet"], 1)]
+                       for i, raw in enumerate(self._fleet(), 1)]
             room = avail - lanes_h - PANEL_BORDER
         else:
             heights = [lane_rows(r, width, ctx, CLIPPED_RESERVE) for r in self._rows()]
             room = lanes_h - PANEL_BORDER
         return fit_note(self.fit_mode, visible_items(heights, room), len(heights))
+
+    def action_cycle_sort(self):
+        """Step the 4ME order: latest → earliest → goal → latest.
+
+        Announced with a toast as well as in the title, because the title is a word the eye
+        has already learned to skip and the reorder itself is easy to read as a redraw.
+        """
+        if self._overlay_owns_keys():
+            return
+        self.ask_sort = ASK_SORTS[(ASK_SORTS.index(self.ask_sort) + 1) % len(ASK_SORTS)]
+        # Same forced rebuild as the category cycle, and for the same reason: `structure_sig`
+        # is deliberately about the DATA, and the data did not change — the view did.
+        self.sig = None
+        self.apply(self.data)
+        self.notify("4ME order: %s first" % self.ask_sort)
 
     def action_grow(self):
         """Grow the FOCUSED panel — the same key does opposite things in the two panels,

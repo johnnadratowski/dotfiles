@@ -480,7 +480,15 @@ def ask_kind(line):
 # written for the dialog; without a short form the list column would clip that sentence
 # mid-word and the row would stop being scannable. Absent ⇒ the prose is used, which is the
 # old behaviour exactly, so nothing that never writes one changes.
-ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks", "short")
+# `review` and `cmd` are ACTIONABLE trailers — they do not describe the ask, they say what
+# the reader can DO about it, and each earns a clickable badge on the row.
+#   [review:<lane path>]  a Monocle review is staged in that lane; the 🔍 badge focuses it
+#   [cmd:<shell command>] the command this ask is asking you to run; the badge copies it
+# `derived` marks a row SYNTHESIZED from live state rather than written into the file — the
+# staged-review rows are, so `x` must refuse them: nothing in the file would be deleted, and
+# the row would reappear on the next tick looking like a failed delete.
+ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks", "short",
+                    "review", "cmd", "derived")
 
 _TRAILER_TAIL = re.compile(r"\s*\[([^\[\]]+)\]\s*$")
 _TRAILER_KV = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$")
@@ -607,19 +615,84 @@ def ask_short(detail):
 # (which `""` sorts to) would give the oldest-first list a head of items whose age is unknown.
 # Deferred rows were explicitly pushed down by the user via `/whats-next`, and an added-date
 # sort that re-floated them would undo a decision they made on purpose.
+
+# MOVED HERE FROM fleet_tui (2026-08-19) because the SORT needs it: the `goal` ordering asks
+# the same question the 🎯 marker asks, and a second copy of "is this ticket on the chain"
+# would be two answers that can disagree about the same row.
+_GOAL_TICKET = re.compile(r"\b([A-Z]{2,5}-\d+)\b")
+_GOAL_PR = re.compile(r"#(\d+)\b")
+_GOAL_TICKET_PR = re.compile(r"^(?:PR)?#(\d+)$")
+
+def goal_mentions(tid, goal, chain):
+    """Is this ask's ticket named anywhere in the standing goal — objective or chain?
+
+    A WHOLE-ID match, not a substring: `SRV-1` must not light up because the chain names
+    `SRV-11`, which is a different ticket and very often a different lane. The goal file is
+    prose, so the id is found by the same word-boundary regex that linkifies it.
+    """
+    tid = (tid or "").strip()
+    if not tid:
+        return False
+    body = "\n".join([goal or ""] + list(chain or []))
+    pr = _GOAL_TICKET_PR.match(tid)
+    if pr:
+        return any(m.group(1) == pr.group(1) for m in _GOAL_PR.finditer(body))
+    return any(m.group(1) == tid for m in _GOAL_TICKET.finditer(body))
+
+
 _ASK_SORT_UNDATED = "9999-12-31"
 
+# THE ORDER IS THE READER'S CHOICE, not the writer's (John, 2026-08-19). Three orderings,
+# because they answer three different questions and no single one of them is right all day:
+#
+#   latest   — what just arrived. THE DEFAULT: the list is checked most often to see what is
+#              new since last time, and that answer is at the top.
+#   earliest — what has been waiting. The oldest ask is the one whose cost is still growing,
+#              and it is the one a chronological list buries once the list is long.
+#   goal     — what gates the standing objective, then latest within that. Answers "if I only
+#              do one thing" without making the reader scan for the 🎯 marks.
+#
+# DEFERRED IS LAST IN EVERY MODE. The user pushed those down on purpose via `/whats-next`; an
+# ordering that re-floated them would silently undo a decision they made, and no choice of
+# sort is a request to re-ask something they declined.
+ASK_SORTS = ("latest", "earliest", "goal")
 
-def ask_sort_key(line):
-    """Order the 4ME list OLDEST-FIRST by `[added:]`. Pure; safe on any line.
 
-    Oldest-first because an ask's age is the one thing about it that only gets worse, and the
-    list is read top-down. The date is compared as a STRING — `YYYY-MM-DD` is ordered by its
-    own spelling, so this needs no date parsing and cannot raise on a stamp someone mistyped.
+def ask_sort_key(line, mode="latest", goal="", chain=()):
+    """Sort key for one ask under `mode` — see ASK_SORTS. Pure; safe on any line.
+
+    The date is compared as a STRING: `YYYY-MM-DD` is ordered by its own spelling, so this
+    needs no date parsing and cannot raise on a stamp someone mistyped.
+
+    UNDATED SORTS LAST IN BOTH DATE MODES, which is why `latest` cannot simply negate
+    `earliest`. An ask with no `[added:]` has no place in a chronology; floating it to the top
+    of the newest-first list — which `""` reversed would do — would put the items we know
+    least about in front of the ones we know most about. It sinks in both directions instead,
+    and that asymmetry is the reason for the explicit branch below rather than a `reverse=`.
     """
     d = ask_detail(line)
-    added = (dict(d.get("trailers") or []).get("added") or "").strip()
-    return (1 if d.get("deferral") else 0, added or _ASK_SORT_UNDATED)
+    t = dict(d.get("trailers") or [])
+    added = (t.get("added") or "").strip()
+    deferred = 1 if d.get("deferral") else 0
+    dated = 0 if added else 1                      # undated last, whichever way dates run
+
+    if mode == "goal":
+        on_goal = 0 if goal_mentions(t.get("ticket", ""), goal, chain) else 1
+        return (deferred, on_goal, dated, _desc(added))
+    if mode == "earliest":
+        return (deferred, dated, added or _ASK_SORT_UNDATED)
+    return (deferred, dated, _desc(added))         # "latest", and the fallback for a typo
+
+
+def _desc(date):
+    """A `YYYY-MM-DD` string that sorts ASCENDING in reverse chronological order.
+
+    Complementing each digit gives newest-first without a `reverse=` flag — which matters
+    because the tuple's OTHER fields (deferred, undated, on-goal) must keep sorting ascending.
+    A single `reverse=True` would flip those too and put the deferred rows on top.
+    """
+    return "".join(chr(ord("9") - (ord(c) - ord("0"))) if c.isdigit() else c
+                   for c in (date or ""))
 
 
 # ── the fleet's STANDING GOAL ────────────────────────────────────────────────────────────

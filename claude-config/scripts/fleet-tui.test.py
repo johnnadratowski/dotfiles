@@ -229,7 +229,7 @@ async def main():
         # "4me 1" is only unambiguous if the row wears the 1. The panel's own title carries
         # the count, so the label and the numbering are one contract, tested together.
         ok("the fleet-level panel is titled 4ME, with its count",
-           app.query_one("#fleet").border_title == "4ME  (1)",
+           app.query_one("#fleet").border_title == "4ME  (1)  ↓latest",
            app.query_one("#fleet").border_title)
         ok("…and its rows are numbered, so \"4me 1\" resolves to a row",
            "[dim] 1[/]" in text, text)
@@ -1783,15 +1783,72 @@ async def main():
         # passed on the broken version too.
         rows = ["new [added:2026-08-19]", "undated", "old [added:2026-01-01]",
                 "put off (deferred 2026-08-01) [added:2020-01-01]"]
-        ok("the 4ME list sorts oldest-first, undated after dated, deferred last of all",
-           sorted(rows, key=fleet_tui.ask_sort_key)
+        def _sorted(mode, goal="", chain=()):
+            return sorted(rows, key=lambda ln: fleet_tui.ask_sort_key(ln, mode, goal, chain))
+
+        ok("`earliest` sorts oldest first, undated after dated, deferred last of all",
+           _sorted("earliest")
            == ["old [added:2026-01-01]", "new [added:2026-08-19]", "undated",
-               "put off (deferred 2026-08-01) [added:2020-01-01]"],
-           sorted(rows, key=fleet_tui.ask_sort_key))
+               "put off (deferred 2026-08-01) [added:2020-01-01]"], _sorted("earliest"))
+        # UNDATED STAYS LAST IN BOTH DIRECTIONS, which is the whole reason `latest` is not
+        # `earliest` reversed: a plain reverse would float the rows we know least about to
+        # the top, and would carry the deferred rows up with them.
+        ok("`latest` sorts newest first — and is NOT `earliest` reversed",
+           _sorted("latest")
+           == ["new [added:2026-08-19]", "old [added:2026-01-01]", "undated",
+               "put off (deferred 2026-08-01) [added:2020-01-01]"], _sorted("latest"))
+        ok("…and an unknown mode falls back to `latest` rather than raising",
+           _sorted("nonsense") == _sorted("latest"))
+        goal_rows = ["off [added:2026-08-19]", "on [SRV-9] [added:2026-01-01]"]
+        ok("`goal` floats chain-gating asks above everything else, whatever their date",
+           sorted(goal_rows,
+                  key=lambda ln: fleet_tui.ask_sort_key(ln, "goal", "g", ["1. SRV-9"]))
+           == ["on [SRV-9] [added:2026-01-01]", "off [added:2026-08-19]"])
 
         # THE CRASH THIS REPLACED took the whole app down from inside a click handler, so the
         # positive control matters more than the negative one: a parser that returned "" for
         # everything would satisfy "does not raise" and tell us nothing.
+        # ── STAGED REVIEWS BECOME 4ME ROWS ──────────────────────────────────────────────
+        # Derived from the flag file every tick, so they appear and vanish on their own. The
+        # assertions are about what makes them USABLE: the review kind (so the category
+        # filter finds them), a path to act on, and the derived mark that stops `x` lying.
+        rows = fleet_tui._review_asks([
+            {"name": "feature-3", "label": "woo", "path": "/lanes/feature-3",
+             "review": {"name": "UI-4", "age": 0}},
+            {"name": "feature-1", "label": "vii", "path": "/lanes/feature-1",
+             "review": None},
+            {"name": "feature-2", "label": "ott", "path": "", "review": {"name": "x", "age": 0}},
+        ])
+        ok("one 4ME row per STAGED review, and none for a lane without one",
+           len(rows) == 1, rows)
+        rd = fleet_tui.ask_detail(rows[0])
+        rt = dict(rd["trailers"])
+        ok("…typed `review`, so it carries the magnifying glass and the filter finds it",
+           (rd["kind"], rd["icon"]) == ("review", ASK_KINDS["review"]), rd)
+        ok("…carrying the lane path to act on, and the derived mark",
+           (rt.get("review"), rt.get("derived")) == ("/lanes/feature-3", "staged-review"), rt)
+        ok("…and it names the agent, not the lane, since that is how the user refers to them",
+           "woo" in fleet_tui.ask_short(rd), fleet_tui.ask_short(rd))
+        # THE AGE IS THE FLAG FILE'S, NOT TODAY'S. A review staged three days ago must read
+        # and sort as three days old — that age is the entire reason it is urgent — so a
+        # synthesizer that stamped `today` would make every stale review look fresh.
+        old = fleet_tui._review_asks([{"name": "l", "label": "l", "path": "/p",
+                                       "review": {"name": "", "age": 3 * 86400}}])
+        ok("…stamped with the FLAG FILE'S age, never today",
+           fleet_tui.ask_age(dict(fleet_tui.ask_detail(old[0])["trailers"])["added"]) == "3d",
+           fleet_tui.ask_detail(old[0])["trailers"])
+
+        # A DOC LINK IN THE CONTEXT STILL EARNS THE ROW'S BADGE. Moving detail into a context
+        # block moved the links with it, and the row silently lost the one glyph on it that
+        # is clicked rather than read.
+        ctx_doc = {"linear_base": "", "repo": ""}
+        with_ctx = fleet_tui.ask_row_markup(
+            1, "todo: read this [added:2026-08-19]\nfile:///tmp/findings.md", ctx_doc)
+        ok("a document referenced only in the CONTEXT still badges the row",
+           "file:///tmp/findings.md" in with_ctx, with_ctx)
+        ok("…and the context prose itself never reaches the row",
+           "findings.md" not in with_ctx.split("[link=")[0], with_ctx)
+
         ok("a real date yields a real age", fleet_tui.ask_age("2026-01-01") != "")
         ok("…and a malformed stamp yields no age rather than raising",
            [fleet_tui.ask_age(s) for s in ("", "nope", "2026-13-01", "26-1-1")]
@@ -1892,7 +1949,7 @@ async def main():
                     if isinstance(w, fleet_tui.Ask)]
 
         ok("unfiltered, every row is there and the title is a bare count",
-           fleet_numbers() == [1, 2, 3, 4, 5] and fleet_title() == "4ME  (5)",
+           fleet_numbers() == [1, 2, 3, 4, 5] and fleet_title() == "4ME  (5)  ↓latest",
            "%s / %s" % (fleet_numbers(), fleet_title()))
 
         await pilot.press("c")
@@ -1900,7 +1957,7 @@ async def main():
         ok("c filters to the first kind PRESENT, in the kinds' declared order",
            app.ask_filter == "product" and fleet_numbers() == [1], app.ask_filter)
         ok("…and the title says which, with its icon and shown/total",
-           fleet_title() == "4ME  (1/5) [💬 product]", fleet_title())
+           fleet_title() == "4ME  (1/5)  ↓latest [💬 product]", fleet_title())
 
         await pilot.press("c")
         await pilot.pause()
@@ -1923,7 +1980,7 @@ async def main():
         await pilot.pause()
         ok("the cycle returns to ALL rather than settling on a subset",
            app.ask_filter == "" and fleet_numbers() == [1, 2, 3, 4, 5]
-           and fleet_title() == "4ME  (5)", "%s / %s" % (app.ask_filter, fleet_title()))
+           and fleet_title() == "4ME  (5)  ↓latest", "%s / %s" % (app.ask_filter, fleet_title()))
 
         # A FILTER IS A VIEW. `x` deletes by exact line match, so it must delete the row the
         # cursor is ON — not the row that would sit at that position unfiltered.
