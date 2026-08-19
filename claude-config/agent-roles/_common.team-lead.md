@@ -481,11 +481,16 @@ never by default. **Report the conclusion and what it costs them; keep the deriv
   **serialization is now ownership.** A dead tester is not a degraded fleet, it is a fleet
   that cannot test — nothing else is allowed to pick the work up, so treat its absence as a
   blocker and respawn it before the next request queues behind nothing.
-- **Teammates do not live in your tmux session** (default `WORKFLOW_TEAMMATE_MODE=detached`):
-  their windows are in a separate `claude-swarm` session. Attach with
-  `tmux attach -t claude-swarm` to watch one; `status` and the TUI are unaffected, since both
-  resolve by process cwd. Pane-injecting verbs (`agent-fanout compact|restart`,
-  `fleet-layout`'s agent verbs) target the fleet session only and are inert for teammates.
+- **Where teammates live is `WORKFLOW_TEAMMATE_MODE`, and you must READ IT — never assume the
+  default.** Check the project's `.claude/workflow.config`; goals-onchain sets `native`, so its
+  teammates are ordinary windows of the fleet session (`main:2..5`), right where the lead's own
+  window is, and every pane-injecting verb reaches them normally. This paragraph previously
+  asserted the `detached` default as though it were the fact on the ground and sent readers to
+  `tmux attach -t claude-swarm`; measured 2026-08-19, that session does not exist and all four
+  lanes are windows of `main`. `detached` is also **not** a safe thing to infer from: per
+  goals-onchain's own config it silently degrades to in-process in this build and creates no
+  `claude-swarm` session at all, so the attach command is wrong in both modes.
+  `status` and the TUI are unaffected either way, since both resolve by process cwd.
 - **`status` is the only liveness proof** — it resolves by process cwd. Busy markers go stale;
   a send proves nothing. **Teammates first, lead last.** Never `tmux kill-server`.
 - Arrangement: `fleet-layout.sh`. What the team is doing: **`fleet-tui.sh`** (textual, via
