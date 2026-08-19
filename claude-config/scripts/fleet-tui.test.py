@@ -1838,6 +1838,134 @@ async def main():
            fleet_tui.ask_age(dict(fleet_tui.ask_detail(old[0])["trailers"])["added"]) == "3d",
            fleet_tui.ask_detail(old[0])["trailers"])
 
+        # ── A BRACKET IN A TRAILER VALUE NO LONGER EATS THE WHOLE LINE ──────────────────
+        # Trailers are bitten off RIGHT TO LEFT, so a `[` in the LAST one used to stop the
+        # loop and leave every trailer to its LEFT unparsed as well. The collateral is what
+        # makes this worth a test: the ask silently lost its `added` stamp — so no age and
+        # the wrong sort slot — its `short` form and its `ticket`, and dumped the raw
+        # trailer text into the row. `jq '.a[0]'` is an ordinary command.
+        for cmd in ("jq '.a[0]'", "git log --format='%h [%s]'"):
+            bt = dict(fleet_tui.ask_trailers(
+                "todo: run it [SRV-9] [added:2026-08-19] [short:run] [cmd:%s]" % cmd)[1])
+            ok("a `[` inside [cmd:%s] costs neither its own value…" % cmd[:12],
+               bt.get("cmd") == cmd, bt)
+            ok("…nor the trailers written to its LEFT, which is the damage that hid it",
+               (bt.get("added"), bt.get("short"), bt.get("ticket"))
+               == ("2026-08-19", "run", "SRV-9"), bt)
+        # THE WIDENING MUST NOT SWALLOW PROSE. A bracketed aside in the ask's own text is
+        # not a trailer, and a pattern loose enough to fix the above could easily take it.
+        pt, ptr = fleet_tui.ask_trailers("todo: see [fig 2] and decide [added:2026-08-19]")
+        ok("…while a bracketed aside in the PROSE is still prose, not a trailer",
+           (pt, dict(ptr)) == ("todo: see [fig 2] and decide", {"added": "2026-08-19"}),
+           (pt, ptr))
+
+        # ── THE ACTION BADGES: 🔎 focus-monocle and 📋 copy-command ─────────────────────
+        # These shipped UNTESTED and, measured against textual 8.2.8, all three of their
+        # moving parts were wrong. Each block below states the defect it pins.
+
+        # (1) THE ARGUMENT IS PERCENT-ENCODED, and the round trip must be exact for the
+        # characters a shell command actually contains. The escape this replaced emitted
+        # `\'` for a quote, which textual's markup grammar has no rule for at all.
+        HOSTILE = ["/lanes/feature-1", "git commit -m 'wip'", 'jq ".a"', "a\\b",
+                   "pnpm test --grep 'a[b]c' | head -5", "goals—onchain", ""]
+        ok("every action argument survives the encode/decode round trip byte for byte",
+           [fleet_tui._adec(fleet_tui._aesc(v)) for v in HOSTILE] == HOSTILE,
+           [(v, fleet_tui._aesc(v)) for v in HOSTILE])
+        ok("…and the encoding emits nothing the markup grammar can mistake for syntax",
+           not (set("".join(fleet_tui._aesc(v) for v in HOSTILE)) & set("'\"[]\\")),
+           [fleet_tui._aesc(v) for v in HOSTILE])
+
+        # (2) THE ROW STILL PARSES. This is the assertion with teeth: `Static` parses markup
+        # during compose, so a row carrying a quoted command used to raise MarkupError from
+        # inside the mount and take the app down — the crash class the `linkify` docstring
+        # records. Parsed with the SAME function `Static` uses, not a regex that approximates
+        # it, and the positive control is the second case: it is the one that used to raise.
+        from textual.content import Content
+        for label, cmd in (("a plain command", "pnpm test"),
+                           ("a command containing quotes AND brackets",
+                            "git log --format='%h [%s]' | head")):
+            raw = "todo: run it [added:2026-08-19] [cmd:%s]" % cmd
+            markup = fleet_tui.ask_row_markup(3, raw, {})
+            try:
+                Content.from_markup(markup)
+                parsed, err = True, ""
+            except Exception as e:
+                parsed, err = False, "%s: %s" % (type(e).__name__, e)
+            ok("a 4ME row carrying %s renders as valid markup" % label, parsed, err)
+            ok("…and the badge that makes it clickable is actually on the row",
+               fleet_tui.CMD_BADGE in markup, markup)
+
+        # (3) THE CLICK'S OWN SUBJECT REACHES THE HANDLER. Textual resolves
+        # `@click=app.copy_cmd(…)` to `action_copy_cmd`, never to the plain `copy_cmd` the
+        # markup names, and `invoke()` silently truncates the arguments to the callable's
+        # arity — so the zero-arg handler this replaced accepted the click and then acted on
+        # whatever row the CURSOR was on. The test drives the real dispatcher for that
+        # reason: calling the method directly would prove nothing about the resolution.
+        CMD = "git commit -m 'it works'"
+        raw = "todo: ship it [added:2026-08-19] [cmd:%s] [review:/lanes/feature-9]" % CMD
+        markup = fleet_tui.ask_row_markup(4, raw, {})
+        copied, reviewed = [], []
+        real_copy, real_open = fleet_tui.FleetTUI.copy_cmd, fleet_tui.FleetTUI.open_review
+        fleet_tui.FleetTUI.copy_cmd = lambda self, c: copied.append(c)
+        fleet_tui.FleetTUI.open_review = lambda self, p: reviewed.append(p)
+        try:
+            # Driven through textual's OWN dispatcher, exactly as a click on the badge
+            # would be — the resolution is the thing under test.
+            for act in ("copy_cmd", "open_review"):
+                ok("the %s badge's action is present in the row's markup" % act,
+                   "app.%s(" % act in markup, markup)
+            await app.run_action("app.copy_cmd('%s')" % fleet_tui._aesc(CMD))
+            await app.run_action("app.open_review('%s')" % fleet_tui._aesc("/lanes/feature-9"))
+            await pilot.pause()
+            ok("clicking 📋 copies THAT row's command, quotes intact — not the cursor row's",
+               copied == [CMD], copied)
+            ok("clicking 🔎 opens THAT row's review path — not the cursor row's",
+               reviewed == ["/lanes/feature-9"], reviewed)
+            # THE KEYBINDING MUST STILL WORK. One entry point now serves both, so a fix that
+            # made the click work by breaking `y`/`m` would otherwise pass everything above.
+            copied.clear()
+            await app.run_action("copy_cmd")
+            await pilot.pause()
+            ok("…while `y` with no argument still asks the cursor, rather than raising",
+               copied == [] or isinstance(copied[0], str), copied)
+        finally:
+            fleet_tui.FleetTUI.copy_cmd = real_copy
+            fleet_tui.FleetTUI.open_review = real_open
+
+        # (4) THE MONOCLE PANE IS FOUND BY cwd AND RETURNED AS A STABLE `%id`. tmux is stubbed
+        # at the subprocess seam — what is under test is the parse and the match, not tmux.
+        # The fixture mirrors a REAL `list-panes -a` reading taken 2026-08-19, including the
+        # decoy: an agent pane whose cwd is a monocle CHECKOUT but which is not running it.
+        PANES = ("%158 monocle /Users/john/lanes/feature-1\n"
+                 "%160 monocle /Users/john/lanes/feature-2\n"
+                 "%16 2.1.228 /Users/john/git/monocle\n"
+                 "%220 zsh /Users/john/lanes/feature-1\n")
+        real_run = fleet_tui.subprocess.run
+        asked = []
+        fleet_tui.subprocess.run = lambda *a, **k: (
+            asked.append(a[0]) or type("R", (), {"stdout": PANES, "returncode": 0})())
+        try:
+            mp = fleet_tui.FleetTUI._monocle_pane
+            ok("the monocle serving a lane is found by cwd, as a stable %id",
+               mp("/Users/john/lanes/feature-2") == "%160", mp("/Users/john/lanes/feature-2"))
+            ok("…and a shell sitting in the same lane is NOT mistaken for it",
+               mp("/Users/john/lanes/feature-1") == "%158", mp("/Users/john/lanes/feature-1"))
+            ok("…a pane merely CHECKED OUT in a monocle repo is not a monocle pane",
+               mp("/Users/john/git/monocle") == "", mp("/Users/john/git/monocle"))
+            ok("…and a lane with no monocle says so instead of guessing a neighbour",
+               [mp("/Users/john/lanes/feature-7"), mp("")] == ["", ""],
+               [mp("/Users/john/lanes/feature-7"), mp("")])
+            # IT MUST ASK TMUX FOR `#{pane_id}`, and that is asserted against the REQUEST,
+            # not the reply: a stub answers in whatever shape the fixture is written in, so
+            # a test that only reads the return value goes on passing after the format
+            # string is changed back to the `session:window.pane` index form — which
+            # renumbers whenever an earlier pane is killed, silently retargeting the badge.
+            ok("…and it asks tmux for the STABLE pane id, not the renumbering index form",
+               any("#{pane_id}" in " ".join(a) for a in asked)
+               and not any("#{pane_index}" in " ".join(a) for a in asked), asked)
+        finally:
+            fleet_tui.subprocess.run = real_run
+
         # A DOC LINK IN THE CONTEXT STILL EARNS THE ROW'S BADGE. Moving detail into a context
         # block moved the links with it, and the row silently lost the one glyph on it that
         # is clicked rather than read.

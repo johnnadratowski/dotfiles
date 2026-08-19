@@ -490,7 +490,19 @@ def ask_kind(line):
 ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks", "short",
                     "review", "cmd", "derived")
 
-_TRAILER_TAIL = re.compile(r"\s*\[([^\[\]]+)\]\s*$")
+# ONE LEVEL OF NESTED BRACKETS IS ALLOWED INSIDE A TRAILER BODY, and that is not a nicety.
+# The body used to be `[^\[\]]+` — no bracket at all — and trailers are eaten RIGHT TO LEFT,
+# so a single `[` in the LAST trailer stopped the loop and left every trailer to its left
+# unparsed too. A `[cmd:jq '.a[0]']` ask therefore lost its `added` stamp (no age, wrong
+# sort slot), its `short` form, its `ticket` and its `derived` mark all at once, and dumped
+# the raw trailer text into the visible row. `jq '.a[0]'` and `git log --format='%h [%s]'`
+# are ordinary commands, so this was reachable by writing a perfectly normal `[cmd:]`.
+#
+# STRICTLY WIDENING: every line the old pattern matched, this matches identically — the
+# first alternative IS the old character class. Unbalanced brackets (`a]b`) still defeat it;
+# that is a real residual limit, recorded rather than papered over, and it costs the same
+# collateral as before.
+_TRAILER_TAIL = re.compile(r"\s*\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\s*$")
 _TRAILER_KV = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$")
 _TRAILER_TICKET = re.compile(r"^(?:[A-Z]{2,5}-\d+|PR#\d+|#\d+)$")
 

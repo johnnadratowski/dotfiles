@@ -70,6 +70,7 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import quote as _urlquote, unquote as _urlunquote
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
@@ -1505,9 +1506,27 @@ REVIEW_BADGE = "🔎"   # deliberately NOT the 🔍 kind icon — one says what 
 CMD_BADGE = "📋"      # copies the command to the clipboard
 
 
-def _qesc(s):
-    """Make a value safe inside a single-quoted `@click` markup argument."""
-    return (s or "").replace("\\", "\\\\").replace("'", "\\'").replace("[", "(")
+def _aesc(s):
+    """Percent-encode a value so it survives a single-quoted `@click` markup argument.
+
+    NOT a hand-rolled backslash escape, and that was measured, not assumed. Textual 8.2.8
+    tokenizes a markup expression's string with `single_string=r"\'.*?\'"` — non-greedy and
+    with NO escape rule at all (`textual/markup.py`, `expect_markup_expression`). So a `'`
+    inside the value ends the string early and the row raises MarkupError from inside
+    `Ask.compose`, which is the crash class the `linkify` docstring above already records
+    taking the whole app down. A `[` was separately being rewritten to `(`, corrupting the
+    command it was supposed to copy and leaving a stray `]` behind.
+
+    Percent-encoding has no such hole: the output alphabet is `A-Za-z0-9-_.~%`, none of which
+    the markup grammar treats as special, and it is exactly reversible. Verified against
+    textual 8.2.8 over quotes, brackets, backslashes, pipes, unicode and the empty string.
+    """
+    return _urlquote(s or "", safe="")
+
+
+def _adec(s):
+    """Inverse of `_aesc`. Values arriving from `@click` markup pass through here first."""
+    return _urlunquote(s or "")
 
 
 def ask_row_markup(n, raw, ctx=None):
@@ -1544,9 +1563,9 @@ def ask_row_markup(n, raw, ctx=None):
     # a badge you can only click is unreachable from the keys every other row action uses.
     t = dict(d["trailers"])
     if t.get("review"):
-        body += " [@click=app.open_review('%s')]%s[/]" % (_qesc(t["review"]), REVIEW_BADGE)
+        body += " [@click=app.open_review('%s')]%s[/]" % (_aesc(t["review"]), REVIEW_BADGE)
     if t.get("cmd"):
-        body += " [@click=app.copy_cmd('%s')]%s[/]" % (_qesc(t["cmd"]), CMD_BADGE)
+        body += " [@click=app.copy_cmd('%s')]%s[/]" % (_aesc(t["cmd"]), CMD_BADGE)
 
     # THE GOAL MARKER, PROMOTED FROM THE DIALOG TO THE ROW (2026-08-19). It was only visible
     # after opening an ask, which is the wrong way round: whether an item gates the standing
@@ -1680,7 +1699,17 @@ class Ask(ListItem):
         self.ctx = ctx or {}
 
     def compose(self):
-        yield Static(ask_row_markup(self.n, self.raw, self.ctx))
+        """A ROW THAT CANNOT RENDER MUST STILL RENDER. `Static` parses markup during compose,
+        so a MarkupError here escapes into the mount and takes the whole app down — the exact
+        failure the `linkify` docstring records, and the one `_aesc` just closed one source of.
+        The fallback is deliberately markup-free (escaped, no tags, no badges): it loses the
+        row's affordances, never the user's item."""
+        try:
+            yield Static(ask_row_markup(self.n, self.raw, self.ctx))
+        except Exception:
+            # A rich `Text` is handed to the renderer as-is; it is never markup-parsed, so
+            # the fallback cannot fail the same way the thing it is catching just did.
+            yield Static(Text("%2d  %s" % (self.n, clip(self.raw, LINE_MAX))))
 
 
 DETAIL_HINT = ("[dim]j/k move · enter edits the highlighted knob · a applies the live knobs "
@@ -2995,64 +3024,94 @@ class FleetTUI(App):
         return dict(ask_detail(item.raw)["trailers"]) if isinstance(item, Ask) else {}
 
     def open_review(self, path):
-        """Focus the Monocle pane serving `path`. Also the `@click` target on the 🔎 badge.
+        """Focus the Monocle pane serving `path`.
 
-        THE PANE IS FOUND BY ITS TUI'S cwd, never by pane order or title. Pane ids are not
-        stable and are not ordered by lane — measured, feature-1 was `main:2.1` and feature-2
-        `main:3.1` — and an agent can set its own pane title. The cwd of the monocle process
-        inside the pane is the one identifier that cannot be wrong about which lane it serves.
+        NOT itself the `@click` target — markup naming `app.open_review` reaches
+        `action_open_review`, which calls this. See that method.
+
+        THE PANE IS FOUND BY ITS TUI'S cwd, never by pane INDEX or title. Window/pane indices
+        are not ordered by lane — measured, feature-1 was `main:2.1` and feature-2 `main:3.1`
+        — and an agent can set its own pane title. The cwd of the monocle process inside the
+        pane is the one identifier that cannot be wrong about which lane it serves.
         """
         target = self._monocle_pane(path)
         if not target:
             self.notify("no monocle pane found for %s" % os.path.basename(path or ""),
                         severity="warning")
             return
-        try:
-            subprocess.run(["tmux", "switch-client", "-t", target.split(".")[0]],
-                           capture_output=True, timeout=5)
-            subprocess.run(["tmux", "select-pane", "-t", target],
-                           capture_output=True, timeout=5)
-        except (OSError, subprocess.SubprocessError) as e:
-            self.notify("could not focus the pane: %s" % e, severity="error")
+        # THE SAME `focus_pane` CTRL+CLICK USES, not a second inline switch-client/select-pane.
+        # The two gestures mean one thing — "put that Monocle in front of me" — and the copy
+        # this replaced had already drifted: it never zoomed, and it ignored tmux's exit code,
+        # so a dead pane id reported success and moved nothing.
+        if not focus_pane(target):
+            self.notify("could not focus the monocle pane", severity="error")
             return
         self.notify("focused monocle · %s" % os.path.basename(path or ""))
 
     @staticmethod
     def _monocle_pane(path):
-        """`session:window.pane` of the monocle serving `path`, or "". Pure-ish; no raises."""
+        """`%id` of the monocle serving `path`, or "". Pure-ish; no raises.
+
+        `#{pane_id}` — the `%42` form — NOT `session:window.pane`. The index form renumbers
+        the moment any earlier pane is killed, so a value read on one tick can name a
+        different pane on the next; `%id` is unique for the pane's whole life. It is also
+        what `monocle_pane()` and `focus_pane()` already speak, so the two ways into a
+        Monocle now pass the same kind of thing around.
+        """
         want = os.path.realpath(path or "")
         if not want:
             return ""
         try:
             out = subprocess.run(
                 ["tmux", "list-panes", "-a", "-F",
-                 "#{session_name}:#{window_index}.#{pane_index} #{pane_pid} "
-                 "#{pane_current_command} #{pane_current_path}"],
+                 "#{pane_id} #{pane_current_command} #{pane_current_path}"],
                 capture_output=True, text=True, timeout=5).stdout
         except (OSError, subprocess.SubprocessError):
             return ""
         for ln in out.splitlines():
-            parts = ln.split(None, 3)
-            if len(parts) < 4:
+            parts = ln.split(None, 2)
+            if len(parts) < 3:
                 continue
-            target, _pid, cmd, cwd = parts
-            if "monocle" not in cmd:
+            target, cmd, cwd = parts
+            # ONE CONSTANT FOR BOTH FINDERS. A literal "monocle" here would keep working
+            # right up until MONOCLE_CMD changed, and then only the badge would break.
+            if MONOCLE_CMD not in cmd:
                 continue
             # `pane_current_path` is the pane SHELL's cwd, which is the lane for a monocle
             # started in place. Compared by realpath so a symlinked lanes dir still matches.
+            #
+            # VERIFIED LIVE 2026-08-19, by two instruments that could have disagreed: tmux's
+            # own `pane_current_path`, and `lsof -a -p <monocle child pid> -d cwd -Fn` on the
+            # process resolved through `pgrep -P <pane_pid>`. All four monocle panes then
+            # running agreed, and each named the lane it serves (main:2.1→feature-1,
+            # 3.1→feature-2, 4.1→feature-3, 5.1→feature-4). The shell cannot drift away from
+            # it while monocle runs, because the shell is blocked on that child.
             if os.path.realpath(cwd) == want:
                 return target
         return ""
 
-    def action_open_review(self):
-        t = self._row_trailers()
-        if not t.get("review"):
+    def action_open_review(self, arg=None):
+        """`m` on the highlighted row, and the 🔎 badge's `@click` target — ONE method.
+
+        IT HAS TO BE ONE METHOD, and that is the whole fix here. Textual resolves
+        `@click=app.open_review('…')` to `action_open_review`, NEVER to the plain
+        `open_review` the markup appears to name — and `invoke()` then truncates the
+        argument list to the callable's arity, so a zero-arg `action_open_review()`
+        SWALLOWED the clicked row's path without raising. The badge silently acted on
+        whatever row the cursor happened to be on. Measured on textual 8.2.8.
+
+        `arg` present ⇒ a click, and it carries its own subject. `arg` absent ⇒ the
+        keybinding, which asks the cursor.
+        """
+        path = _adec(arg) if arg is not None else self._row_trailers().get("review")
+        if not path:
             self.notify("no review staged on this row", severity="warning")
             return
-        self.open_review(t["review"])
+        self.open_review(path)
 
     def copy_cmd(self, cmd):
-        """Put `cmd` on the system clipboard. Also the `@click` target on the 📋 badge."""
+        """Put `cmd` on the system clipboard. Reached from `action_copy_cmd`, never
+        directly from the badge markup — see action_open_review."""
         if not cmd:
             return
         try:
@@ -3062,12 +3121,14 @@ class FleetTUI(App):
             return
         self.notify("copied · %s" % clip(cmd, 48))
 
-    def action_copy_cmd(self):
-        t = self._row_trailers()
-        if not t.get("cmd"):
+    def action_copy_cmd(self, arg=None):
+        """`y` on the highlighted row, and the 📋 badge's `@click` target. See
+        action_open_review for why the click and the key must share one entry point."""
+        cmd = _adec(arg) if arg is not None else self._row_trailers().get("cmd")
+        if not cmd:
             self.notify("no command on this row", severity="warning")
             return
-        self.copy_cmd(t["cmd"])
+        self.copy_cmd(cmd)
 
     def action_open_doc(self):
         """Open the first document this row references — its prose OR its context block.
