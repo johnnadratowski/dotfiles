@@ -1586,3 +1586,50 @@ Two corollaries with teeth:
 - **Validate the instrument on a known-positive before trusting a negative** — and if you cannot,
   report *"no signal since T, by method M"* rather than a verdict, so the reader can weigh the
   instrument instead of inheriting your conclusion.
+
+## Write the object beside the number: a correct measurement bound to an unchecked subject (2026-08-19)
+
+The entry above is about checks that *could not disagree*. This is its neighbour and it is
+harder to catch, because here **the instrument is sound and the reading is true** — it is the
+noun the reading gets attached to that was never verified. Three instances in one session, on
+one task:
+
+- **`_qesc` escaped `'` as `\'`** for a Textual markup argument. Correct escaping — for a
+  grammar nobody had read. Textual's is `single_string=r"'.*?'"`, non-greedy with **no escape
+  rule at all**, so the escape was the crash. The object assumed: *"the parser"*, generically.
+- **`ls -l` and `stat -f %i` on `~/.claude/scripts/*.py`** returned regular files with inodes
+  identical to the repo's. Both commands ran correctly and both outputs were true. But the
+  symlink is on the **directory**; the files were reached *through* it, so identical inodes were
+  the expected result of a symlink and were read as evidence of hardlinking. A hazard was
+  reported, and relayed onward, that does not exist. The object assumed: *the leaf, not the link*.
+- **`tmux ... #{pane_title}`** showed panes titled `general-purpose` while the TUI listed
+  `tui-work`. True, reproducible, and the basis of a whole diagnosis — with
+  `pane-border-status: off`, so the title **renders nowhere**. The fix that followed from it
+  would have been inert. The object assumed: *"what the user sees"*.
+
+**Why it is missable:** a wrong-object finding survives rereading in a way a wrong-*value* one
+does not. You re-run the command, you get the same output, it still supports the claim — because
+the command was never the problem. Confirmation is free and costs nothing to obtain, which is
+exactly what makes it feel like verification.
+
+**The check, and it is one question asked before the claim leaves your hands:** *what is the
+noun this number is about, and did I verify that noun or assume it?* Concretely —
+
+- **"the user sees X"** needs a `capture-pane`, a rendered-format check, or a screenshot beside
+  it. A value present in a data structure is not a value present on a screen.
+- **"this file is linked / generated / ignored"** — check the **directory** and the tool's own
+  mapping, not only the leaf. Whole-directory links make every leaf inside look like the target.
+- **"the parser accepts this"** — read the grammar. Anywhere you emit into someone else's
+  syntax, the escape you write is a claim about *their* tokenizer, and it is cheap to go and
+  read and impossible to guess.
+
+**The general form: write the object beside the number.** Not "8 panes" but "8 panes whose
+`pane_title` matches, out of 11 config members, on a surface with borders off." The discipline is
+to make the denominator's *type* explicit in the sentence, because the moment it is written down
+the mismatch is visible — and every one of the three above became obvious the instant the object
+was named out loud.
+
+**Corollary for reports that have already gone out:** a wrong-object finding is usually relayed
+before it is caught, because it reads as well-evidenced. Retract it to whoever you told, name the
+object you got wrong, and let them correct their own relay — the person who repeated your claim
+under their authority cannot fix it without knowing which noun moved.
