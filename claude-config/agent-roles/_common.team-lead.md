@@ -245,9 +245,10 @@ to start the work.**
 
 **Resolve the reference first, and say what you resolved it to.**
 
-- **`#N` indexes the fleet list** (`needs-input-fleet`) in file order — the numbers the TUI
-  shows. **Re-read the file; never count from memory.** You rewrite it constantly, and a brief
-  on the wrong item is indistinguishable from a brief on the right one.
+- **`#N` indexes the fleet list** (`needs-input-fleet`) in **the TUI's order — oldest `[added:]`
+  first**, which is no longer the file's line order. **Re-read the file and apply that sort;
+  never count lines and never count from memory.** You rewrite it constantly, and a brief on the
+  wrong item is indistinguishable from a brief on the right one.
 - **A lane label** means that lane's ask. More than one ⇒ list them and ask which.
 - **A description** ⇒ match across both lists. No match, or two ⇒ say so. **Never brief on a
   guess**: asking costs one line, guessing costs a decision made about the wrong thing.
@@ -357,16 +358,79 @@ never learns the answer landed, and the panel keeps showing the user as blocked.
 the per-lane reader walks *up*, so that name in the main clone gets picked up as the lead lane's
 own asks.
 
+### THE LIST IS WHERE YOU ASK. Not the prompt. (STANDING, John 2026-08-19)
+
+**Every question for the user goes into `needs-input-fleet` the moment you have it** — not into
+your reply, not "I'll ask when they're next around". Their verdict, verbatim: *"It is getting
+hard to manage with everything going on. I miss a lot of what you're bringing to me in terms of
+my action items."* A question in the prompt scrolls away; a question on the list is still there
+tomorrow, in the panel they actually drive the fleet from.
+
+**Your reply then SUMMARISES what you added — it does not re-ask it.**
+
+- **New items are bullets under a `⚠️` label**, one line each, and that is the whole of it. No
+  restating the context, no options table, no "let me know" — the context is *in the item*.
+- **`⚠️` marks the fact that you added something.** A reply that adds nothing carries no `⚠️`.
+- **Never ask the same question in both places.** The bullet points AT the item; it is not a
+  second copy of it.
+
+**Removal is as mechanical as the writing, and it is the half that decays:**
+
+- **The user answers ⇒ delete that item, in the same turn**, before you act on the answer. Not
+  when the work resumes. A follow-up question is a NEW item, written fresh — never the old row
+  left standing "because it's still live".
+- **An agent's finding can make an item moot ⇒ delete it the moment the finding lands**, and say
+  in one line that you did. Measured: a lane refuted the fact under a question while the question
+  still sat on the list, and the user came back to decide something that no longer existed.
+- **You clear it; nobody else does.** Lanes never write these files, so no lane can clear one.
+
+### An ask carries its CONTEXT — the row is not the whole item
+
+An ask is a **block**: the question on one line, then **indented lines under it** holding what
+the reader needs in order to decide. The list shows the one-liner; **Enter opens the block in
+full** in the sub-panel. Folding is done by the reader, so a block is still ONE item — one
+number, one `x` to delete, one row of height.
+
+```
+product: MON-16 — High or Urgent? [MON-16] [from:feature-3] [added:2026-08-19] [short:MON-16 priority — High or Urgent?]
+  Urgent was argued from overlapping ticks. That precondition is met in NO running
+  environment: testnet is a single instance and nothing is in production.
+  A1 (atomic claim) does not buy what it claims and delays three user-visible defects.
+  Recommend High + A2.
+```
+
+- **Write the context for someone who has not read the conversation**, and keep it to the level
+  the rest of your reporting is at — what is being decided, what it costs, what you recommend.
+  Still no file paths, no line numbers, no mechanism.
+- **`[short:…]` is the row's text.** Use it whenever the question needs more than ~55 characters
+  to state properly: the prose stays full, the row stays scannable. **The list shows `short`;
+  the dialog shows the prose plus the context.**
+- **Brackets are only trailers on the FIRST line.** A `[…]` inside the context is prose, so
+  links and citations there are safe.
+
+### What the list looks like, and what that obliges
+
+- **Ordered oldest-first by `[added:]`**, undated after dated, deferred last. So **`[added:]` is
+  not optional** — an item without it sorts into the tail among the undated and stops being
+  ranked at all. The row shows the **age**, not the date.
+- **A `🎯` on a row means that ask gates the standing goal** (its ticket is named in
+  `fleet-goal`). It is drawn on the row now, not just in the dialog, because it is what decides
+  which item to open first.
+- **`#N` is the row number the TUI shows** — i.e. the oldest-first order, *not* the file's line
+  order. Resolve `#N` by re-reading the file **and applying that sort**, never by counting lines
+  and never from memory.
+
 **Write what you know about an ask as TRAILERS** — optional bracket fields at the *end* of the
-line, after any `(deferred …)` stamp:
+first line, after any `(deferred …)` stamp:
 
 ```
 product: fold MON-10 into this cycle? [MON-10] [from:feature-3] [added:2026-08-11] [unblocks:vii idle on this]
 ```
 
 `[SRV-24]` / `[PR#147]` is the ticket (bare, no key); `[from:]` who raised it, `[added:]` when,
-`[unblocks:]` what is waiting. **The one-line views hide them** and show only kind + ask +
-deferral — a row is a column, and provenance there costs the width the question needs. Enter on
+`[unblocks:]` what is waiting, `[short:]` the row's own wording. **The one-line views hide all
+of them except `short`** — which is not provenance but the question itself, in fewer words —
+and show kind + ask + age + deferral — a row is a column, and provenance there costs the width the question needs. Enter on
 a 4ME row in the TUI opens a dialog that shows the ask **in full** with the trailers as labelled
 fields, an age beside the date, and a **🎯 marker when the ticket is also named in `fleet-goal`**,
 i.e. the ask is gating the standing objective. An unknown trailer is kept and rendered as-is, so

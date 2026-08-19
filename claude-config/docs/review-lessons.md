@@ -1534,3 +1534,55 @@ Cheap to fix, and worth stating as a rule because the failure points at the code
 in the test data: **when an assertion matches on a substring, no fixture value in scope may
 contain that substring.** The same shape hides the opposite failure — a fixture that contains
 the token makes a broken implementation look correct — and that direction is silent.
+
+## A source-scanning guard has TWO enumerations — assert anti-vacuity on both (2026-08-18)
+
+A guard that greps source for a hazard rests on two independent lists: the **file set** it
+scans and the **pattern set** it matches. An anti-vacuity assertion on one is not coverage of
+the pair.
+
+Measured: ott's Docker-stop guard had a positive control on its file list and none on its
+pattern list. The pattern list matched **1 of 8** real ways to write a Docker stop — including
+`tell app "Docker" to quit`, the abbreviation this repo's own README used. **A detector with no
+positive control reports "clean" identically whether the code is clean or the detector is
+broken.**
+
+The compounding half: when the reviewer named the pattern list, the fix went in there and the
+file list's own check was left half-strength — it had to be told twice. **A working guard on
+one input reads as coverage of the pair.**
+
+**Apply:** check each enumeration separately, each with its own known-positive. And the wider
+form — verifying the code *around* a mechanism thoroughly is not verifying the mechanism; a
+predicate fully surrounded by tests can have none of its own.
+
+### Corollary, from the same review: don't scan English — invert the direction
+
+A stale prose claim that a symbol-grep cannot see looks like it needs an English scanner, which
+would false-alarm on the paragraphs it protects. Instead **tag each site with a token and assert
+the token is PRESENT**. Undecidable becomes trivial; it cost six lines.
+
+## The general case: ask what the check would have shown if you were WRONG (2026-08-19)
+
+The two-enumerations rule above is one instance of a wider defect that appeared **four times in
+one day across two agents**, each of whom diagnosed it in the other's instrument within hours of
+committing it in their own:
+
+- a `ps`-absence check used to confirm a process had died — it agreed with the false completion
+  notice that supplied the hypothesis;
+- a single-candidate commit check that confirmed the candidate instead of discriminating among
+  commits;
+- a source-scanning guard whose pattern list had no positive control;
+- an inference that a UI field was the branch tip, from "it didn't move when the base changed" —
+  equally consistent with the field being stale.
+
+**Every one was a check that could not have disagreed with the hypothesis it was testing.**
+
+**Ask it mechanically, not when suspicion strikes: what would this check have shown if I were
+wrong? If the answer is "the same thing", it is not evidence.**
+
+Two corollaries with teeth:
+- **Repeating a broken reading is not replication.** Five samples of a gauge you have never seen
+  move is one reading taken five times.
+- **Validate the instrument on a known-positive before trusting a negative** — and if you cannot,
+  report *"no signal since T, by method M"* rather than a verdict, so the reader can weigh the
+  instrument instead of inheriting your conclusion.

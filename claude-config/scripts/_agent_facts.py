@@ -475,7 +475,12 @@ def ask_kind(line):
 # the format will grow; a parser that errored on the first unrecognised key would make every
 # extension a breaking change, and one that silently DROPPED it would lose the fact without
 # ever saying so.
-ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks")
+# `short` IS THE ONE TRAILER THE ONE-LINE VIEWS DO NOT DROP — it REPLACES the prose there.
+# An ask now carries its CONTEXT (see ask_detail), so the prose is free to be a full sentence
+# written for the dialog; without a short form the list column would clip that sentence
+# mid-word and the row would stop being scannable. Absent ⇒ the prose is used, which is the
+# old behaviour exactly, so nothing that never writes one changes.
+ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks", "short")
 
 _TRAILER_TAIL = re.compile(r"\s*\[([^\[\]]+)\]\s*$")
 _TRAILER_KV = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$")
@@ -525,13 +530,22 @@ def ask_deferral(text):
 
 
 def ask_detail(line):
-    """Everything one ask line carries, for the surface that has room to show all of it.
+    """Everything one ask carries, for the surface that has room to show all of it.
 
     Ordered the way the line is written — kind token, prose, deferral stamp, trailers — and
     each layer peeled by the reader that owns it, so the detail view and the one-line views
     cannot disagree about where the prose ends.
+
+    AN ASK MAY NOW BE MORE THAN ONE LINE. Everything after the first line is CONTEXT — the
+    background the reader needs to answer without going and asking for it, added 2026-08-19
+    because the questions were being put in chat, where they scrolled away, and the list row
+    alone was never enough to decide from. Only the first line is parsed; the rest is prose
+    the dialog renders verbatim. The one-line views never see it, so a long context cannot
+    cost the list a single column.
     """
     raw = (line or "").strip()
+    raw, _, tail = raw.partition("\n")
+    context = "\n".join(ln.strip() for ln in tail.splitlines() if ln.strip())
     m = _ASK_KIND.match(raw)
     if m and m.group(1) in ASK_KINDS:
         kind, icon, body = m.group(1), ASK_KINDS[m.group(1)], raw[m.end():].strip()
@@ -543,8 +557,69 @@ def ask_detail(line):
         kind, icon, body = "", ASK_GENERAL, raw
     body, trailers = ask_trailers(body)   # trailers sit AFTER the stamp, so they come off first
     body, deferral = ask_deferral(body)
-    return {"kind": kind, "icon": icon, "text": body,
+    return {"kind": kind, "icon": icon, "text": body, "context": context,
             "deferral": deferral, "trailers": trailers}
+
+
+# AN INDENTED LINE CONTINUES THE ASK ABOVE IT. Added 2026-08-19, when the user's verdict was
+# that questions were arriving in chat — where they scroll away unanswered — and that a
+# 60-column row alone was never enough to decide from. An ask now carries the context needed
+# to answer it, and the natural place for a paragraph in a line-oriented file is an indented
+# continuation, the way every config format this user already reads spells the same thing.
+#
+# THE ASK IS STILL ONE ITEM. Folding happens at READ, so everything downstream — numbering,
+# filtering, deletes, row-height arithmetic — keeps counting items rather than lines, and no
+# caller had to learn the format. Only ask_detail splits the block, and only surfaces with
+# room render the tail.
+#
+# IT LIVES HERE, NOT IN THE TUI, because `fleet-status.sh` reads the same files. A folder in
+# only one reader would leave the other rendering every context line as its own bogus ask —
+# the list would gain rows that are not asks and the count at the top would be wrong.
+#
+# AN INDENTED FIRST LINE IS ITS OWN ASK, not a continuation of nothing. A file that opens with
+# a stray indent is a typo, and inventing a parent for it would silently merge two entries.
+# Its bytes are kept as written: a delete matches the head line against the file, so a head
+# this reader had tidied would no longer match the line it came from.
+def fold_ask_context(lines):
+    """Join each ask with the indented lines under it, into one `\\n`-joined string."""
+    out = []
+    for ln in lines:
+        if out and ln[:1] and ln[:1].isspace():
+            out[-1] = out[-1] + "\n" + ln.strip()
+        else:
+            out.append(ln.rstrip())
+    return out
+
+
+def ask_short(detail):
+    """The text a ONE-LINE view shows for an ask — its `[short:]` trailer, else its prose.
+
+    A separate function rather than a field on ask_detail's dict so the fallback lives in one
+    place: every list view must make the same choice, and a caller that read `text` directly
+    would silently ignore a short form the lead wrote precisely because the prose is long.
+    """
+    return (dict(detail.get("trailers") or []).get("short") or "").strip() \
+        or detail.get("text", "")
+
+
+# Sorts UNDATED LAST and DEFERRED LAST OF ALL, which is why this is not just the date string.
+# Undated rows predate the trailer and have no place in a chronology — putting them at the top
+# (which `""` sorts to) would give the oldest-first list a head of items whose age is unknown.
+# Deferred rows were explicitly pushed down by the user via `/whats-next`, and an added-date
+# sort that re-floated them would undo a decision they made on purpose.
+_ASK_SORT_UNDATED = "9999-12-31"
+
+
+def ask_sort_key(line):
+    """Order the 4ME list OLDEST-FIRST by `[added:]`. Pure; safe on any line.
+
+    Oldest-first because an ask's age is the one thing about it that only gets worse, and the
+    list is read top-down. The date is compared as a STRING — `YYYY-MM-DD` is ordered by its
+    own spelling, so this needs no date parsing and cannot raise on a stamp someone mistyped.
+    """
+    d = ask_detail(line)
+    added = (dict(d.get("trailers") or []).get("added") or "").strip()
+    return (1 if d.get("deferral") else 0, added or _ASK_SORT_UNDATED)
 
 
 # ── the fleet's STANDING GOAL ────────────────────────────────────────────────────────────
@@ -597,9 +672,16 @@ def needs_input_items(cwd):
     if not body:
         return []
     items = []
-    for ln in body.splitlines():
-        ln = _ASK_PREFIX.sub("", ln.strip())
-        if not ln or ln.startswith("#"):
+    # FOLDED FIRST, then only the head line is rendered. A context block is written for the
+    # dialog that has room for it; this surface is a nested one-line list, so an unfolded
+    # block would arrive here as extra rows that are not asks — inflating the count that
+    # tells the user how much they owe.
+    # Comments are dropped BEFORE folding, and at any indent — same order as `_ask_lines`.
+    # Folded first, an indented `#` note would be swallowed into the ask above it as context.
+    kept = [ln for ln in body.splitlines() if not ln.lstrip().startswith("#")]
+    for ln in fold_ask_context(kept):
+        ln = _ASK_PREFIX.sub("", ln.split("\n", 1)[0].strip())
+        if not ln:
             continue
         parts = [p.strip(" ;") for p in _ASK_ENUM.split(ln)] if _ASK_ENUM.search(ln) else [ln]
         for p in parts:
@@ -609,6 +691,164 @@ def needs_input_items(cwd):
             # Clipped AFTER the kind token is consumed, so typing an ask costs it no width.
             items.append((icon, clip(text)))
     return items
+
+
+# ── MONOCLE BUILD DRIFT ──────────────────────────────────────────────────────────────────
+# WHAT THIS EXISTS TO PREVENT. On 2026-08-18 all four lanes were running four DIFFERENT
+# stale monocle builds — one of them a fortnight old — and no surface anywhere reported a
+# version. The only symptom was a newly-shipped feature appearing not to exist, which was
+# read as "the feature is broken" and cost an apply-and-roll-back cycle of a tmux change
+# that was in fact correct. A long-lived TUI silently outliving its binary is the general
+# shape; this makes it visible before it is diagnosed the expensive way.
+#
+# WHAT IS AND IS NOT KNOWABLE FROM OUTSIDE, because the difference matters more than the
+# feature does. The BINARY will say what it is (`monocle --version`). The RUNNING PROCESS
+# will not — its build is printed on its own screen and nowhere else, and scraping a TUI's
+# header is a guess dressed as a fact. So nothing here ever reports a running process's
+# version. What it reports instead is the one comparison that needs no version at all:
+# THE PROCESS STARTED BEFORE THE BINARY WAS LAST WRITTEN, therefore it cannot be running
+# that binary. That is a fact about times, not a guess about builds, and it is exactly the
+# fact that was missing today.
+#
+# It is deliberately conservative in one direction: a binary rewritten with identical
+# content still marks every older process stale. Flagging a restart that turns out to be
+# unnecessary costs a restart; missing a real drift cost an hour.
+MONOCLE_CMD = "monocle"
+
+
+def etime_secs(etime):
+    """`ps -o etime=` — [[DD-]HH:]MM:SS — as seconds. None when there is nothing to read.
+
+    ONE PARSER. fmt_uptime formats this same field for the console, and a second copy of
+    the arithmetic is how two surfaces come to disagree about how old an agent is.
+    """
+    etime = (etime or "").strip()
+    if not etime:
+        return None
+    days = 0
+    if "-" in etime:
+        d, etime = etime.split("-", 1)
+        days = int(d) if d.isdigit() else 0
+    bits = [int(x) if x.isdigit() else 0 for x in etime.split(":")]
+    while len(bits) < 3:
+        bits.insert(0, 0)
+    h, m, sec = bits[-3], bits[-2], bits[-1]
+    return ((days * 24 + h) * 60 + m) * 60 + sec
+
+
+def parse_monocle_procs(pane_text, ps_text):
+    """{pane's cwd: (pid, elapsed seconds)} for every pane whose foreground command is monocle.
+
+    Pure. `pane_text` is tmux's own listing, `ps_text` a single system-wide sweep — one
+    subprocess each for the whole fleet, rather than a tmux round trip per lane per tick.
+
+    The pane says WHERE (its cwd is the lane), the process says HOW OLD. They are joined on
+    the pane's pid being the process's parent, which is what "the command running in this
+    pane" means: monocle is typed at that pane's shell.
+    """
+    panes = {}
+    for line in (pane_text or "").splitlines():
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) < 3:
+            continue
+        cmd, ppid, path = parts[0].strip(), parts[1].strip(), parts[2].strip()
+        if os.path.basename(cmd) == MONOCLE_CMD and ppid and path:
+            panes[ppid] = path
+    out = {}
+    for line in (ps_text or "").splitlines():
+        bits = line.split(None, 3)
+        if len(bits) < 4:
+            continue
+        pid, ppid, elapsed, comm = bits[0], bits[1], bits[2], bits[3].strip()
+        if ppid not in panes or os.path.basename(comm) != MONOCLE_CMD:
+            continue
+        age = etime_secs(elapsed)
+        if age is None:
+            continue
+        out[panes[ppid]] = (int(pid) if pid.isdigit() else 0, age)
+    return out
+
+
+def monocle_drift(pane_text, ps_text, binary_mtime, now=None):
+    """{lane path: {"pid", "age", "stale"}} — `stale` iff the process predates the binary.
+
+    Pure, and `stale` is None rather than False when the binary's mtime is unknown: "we
+    could not compare" and "compared, and it is current" are different answers, and only
+    one of them should let a reader stop looking.
+    """
+    now = time.time() if now is None else now
+    out = {}
+    for path, (pid, age) in parse_monocle_procs(pane_text, ps_text).items():
+        started = now - age
+        out[path] = {"pid": pid, "age": age,
+                     "stale": None if not binary_mtime else bool(binary_mtime > started)}
+    return out
+
+
+def monocle_binary():
+    """The monocle on PATH, or "" — never a guessed location."""
+    for d in (os.environ.get("PATH") or "").split(os.pathsep):
+        if not d:
+            continue
+        cand = os.path.join(d, MONOCLE_CMD)
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+    return ""
+
+
+_MONOCLE_BUILD = {}
+
+
+def monocle_build(path=None):
+    """What the BINARY says it is. Cached against its own mtime, so a rebuild re-reads it.
+
+    Labelled everywhere as the binary's build, never a lane's: this is what a monocle
+    started NOW would be, which is not what any running one necessarily is.
+    """
+    path = monocle_binary() if path is None else path
+    if not path:
+        return ""
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return ""
+    hit = _MONOCLE_BUILD.get(path)
+    if hit and hit[0] == mtime:
+        return hit[1]
+    import subprocess
+    try:
+        out = subprocess.run([path, "--version"], capture_output=True, text=True,
+                             timeout=5).stdout.strip().splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    build = out[0].strip() if out else ""
+    _MONOCLE_BUILD[path] = (mtime, build)
+    return build
+
+
+def monocle_state():
+    """(binary build, {lane path: {"pid", "age", "stale"}}) for the whole machine.
+
+    Two subprocesses total, whatever the fleet's size — see parse_monocle_procs.
+    """
+    path = monocle_binary()
+    if not path:
+        return "", {}
+    import subprocess
+    try:
+        panes = subprocess.run(
+            ["tmux", "list-panes", "-a", "-F",
+             "#{pane_current_command}\t#{pane_pid}\t#{pane_current_path}"],
+            capture_output=True, text=True, timeout=5).stdout
+        procs = subprocess.run(["ps", "-axo", "pid=,ppid=,etime=,comm="],
+                               capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return monocle_build(path), {}
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        mtime = 0
+    return monocle_build(path), monocle_drift(panes, procs, mtime)
 
 
 def transcript_for(cwd):

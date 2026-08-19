@@ -16,6 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
     ASK, agent_transcript, agent_transcript_exact, ask_kind, ask_trailers,
+    monocle_state,
     branch_ticket_for, clip, context_for, fleet_goal,
     fleet_goal_path, fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items,
     open_prs_for, status_age, status_line, tickets_for,
@@ -120,6 +121,9 @@ def fmt_uptime(etime):
 
 
 def rows():
+    # ONCE PER RUN, NOT PER ROW. Two subprocesses answer for the whole machine, and the
+    # answer is machine-wide anyway — see _agent_facts.monocle_state.
+    _build, _monocle = monocle_state()
     for line in sys.stdin:
         f = line.rstrip("\n").split("\t")
         if len(f) < 4 or not f[0]:
@@ -213,6 +217,10 @@ def rows():
             # so it comes from a cache a long-running caller refreshes — never a fetch on the
             # render path. See refresh_open_prs().
             "open_prs": open_prs_for(path),
+            # WHETHER THIS LANE'S MONOCLE PREDATES THE BINARY ON DISK. None when there is
+            # no monocle in this lane to compare, or no binary to compare it against —
+            # which is not the same as "current", and must not read as it.
+            "monocle_stale": (_monocle.get(path) or {}).get("stale"),
             "needs_input": needs_input(path),
             # One element per ask. "needs_input" stays a string for JSON consumers; the panel
             # renders these, because a lane routinely owes the human more than one answer.
@@ -259,6 +267,12 @@ def main():
     general = general_asks()
     n_ask = sum(len(r.get("asks") or []) for r in data) + len(general)
     head = "FLEET  %d/%d lanes up  %d busy" % (live, len(lanes), busy)
+    # DRIFT IS A HEADER FACT because it is a fleet-wide operation to fix: restarting one
+    # lane's monocle and leaving the others is how four lanes came to run four different
+    # builds. The count says how big the job is; the per-row marker below says which.
+    stale = sum(1 for r in lanes if r.get("monocle_stale"))
+    if stale:
+        head += "  %d monocle%s stale" % (stale, "" if stale == 1 else "s")
     if subs:
         head += "  %d subagent%s" % (len(subs), "" if len(subs) == 1 else "s")
     if n_ask:
@@ -335,6 +349,15 @@ def main():
             if prs:
                 line += "  " + " ".join(
                     osc8("#%s%s" % (num, "…" if draft else ""), url) for num, url, draft in prs)
+            # WHICH LANES THE HEADER'S COUNT MEANT. Spelled out rather than glyphed: this
+            # marker appears on the day someone rebuilt monocle and is absent every other
+            # day, so it has no chance to teach anyone what a symbol would stand for.
+            #
+            # "old monocle", not "wrong version" — what is known is that this process
+            # started before the binary was last written, so it cannot be running it. Its
+            # actual build is on its own screen and nowhere a tool can read it.
+            if r.get("monocle_stale"):
+                line += "  old monocle"
         sys.stdout.write(line.rstrip() + "\n")
 
         # SECOND LINE: what this lane is doing, now. It leads and it is unmarked — a glyph in

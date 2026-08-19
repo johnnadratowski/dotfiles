@@ -53,6 +53,7 @@ What it locks in — each is a way this view could lie or lose work:
 import asyncio
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -60,6 +61,7 @@ import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fleet_tui  # noqa: E402
+import _agent_facts  # noqa: E402
 # The threshold by NAME, not a literal: a test that hard-codes 7200 goes on passing after
 # someone retunes the constant, while asserting about a boundary that no longer exists.
 from _agent_facts import ASK_KINDS, STATUS_STALE_AFTER, ask_deferral  # noqa: E402
@@ -132,6 +134,9 @@ async def main():
         # snapshot() reads it from the lane's flag file; the fixture sets it directly, since
         # what is under test here is what the ROW does with it.
         "review": None,
+        # Whether this lane's monocle predates the binary on disk. Volatile because it flips
+        # the moment someone rebuilds monocle, with nothing about the lane itself changing.
+        "monocle_stale": None,
     }
 
     # The roster the SIZING tests drive: how many agents beyond the fixture lane, and whether
@@ -156,6 +161,7 @@ async def main():
             "open_prs": volatile["prs"],
             "ask_path": ask_path, "raw_asks": fleet_tui._ask_lines(ask_path),
             "review": volatile["review"],
+            "monocle_stale": volatile["monocle_stale"],
         }
         extra = [dict(base, name="extra-%d" % i, label="e%d" % i, issue_links=[],
                       status="", raw_asks=[], open_prs=[])
@@ -163,14 +169,21 @@ async def main():
         return {
             "lanes": ([base] if roster["base"] else []) + extra,
             "subs": list(roster["subs"]),
-            "fleet": fleet_tui._ask_lines(fleet_path),
+            # SORTED, exactly as the real snapshot() sorts — oldest `[added:]` first. A
+            # fixture that skipped the sort would let the panel's ordering go untested while
+            # every row-level assertion still passed.
+            "fleet": sorted(fleet_tui._ask_lines(fleet_path), key=fleet_tui.ask_sort_key),
             "fleet_path": fleet_path,
             # Read through the REAL reader on every call, exactly as snapshot() does, so the
             # "a goal edited mid-session lands on the next tick" assertion is testing the
             # re-read rather than a value the fixture happened to hold.
             "goal": fleet_tui.fleet_goal(goal_path)[0],
             "goal_chain": fleet_tui.fleet_goal(goal_path)[1],
+            # The goal rides in `ctx` TOO, because `ctx` is what reaches the row renderers
+            # and the 🎯 marker is drawn on the row, not only in the dialog.
             "ctx": {"linear_base": "https://linear.app/acme",
+                    "goal": fleet_tui.fleet_goal(goal_path)[0],
+                    "goal_chain": fleet_tui.fleet_goal(goal_path)[1],
                     "repo": "https://github.com/acme/goals"},
             "error": "",
         }
@@ -1261,10 +1274,18 @@ async def main():
         # drops is exactly what the overlay has to go back to the file for.
         row_text = str(app.query_one("#fleet", ListView).children[0].query_one(Static).content)
         ok("the 4ME row still clips its ask to the column",
-           row_text.rstrip().endswith("…"), row_text)
+           "…" in row_text, row_text)
         ok("…and hides the trailers, which are provenance rather than the question",
            "from:feature-3" not in row_text and "added:" not in row_text
            and "[MON-10]" not in row_text, row_text)
+        # THE AGE AND THE GOAL MARKER RIDE ON THE ROW (2026-08-19). Both were reachable only
+        # by opening the ask, which is backwards: they are what decides WHICH ask to open.
+        # The age is asserted as a real value, not merely present — an age that rendered ""
+        # would leave the row looking correct while saying nothing.
+        ok("…but the AGE rides on the row, after the clip, where it costs the question nothing",
+           re.search(r"\d+[smhdw](\[/\])?\s*$", row_text.rstrip()), row_text)
+        ok("…and an ask whose ticket the standing goal names is marked on the ROW",
+           "🎯" in row_text, row_text)
 
         fleet.focus()
         fleet.index = 0
@@ -1528,6 +1549,33 @@ async def main():
             for _ in range(3):
                 await pilot.pause()
 
+        # ── DRIFT IS VISIBLE WITHOUT ASKING ANYONE ──────────────────────────────────────
+        # The header, not a row: fixing it is a fleet-wide restart, and the marker is absent
+        # on every day but the one after a rebuild.
+        volatile["monocle_stale"] = True
+        app.load()
+        for _ in range(3):
+            await pilot.pause()
+        ok("a lane whose monocle predates the binary is counted in the header",
+           "1 old monocle" in screen_text(app), screen_text(app).split("\n")[0])
+        # THE NEGATIVE, which is what keeps the marker worth reading: on an ordinary day it
+        # must be absent entirely, not shown as a zero.
+        volatile["monocle_stale"] = False
+        app.load()
+        for _ in range(3):
+            await pilot.pause()
+        ok("…and a lane on the current build puts nothing in the header at all",
+           "monocle" not in screen_text(app).split("\n")[0],
+           screen_text(app).split("\n")[0])
+        # UNKNOWN IS NOT STALE EITHER. A lane with no monocle to compare must not be counted.
+        volatile["monocle_stale"] = None
+        app.load()
+        for _ in range(3):
+            await pilot.pause()
+        ok("…nor does a lane whose monocle could not be resolved",
+           "monocle" not in screen_text(app).split("\n")[0],
+           screen_text(app).split("\n")[0])
+
         # ── CTRL+HJKL: MOVE INSIDE THE TUI, THEN HAND OFF TO TMUX AT THE EDGE ───────────
         # BOTH BRANCHES OF EVERY DIRECTION are asserted, because each alone passes against a
         # different broken implementation: internal-only never leaves the pane, hand-off-only
@@ -1674,12 +1722,81 @@ async def main():
         d = fleet_tui.ask_detail(
             "product: rescope (deferred 2026-08-11 — until SRV-21) [MON-10] [from:woo]")
         ok("ask_detail peels kind, prose, stamp and trailers in the written order",
-           d == {"kind": "product", "icon": "💬", "text": "rescope",
+           d == {"kind": "product", "icon": "💬", "text": "rescope", "context": "",
                  "deferral": "deferred 2026-08-11 — until SRV-21",
                  "trailers": [("ticket", "MON-10"), ("from", "woo")]}, d)
         ok("an untyped ask still parses, as the general kind",
            fleet_tui.ask_detail("bare [SRV-1]")["kind"] == "",
            fleet_tui.ask_detail("bare [SRV-1]"))
+
+        # ── the CONTEXT BLOCK, the SHORT form, and the ORDERING ──────────────────────────
+        # All three landed together (2026-08-19) for one reason: the user could not act on
+        # the list. Each is asserted against the failure it was added for, not its mechanism.
+        d = fleet_tui.ask_detail("product: fold it in? [SRV-1]\nbecause vii is idle\nand it is cheap")
+        ok("context is every line after the first, and the first line still parses normally",
+           (d["text"], d["context"], dict(d["trailers"])["ticket"])
+           == ("fold it in?", "because vii is idle\nand it is cheap", "SRV-1"), d)
+        ok("…so a bracket in the CONTEXT can never be mistaken for a trailer",
+           fleet_tui.ask_detail("a?\ncontext [not:a-trailer]")["trailers"] == [],
+           fleet_tui.ask_detail("a?\ncontext [not:a-trailer]"))
+        ok("an ask with no context reports an empty one, never None",
+           fleet_tui.ask_detail("a?")["context"] == "")
+
+        # FOLDING AND DELETING ARE ONE CONTRACT and are asserted together: the reader turns a
+        # block into one item, and `x` must remove the same block. A delete that matched the
+        # head and left the indented lines behind would silently re-parent a paragraph onto
+        # an unrelated ask — corruption that looks like a working list.
+        ok("indented lines fold into the ask above them, so the list still counts ITEMS",
+           fleet_tui.fold_ask_context(
+               ["product: a?", "  ctx one", "\tctx two", "ship: b?", "  ctx b"])
+           == ["product: a?\nctx one\nctx two", "ship: b?\nctx b"],
+           fleet_tui.fold_ask_context(
+               ["product: a?", "  ctx one", "\tctx two", "ship: b?", "  ctx b"]))
+        # ITS BYTES ARE KEPT, indent and all, rather than tidied. `x` deletes by matching the
+        # head line against the file, so a head this reader had silently stripped would no
+        # longer match the line it came from — a delete that fails quietly is worse than an
+        # ugly row. Being its own ITEM is the fact under test; its spelling is incidental.
+        ok("…and a stray leading indent is its own ask, never a continuation of nothing",
+           len(fleet_tui.fold_ask_context(["  orphan", "product: a?"])) == 2,
+           fleet_tui.fold_ask_context(["  orphan", "product: a?"]))
+
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+            tf.write("product: a?\n  ctx one\n  ctx two\nship: b?\n  ctx b\n")
+            block_path = tf.name
+        folded = fleet_tui._ask_lines(block_path)
+        dropped = fleet_tui._drop_line(block_path, folded[0])
+        with open(block_path) as f:
+            left = f.read()
+        os.unlink(block_path)
+        ok("deleting an ask takes its whole context block with it, and nothing else",
+           dropped and left == "ship: b?\n  ctx b\n", (dropped, left))
+
+        ok("a `[short:]` trailer is what the one-line views show, not the prose",
+           fleet_tui.ask_short(fleet_tui.ask_detail(
+               "product: a very long question indeed [short:the gist]")) == "the gist")
+        ok("…and with no short form the prose is used, exactly as before",
+           fleet_tui.ask_short(fleet_tui.ask_detail("product: the gist")) == "the gist")
+
+        # OLDEST FIRST, undated after dated, deferred last of all. Asserted as a whole
+        # ordering rather than pairwise: the bug this replaces was a list that was *usually*
+        # chronological, so a check that only compared two adjacent dated rows would have
+        # passed on the broken version too.
+        rows = ["new [added:2026-08-19]", "undated", "old [added:2026-01-01]",
+                "put off (deferred 2026-08-01) [added:2020-01-01]"]
+        ok("the 4ME list sorts oldest-first, undated after dated, deferred last of all",
+           sorted(rows, key=fleet_tui.ask_sort_key)
+           == ["old [added:2026-01-01]", "new [added:2026-08-19]", "undated",
+               "put off (deferred 2026-08-01) [added:2020-01-01]"],
+           sorted(rows, key=fleet_tui.ask_sort_key))
+
+        # THE CRASH THIS REPLACED took the whole app down from inside a click handler, so the
+        # positive control matters more than the negative one: a parser that returned "" for
+        # everything would satisfy "does not raise" and tell us nothing.
+        ok("a real date yields a real age", fleet_tui.ask_age("2026-01-01") != "")
+        ok("…and a malformed stamp yields no age rather than raising",
+           [fleet_tui.ask_age(s) for s in ("", "nope", "2026-13-01", "26-1-1")]
+           == ["", "", "", ""],
+           [fleet_tui.ask_age(s) for s in ("", "nope", "2026-13-01", "26-1-1")])
 
         CTX = {"linear_base": "https://linear.app/acme",
                "repo": "https://github.com/acme/goals"}
@@ -2205,6 +2322,63 @@ async def main():
         {"linear_base": "https://linear.app/acme"})
     ok("…and a ticket id inside that path is not linkified inside its own href",
        "[link='file:///tmp/SRV-24.md']/tmp/SRV-24.md[/link]" in _dlg_id, _dlg_id)
+
+    # ── MONOCLE BUILD DRIFT ─────────────────────────────────────────────────────────────
+    # THE FAILURE THIS ENCODES. Four lanes were each running a different stale monocle, one
+    # of them a fortnight old, and no surface reported a version — so a shipped feature read
+    # as broken and a correct change was rolled back. Driven against fabricated `tmux` and
+    # `ps` output, which is the only way to get a STALE lane on demand: the real fleet is
+    # current, so a test that only looked at it would assert nothing.
+    _PANES = ("monocle\t100\t/lanes/feature-1\n"
+              "monocle\t200\t/lanes/feature-2\n"
+              "zsh\t300\t/lanes/feature-3\n"                # a shell, not a monocle
+              "2.1.233\t400\t/lanes/feature-4\n")           # an agent, not a monocle
+    _PS = ("11 100    05:00 monocle\n"                        # 5 minutes old
+           "22 200 14-02:00:00 /Users/john/bin/monocle\n"     # a fortnight old, by full path
+           "33 300    05:00 zsh\n"
+           # A MONOCLE THAT IS NOT THE PANE'S FOREGROUND PROCESS — suspended with ctrl+z, or
+           # backgrounded. `pane_current_command` says `zsh`, so this lane HAS no running
+           # monocle to be stale, and counting it would mark a lane for a restart of
+           # something nobody is looking at.
+           "55 300    05:00 monocle\n"
+           "44 999    05:00 monocle\n")                       # a monocle in no listed pane
+    _NOW = 1_700_000_000.0
+    _found = _agent_facts.parse_monocle_procs(_PANES, _PS)
+    ok("a monocle pane is joined to its process through the pane's own pid",
+       _found == {"/lanes/feature-1": (11, 300),
+                  "/lanes/feature-2": (22, 14 * 86400 + 7200)}, _found)
+    # THE PANE IS THE FILTER, not the process list: a monocle running outside any listed
+    # pane belongs to no lane, and a shell in a lane is not a monocle.
+    ok("…and a pane running something else contributes nothing, even with a monocle "
+       "still alive underneath it",
+       "/lanes/feature-3" not in _found and "/lanes/feature-4" not in _found, _found)
+
+    # THE COMPARISON IS TIMES, NOT VERSIONS. A process that started before the binary was
+    # last written cannot be running it — which needs no version string, and is the one fact
+    # about a running TUI that is knowable from outside.
+    _bin_written = _NOW - 3600          # rebuilt an hour ago
+    _drift = _agent_facts.monocle_drift(_PANES, _PS, _bin_written, _NOW)
+    ok("a monocle started after the binary was written is NOT stale",
+       _drift["/lanes/feature-1"]["stale"] is False, _drift["/lanes/feature-1"])
+    ok("…and one that predates it is",
+       _drift["/lanes/feature-2"]["stale"] is True, _drift["/lanes/feature-2"])
+    # THE NEGATIVE THAT KEEPS THE MARKER HONEST. Every lane on the current build must come
+    # back clean, or the marker is noise on every ordinary day and stops being read.
+    _all_fresh = _agent_facts.monocle_drift(_PANES, _PS, _NOW - 14 * 86400 - 99999,
+                                                      _NOW)
+    ok("with the binary older than everything, no lane is marked",
+       [v["stale"] for v in _all_fresh.values()] == [False, False], _all_fresh)
+    # UNKNOWN IS NOT CURRENT. With no binary to compare against, `stale` is None — a reader
+    # who cannot tell must not be shown the same answer as one who checked and found it fine.
+    _no_bin = _agent_facts.monocle_drift(_PANES, _PS, 0, _NOW)
+    ok("…and with no binary to compare against the answer is unknown, not 'current'",
+       all(v["stale"] is None for v in _no_bin.values()), _no_bin)
+
+    ok("an elapsed time is read the same way the console's uptime column reads it",
+       (_agent_facts.etime_secs("05:00"),
+        _agent_facts.etime_secs("2:03:04"),
+        _agent_facts.etime_secs("14-02:00:00"),
+        _agent_facts.etime_secs("")) == (300, 7384, 14 * 86400 + 7200, None))
 
     # ── THE NAME TMUX MATCHES THIS PANE BY ──────────────────────────────────────────────
     # The tmux condition keys off this string, so a change here silently stops the forwarding

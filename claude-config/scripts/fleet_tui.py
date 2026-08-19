@@ -75,7 +75,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_GENERAL, ASK_KINDS, LINE_MAX,  # noqa: E402
-                          ask_detail, ask_kind,
+                          ask_detail, ask_kind, ask_short, ask_sort_key, fold_ask_context,
                           ask_trailers, branch_for, branch_ticket_for, clip, fleet_goal,
                           fleet_goal_path, fmt_age, fmt_ago, refresh_open_prs, status_text,
                           tickets_for)
@@ -154,27 +154,40 @@ def _ask_lines(path):
             body = f.read()
     except OSError:
         return []
-    return [ln.rstrip() for ln in body.splitlines()
+    kept = [ln.rstrip() for ln in body.splitlines()
             if ln.strip() and not ln.lstrip().startswith("#")]
+    # Folded by the SHARED reader in _agent_facts, because `fleet-status.sh` reads these same
+    # files — see fold_ask_context for why a folder in only one of them corrupts the other.
+    return fold_ask_context(kept)
 
 
 def _drop_line(path, raw):
-    """Remove the first exact occurrence of `raw`. Returns True when the file changed.
+    """Remove the first occurrence of `raw` — WITH ITS CONTEXT BLOCK. True when it changed.
 
     Rewrites rather than truncates: another line may have been added since the snapshot, and
     a to-do list that loses an entry nobody ticked off is worse than one that fails to tick.
+
+    MATCHED ON THE FIRST LINE, DELETED AS A BLOCK. `raw` arrives folded (see `_fold_context`),
+    so matching the whole thing would depend on reproducing the exact indentation the file
+    used. The first line is the ask's identity; the indented lines under it are by definition
+    part of it, and leaving them behind would orphan a paragraph under an unrelated item.
     """
+    head = (raw or "").split("\n", 1)[0].rstrip()
     try:
         with open(path) as f:
             lines = f.read().splitlines()
     except OSError:
         return False
     for i, ln in enumerate(lines):
-        if ln.rstrip() == raw:
-            del lines[i]
-            with open(path, "w") as f:
-                f.write("\n".join(lines) + ("\n" if lines else ""))
-            return True
+        if ln.rstrip() != head:
+            continue
+        j = i + 1
+        while j < len(lines) and lines[j].strip() and lines[j][:1].isspace():
+            j += 1
+        del lines[i:j]
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + ("\n" if lines else ""))
+        return True
     return False
 
 
@@ -365,6 +378,9 @@ def ask_ticket_url(tid, ctx):
     return ""
 
 
+_ASK_ADDED = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
 def ask_age(added):
     """"3d" for an `[added:YYYY-MM-DD]` stamp, or "" — the same shape `fmt_age` gives a lane.
 
@@ -373,10 +389,29 @@ def ask_age(added):
     looking recent. Both are shown: the date is the fact, the age is what it means.
 
     An unparseable stamp yields "" rather than a guess — the lead writes this file by hand.
+
+    PARSED BY REGEX, NOT `time.strptime`, and that is a CRASH FIX rather than a preference.
+    `strptime` imports `_strptime` LAZILY, on its first call. A Homebrew python upgrade
+    replaces the Cellar directory a running interpreter was resolved from, so every
+    not-yet-imported module vanishes underneath a live process — and the first click on a
+    dated ask then died with `ModuleNotFoundError: No module named '_strptime'` inside a
+    message handler, which took the whole app down (2026-08-19). The format here is three
+    integers; deriving them with a regex needs no import and therefore has no such window.
+
+    THE GENERAL RULE, since this file is long-lived and the next one will not be `strptime`:
+    a lazily-imported stdlib module is a dependency that is resolved LATER THAN THE PROCESS
+    IT RUNS IN. Prefer what is already imported at module scope inside anything a keypress
+    can reach.
     """
+    m = _ASK_ADDED.match((added or "").strip())
+    if not m:
+        return ""
+    y, mo, d = (int(g) for g in m.groups())
     try:
-        then = time.mktime(time.strptime((added or "").strip(), "%Y-%m-%d"))
-    except (ValueError, OverflowError):
+        # `mktime` is a C function on the already-imported `time` module — no lazy import.
+        # `-1` for isdst lets it resolve the offset; the weekday/yearday fields are ignored.
+        then = time.mktime((y, mo, d, 0, 0, 0, 0, 1, -1))
+    except (ValueError, OverflowError, OSError):
         return ""
     return fmt_age(max(0, time.time() - then))
 
@@ -934,11 +969,21 @@ def snapshot():
     return {
         "lanes": lanes,
         "subs": subs,
-        "fleet": _ask_lines(fleet_path) if fleet_path else [],
+        # SORTED OLDEST-FIRST BY `[added:]`, not left in file order (2026-08-19, at the
+        # user's instruction). File order was append order, which is *usually* chronological
+        # and stops being so the moment `/whats-next` moves a deferred row to the bottom or
+        # the lead rewrites the list — so "the top is the oldest" was true by accident and
+        # silently false afterwards. Sorting at READ makes it true by construction, and the
+        # row numbers stay file addresses (see filter_asks) so `4me 3` still resolves.
+        "fleet": sorted(_ask_lines(fleet_path), key=ask_sort_key) if fleet_path else [],
         "fleet_path": fleet_path,
         "goal": goal,
         "goal_chain": goal_chain,
+        # The goal travels in `ctx` as well as at top level: `ctx` is what reaches the row
+        # renderers, and the 🎯 marker is now drawn on the ROW, not only in the dialog.
         "ctx": {"linear_base": linear_base,
+                "goal": goal,
+                "goal_chain": goal_chain,
                 "repo": _repo_url(lanes[0]["path"]) if lanes else ""},
         "error": "",
     }
@@ -1440,11 +1485,26 @@ def ask_row_markup(n, raw, ctx=None):
     is one line in a column, so it shows the question and the deferral stamp, and leaves
     provenance to the surface with room for it.
     """
-    icon, text = ask_kind(raw)
-    text, _trailers = ask_trailers(text)
-    text, urls = doc_refs(text)
-    return "[dim]%2d[/]  %s %s" % (
-        n, icon, doc_markup(linkify(fit_ask(text, urls), ctx or {}), urls))
+    ctx = ctx or {}
+    d = ask_detail(raw)
+    text, urls = doc_refs(ask_short(d) + (" (%s)" % d["deferral"] if d["deferral"] else ""))
+    body = doc_markup(linkify(fit_ask(text, urls), ctx), urls)
+
+    # THE GOAL MARKER, PROMOTED FROM THE DIALOG TO THE ROW (2026-08-19). It was only visible
+    # after opening an ask, which is the wrong way round: whether an item gates the standing
+    # objective is exactly the fact that decides WHICH item to open. Ticket-scoped, like the
+    # dialog's — a whole-id match against `fleet-goal`, never a substring.
+    tid = dict(d["trailers"]).get("ticket", "")
+    on_goal = goal_mentions(tid, ctx.get("goal") or "", ctx.get("goal_chain") or [])
+    if on_goal:
+        body = "[b yellow]🎯[/] " + body
+
+    # THE AGE, NOT THE DATE, and at the tail where it cannot push the question out of the
+    # column. A date makes the reader subtract against a today they have to recall — the
+    # arithmetic nobody does, which is how items sat for weeks looking recent.
+    age = ask_age(dict(d["trailers"]).get("added", ""))
+    return "[dim]%2d[/]  %s %s%s" % (
+        n, d["icon"], body, "  [dim]%s[/]" % escape(age) if age else "")
 
 
 # ── the 4ME category filter ──────────────────────────────────────────────────────────────
@@ -2067,6 +2127,18 @@ class FleetTUI(App):
             # emoji form, which the terminal draws double-width in a single cell — so
             # one space renders as none and the glyph reads as part of the number.
             bits.append(f"[b yellow]{ASK}  {n_ask} needs you[/]")
+        # MONOCLE DRIFT, IN THE HEADER RATHER THAN ON A ROW. It is a fleet-wide operation to
+        # fix — restarting one lane's monocle and leaving the others is exactly how four
+        # lanes came to run four different builds — and it is absent on every day but the one
+        # after a rebuild, so it earns a place in the header precisely because it is rare.
+        # The columns below are fixed-width by design and this would have cost one of them a
+        # marker that is blank ~always.
+        #
+        # "old", not a version: what is known is that the process predates the binary on
+        # disk. `fleet-status` names the lanes; this says the job exists.
+        stale = sum(1 for r in lanes if r.get("monocle_stale"))
+        if stale:
+            bits.append("[b yellow]%d old monocle%s[/]" % (stale, "" if stale == 1 else "s"))
         bits.append(mark)
         # Written only when changed, for the same reason the lane lines are: an unconditional
         # update() on a timer repaints, and a repaint of the header is as visible as any other.
@@ -2610,11 +2682,19 @@ class FleetTUI(App):
         The row trades a path for a glyph because the row is a column. Here the path stays
         visible — it is what someone copies into a terminal — and is a link as well, so the
         dialog is not the one surface where you can read the location but not open it.
+
+        AND THE CONTEXT BLOCK UNDER IT, which is why this dialog now earns its keystroke. The
+        ask alone says what is being decided; the context says what the reader needs in order
+        to decide it without going and asking. It is rendered UPRIGHT under the italic ask, so
+        the question stays visually the question and the background stays background.
         """
         text = d["text"] or ""
         if not text:
             return "[dim i]— empty —[/]"
-        return "[i]%s[/]" % doc_text_markup(text, lambda t: linkify(t, ctx))
+        out = "[i]%s[/]" % doc_text_markup(text, lambda t: linkify(t, ctx))
+        if d.get("context"):
+            out += "\n\n" + doc_text_markup(d["context"], lambda t: linkify(t, ctx))
+        return out
 
     def ask_fields_markup(self, d, ctx):
         """The trailers as LABELLED fields, one per line.
