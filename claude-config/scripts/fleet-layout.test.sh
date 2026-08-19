@@ -961,10 +961,46 @@ case "$sub_out" in
   *"itself a subagent"*) pass=$((pass+1)); echo "  PASS: a subagent declines to place its siblings" ;;
   *) fail=$((fail+1)); printf '  FAIL: a subagent declines to place its siblings\n        got: [%s]\n' "$sub_out" ;;
 esac
+# `break-pane` is named alongside `join-pane` because placement changed shape: the FIRST
+# subagent is now moved by breaking it out into the parking window, so a guard that only
+# watched for `join-pane` would have gone quietly blind to the first — and worst — case.
 case "$sub_out" in
-  *join-pane*) fail=$((fail+1)); printf '  FAIL: …and proposes no join\n        got: [%s]\n' "$sub_out" ;;
-  *) pass=$((pass+1)); echo "  PASS: …and proposes no join" ;;
+  *join-pane*|*break-pane*) fail=$((fail+1)); printf '  FAIL: …and proposes no move\n        got: [%s]\n' "$sub_out" ;;
+  *) pass=$((pass+1)); echo "  PASS: …and proposes no move" ;;
 esac
+
+# WHERE THE PANES ACTUALLY GO. This is the assertion the 2026-08-18 fix never had, and its
+# absence is why the regression was invisible to a green suite: the old behaviour and the new
+# one both "place" panes, and nothing checked WHICH WINDOW they landed in.
+#
+# Driven from a LEAD pane (%900, deliberately absent from the stubbed rows, so the
+# self-is-a-subagent guard does not fire) with two subagents to place. The first must be
+# BROKEN OUT into a window named g-subagents; the second must JOIN that window — never the
+# lead's pane. The negative half is the load-bearing half: `-t %900` appearing anywhere in the
+# output is precisely the overruled behaviour coming back.
+printf '%s\n' "%900" > "$FAKEHOME/.claude/running-agents/lead.999"
+park_out="$(FAKE_SELF="%901" FAKE_SIB="%902" lib '
+  _subagent_panes() { printf "%s\t%s\t%s\n" "$FAKE_SELF" rev-a reviewer; printf "%s\t%s\t%s\n" "$FAKE_SIB" rev-b reviewer; }
+  _subagent_window_id() { :; }          # the window does not exist yet, as after a quiet fleet
+  _win_of() { :; }
+  _normalize_agent_window() { :; }
+  TMUX_PANE="%900"; fleet_tmux_ok() { return 0; }
+  tmux() { case "$1" in display-message) echo "main" ;; esac; }
+  DRY_RUN=1; layout_subagents' 2>&1)"
+case "$park_out" in
+  *"break-pane -d -s %901 -n g-subagents"*) pass=$((pass+1)); echo "  PASS: the first subagent BECOMES the g-subagents window" ;;
+  *) fail=$((fail+1)); printf '  FAIL: the first subagent BECOMES the g-subagents window\n        got: [%s]\n' "$park_out" ;;
+esac
+case "$park_out" in
+  *"-t %900"*) fail=$((fail+1)); printf '  FAIL: …and nothing is stacked under the lead (the overruled behaviour)\n        got: [%s]\n' "$park_out" ;;
+  *) pass=$((pass+1)); echo "  PASS: …and nothing is stacked under the lead (the overruled behaviour)" ;;
+esac
+# `-d` keeps the human in the lead's chat instead of yanking them to the new window.
+case "$park_out" in
+  *"break-pane -d"*) pass=$((pass+1)); echo "  PASS: …and the break is detached, so focus does not move" ;;
+  *) fail=$((fail+1)); printf '  FAIL: …and the break is detached, so focus does not move\n        got: [%s]\n' "$park_out" ;;
+esac
+rm -f "$FAKEHOME/.claude/running-agents/lead.999"
 
 # NOT A FLEET AGENT ⇒ TOUCH NOTHING. `subagents` is hook-driven: place-subagents.sh runs on
 # every SubagentStart in EVERY session on this machine. A plain claude in an unrelated repo,
@@ -981,7 +1017,7 @@ case "$van_out" in
   *) fail=$((fail+1)); printf '  FAIL: a non-fleet session is left alone\n        got: [%s]\n' "$van_out" ;;
 esac
 case "$van_out" in
-  *resize-pane*|*join-pane*|*"set-option"*) fail=$((fail+1)); printf '  FAIL: …and no tmux mutation is proposed\n        got: [%s]\n' "$van_out" ;;
+  *resize-pane*|*join-pane*|*break-pane*|*"set-option"*) fail=$((fail+1)); printf '  FAIL: …and no tmux mutation is proposed\n        got: [%s]\n' "$van_out" ;;
   *) pass=$((pass+1)); echo "  PASS: …and no tmux mutation is proposed" ;;
 esac
 

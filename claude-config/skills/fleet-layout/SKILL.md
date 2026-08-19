@@ -1,6 +1,6 @@
 ---
 name: fleet-layout
-description: Rearrange the fleet's tmux panes for the monitors you have, relabel windows from their resident agents, and restack a lead's subagent panes. Modes: wide, dual, single, plus subagents. Restructures only — never starts or stops an agent. Use for "relayout the fleet", "I'm on one monitor now", "fix the tab names", "my subagent panes are unreadable".
+description: Rearrange the fleet's tmux panes for the monitors you have, relabel windows from their resident agents, and park a lead's subagent panes in their own window. Modes: wide, dual, single, plus subagents. Restructures only — never starts or stops an agent. Use for "relayout the fleet", "I'm on one monitor now", "fix the tab names", "my subagent panes are unreadable".
 ---
 
 # fleet-layout — retopologize the fleet for the monitors you have
@@ -43,11 +43,11 @@ across. `single` brings them home and closes that window. You do not need `attac
 | `name-windows` | Label every window from **all** of its resident live agents, then put the windows in canonical order. No pane moves. Called automatically by the SessionStart hook. |
 | `attach` | Re-open the external-monitor window for an already-built `wide`/`dual` layout. |
 | `balance` | Re-split each cell 60/40. Run after the terminal changes size. |
-| `subagents` | Restack a lead's subagent panes below the lead's own pane. See below. |
+| `subagents` | Move a lead's subagent panes out to the `g-subagents` window. See below. |
 | `agent-windows` | Give EVERY live agent the same window shape — chat left, companion column right. **Every layout verb ends with this**, so staffing an agent can no longer leave the lead's chat squeezed or a teammate alone at full width. Idempotent. |
 | `lead-window` | Build the lead's OWN window: a companion column beside its chat, sized 60/40 and seeded with `WORKFLOW_CELL_COMMAND`. `--pane=%N` names the lead's pane (default `$TMUX_PANE`). Called by `team-boot.sh boot`; idempotent by pane count, so re-running is free. |
 
-## `subagents` — put a lead's helpers where they can be read
+## `subagents` — park a lead's helpers in a window of their own
 
 With `teammateMode: "tmux"`, an `Agent`-tool spawn becomes a **real tmux pane**, and the
 harness puts it wherever the current layout puts a new pane — in practice appended into the
@@ -58,11 +58,25 @@ cell's **right column, under the monocle companion**. Five reviewers and testers
 ~/.claude/scripts/fleet-layout.sh subagents [--dry-run]
 ```
 
-Run it **in the lead's own pane** — that pane is the stacking target, so it is known exactly
-rather than inferred, and a subagent can never end up as its own target. Each subagent pane is
-`join-pane -v`'d beneath it, in the left column, then the window is evened vertically. They are
-work the lead is waiting on, so reading them top-to-bottom beside the lead's transcript matches
-how they are used.
+Every subagent pane is moved into the **`g-subagents` window**, which holds nothing else, and
+that window is evened vertically. **The lead's window keeps only the lead.** (John, 2026-08-18.
+Before that this verb stacked them under the lead's own pane instead, on the theory that work
+the lead is waiting on reads best beside the lead's transcript — but the lead's window is the
+one the human reads all day, and five stacked panes ruin it exactly the way the right-hand
+column did.)
+
+Run it **in the lead's own pane**: that pane identifies the lead, so a subagent can never be
+mistaken for one and start rearranging its siblings.
+
+**The window is not durable — never assume it exists.** tmux deletes a window when its last
+pane dies, so `g-subagents` comes and goes with the fleet's subagents; the verb creates it by
+breaking the first pane out (`break-pane -d`, detached so your focus does not move) and joins
+the rest to it. This is why making the window by hand was never a fix: nothing routed new panes
+into it, so the next spawn pulled everything back under the lead. It is also why the window
+being absent is normal, not a fault.
+
+`name_windows` skips this window's name, and `automatic-rename` is turned off on it — both are
+needed, or tmux renames it from its running command and the next run makes a second one.
 
 Which panes move comes from the **team config** (`~/.claude/teams/*/config.json`), which records
 each member's `tmuxPaneId` and `agentType` — not from pane titles (an agent can set its own) and

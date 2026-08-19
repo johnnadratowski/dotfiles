@@ -130,8 +130,8 @@ _role_of() {
 
 # _is_lane_agent <agent-name> — true only for a DURABLE LANE resident (`feature-2`), false for
 # every task-scoped subagent a lead spawns. THE gate for the restructuring verbs: a lane agent
-# owns a window, a subagent belongs stacked under the pane that spawned it (`subagents` owns
-# that placement, and these verbs must not compete for it).
+# owns a window, a subagent belongs in the `g-subagents` parking window (`subagents` owns that
+# placement, and these verbs must not compete for it).
 #
 # WHY THE SHAPE TEST IS HERE AT ALL — it predates the fix, and it is kept deliberately.
 # `fleet_resolve_role` USED TO DEFAULT TO `feature` for any name it did not recognise, and a
@@ -141,7 +141,10 @@ _role_of() {
 # defaults to `other`, so the two agree — this is no longer a workaround, it is the local half of one
 # rule, and it still carries the `.role`-override case below.
 # Observed 2026-08-11: two of the lead's subagents were broken out into windows of their own,
-# named for their tasks, instead of staying panes under their spawner. The role-name filters
+# named for their tasks — one window EACH, rather than sharing the single parking window that
+# `subagents` puts them in. (The failure is unchanged by the 2026-08-19 move to `g-subagents`:
+# the bug was ever letting a restructuring verb treat a subagent as a lane, and a per-task
+# window is as wrong now as it was then.) The role-name filters
 # these verbs already carried could not have caught it — the misclassification happens upstream
 # of them, and `reviewer`/`tester` (the named subagents the filters were written against) are
 # the only subagents the default does NOT swallow.
@@ -548,9 +551,20 @@ _order_windows() {
     done <<EOF
 $agents
 EOF
+    # THE PARKING WINDOW RANKS BY NAME, not by who is standing in it. Its residents are
+    # subagents, and _window_rank reads a task-named subagent's role column as `feature` (see
+    # the note on _feature_agents) — so ranking it from its occupants would sort the subagent
+    # window in among the lane windows, and its position would then CHANGE every time a
+    # differently-named subagent spawned. 250 puts it after the lanes and before the
+    # unclassified tail, which is a fixed place the human can learn.
     # shellcheck disable=SC2086
-    rows="${rows}$(printf '%06d' "$(_window_rank "$idx" $names)")${TAB}${idx}${TAB}${win}
+    if [ "$(tmux display-message -p -t "$win" '#{window_name}' 2>/dev/null)" = "$FL_SUBAGENT_WINDOW" ]; then
+      rows="${rows}$(printf '%06d' 250)${TAB}${idx}${TAB}${win}
 "
+    else
+      rows="${rows}$(printf '%06d' "$(_window_rank "$idx" $names)")${TAB}${idx}${TAB}${win}
+"
+    fi
     idx=$(( idx + 1 ))
   done
   [ -n "$rows" ] || return 0
@@ -1267,16 +1281,28 @@ attach_external() {
 }
 
 # ----------------------------------------------------------------------- subagents
-# Restack a lead's SUBAGENT panes (reviewer / tester / planner …) directly beneath the
-# lead's own claude pane.
+# Move a lead's SUBAGENT panes (reviewer / tester / planner …) OUT of the lead's window and
+# into a parking window of their own.
 #
 # Why this verb exists: with `teammateMode: "tmux"`, an Agent-tool spawn is materialised as a
 # real pane, and the harness places it wherever tmux's current layout puts a new pane — in
 # practice appended into the cell's RIGHT column, under the monocle companion. Five reviewers
-# and testers land on top of a 40%-wide column and the whole window becomes unreadable. They
-# belong under the lead, in the left column: they are work the lead is waiting on, so reading
-# them top-to-bottom next to the lead's own transcript is the arrangement that matches how
-# they are used.
+# and testers land on top of a 40%-wide column and the whole window becomes unreadable.
+#
+# WHERE THEY GO, AND WHY IT IS NO LONGER UNDER THE LEAD. Until 2026-08-19 this verb answered
+# that by `join-pane -v`-ing every subagent beneath the lead's own pane — same window, left
+# column — on the theory that work the lead is waiting on reads best next to the lead's own
+# transcript. John overruled it on 2026-08-18: the left column is 60% of ONE window, the
+# window the human reads all day, and five stacked subagents make it unreadable in exactly the
+# way the right-hand column did. Subagents now get a window of their own.
+#
+# WHY THE 2026-08-18 FIX DID NOT HOLD, which is the part worth remembering. What landed then
+# was a `g-subagents` window made BY HAND, plus one line in `name_windows` keeping the labeler
+# off its name, plus a prose rule in the role docs. Nothing in any script ever created that
+# window or routed a pane into it — this function still joined every subagent under the lead —
+# so the arrangement survived only until the next spawn, which dragged every subagent back
+# (`~/.claude/debug/place-subagents.log`, 2026-08-19 13:31:28, four panes re-joined to %252).
+# A layout rule that only a human enforces is not a rule, it is a chore.
 #
 # WHICH PANES. The team config is authoritative — Claude Code records each member's
 # `tmuxPaneId` and `agentType` there, so we neither guess from pane titles (an agent can set
@@ -1707,6 +1733,21 @@ _pane_is_in_a_lane() {  # <pane-id>
   return 0
 }
 
+# THE PARKING WINDOW IS NOT DURABLE — resolve it every time, never assume it exists.
+#
+# tmux deletes a window when its last pane dies, so this window comes and goes with the
+# fleet's subagents. It was absent entirely when this regression was diagnosed (`tmux
+# list-windows -a` showed seven windows, none named g-subagents) precisely because the last
+# subagent to be parked there had exited. Any design that treats "the window exists" as a
+# precondition breaks the first time the fleet goes quiet — which is why the hand-made window
+# of 2026-08-18 was never going to survive.
+FL_SUBAGENT_WINDOW="${WORKFLOW_SUBAGENT_WINDOW:-g-subagents}"
+
+_subagent_window_id() {   # <session> -> window_id of the parking window, empty when absent
+  tmux list-windows -t "$1" -F "#{window_id}${TAB}#{window_name}" 2>/dev/null |
+    awk -F"$TAB" -v n="$FL_SUBAGENT_WINDOW" '$2==n{print $1; exit}'
+}
+
 layout_subagents() {
   fleet_tmux_ok || { echo "fleet-layout subagents: not inside tmux — nothing to place" >&2; return 0; }
 
@@ -1751,22 +1792,70 @@ layout_subagents() {
     _normalize_agent_window "$target"       # sizing drifts with or without subagents
     return 0
   fi
-  local pane name atype
+  local pane name atype sess win anchor
+  sess="$(tmux display-message -p -t "$target" '#{session_name}' 2>/dev/null)"
+  [ -n "$sess" ] || { echo "fleet-layout subagents: cannot resolve the lead's session"; return 0; }
+  win="$(_subagent_window_id "$sess")"
+
   while IFS="$TAB" read -r pane name atype; do
     [ -n "$pane" ] || continue
-    # Never move our own pane, and never move the pane we are stacking onto.
+    # Never move our own pane.
     [ "$pane" = "$target" ] && { printf '  %-14s %s\n' "$name" "SKIPPED (that is the lead's own pane)"; continue; }
-    printf '  %-14s %s\n' "$name" "$atype → below the lead's pane ($target)"
-    # -v stacks BELOW the target, keeping it inside the left column rather than the cell's
-    # right-hand companion stack. Failure is reported and does not abort the rest: a pane that
-    # will not move is cosmetic, and half-placed beats aborted.
-    _rw join-pane -v -s "$pane" -t "$target" || printf '  %-14s %s\n' "$name" "join failed (left where it was)"
+    # ALREADY PARKED ⇒ LEAVE IT. This verb re-runs on every single spawn and selects ALL live
+    # subagents, not just the new one, so without this test each spawn re-joins every sibling —
+    # reshuffling the stack under whoever is reading it, for no gain. (That re-placement of the
+    # whole set is also what made the old behaviour feel like it "kept coming back": one new
+    # subagent was enough to drag every previously-moved pane along with it.)
+    if [ -n "$win" ] && [ "$(_win_of "$pane")" = "$win" ]; then
+      printf '  %-14s %s\n' "$name" "already in $FL_SUBAGENT_WINDOW"
+      continue
+    fi
+    printf '  %-14s %s\n' "$name" "$atype → $FL_SUBAGENT_WINDOW"
+    if [ -z "$win" ]; then
+      # THE FIRST SUBAGENT BECOMES THE WINDOW. `break-pane`, never `new-window`: new-window
+      # would spawn a shell pane nobody asked for, which we would then have to kill (and a
+      # kill in this code path is exactly what must never happen near live agent panes).
+      # `-d` is load-bearing — without it the new window becomes active and the human is
+      # yanked out of the lead's chat every time a subagent spawns.
+      _rw break-pane -d -s "$pane" -n "$FL_SUBAGENT_WINDOW" \
+        || { printf '  %-14s %s\n' "$name" "break failed (left where it was)"; continue; }
+      if [ "$DRY_RUN" = "1" ]; then
+        win="@dry-run"          # nothing was created; stop proposing a second break
+      else
+        win="$(_subagent_window_id "$sess")"
+        # The labeler skips this name (see name_windows), but tmux's OWN automatic-rename is a
+        # separate mechanism and would still overwrite it from the pane's running command.
+        # Both have to be off or the window loses its name and the next run makes a second one.
+        [ -n "$win" ] && _rw set-window-option -t "$win" automatic-rename off
+      fi
+    else
+      anchor="$(tmux list-panes -t "$win" -F '#{pane_id}' 2>/dev/null | head -1)"
+      # A DRY RUN MUST SHOW EVERY MOVE IT WOULD MAKE. Under --dry-run the window was never
+      # created, so this lookup finds no anchor and the joins would silently vanish from the
+      # output — a preview that showed one move out of seven and looked like the whole plan.
+      [ "$DRY_RUN" = "1" ] && [ -z "$anchor" ] && anchor="<first pane of $FL_SUBAGENT_WINDOW>"
+      if [ -n "$anchor" ]; then
+        # Failure is reported and does not abort the rest: a pane that will not move is
+        # cosmetic, and half-placed beats aborted.
+        _rw join-pane -v -s "$pane" -t "$anchor" \
+          || printf '  %-14s %s\n' "$name" "join failed (left where it was)"
+      fi
+    fi
+    # REBALANCE ON EVERY MOVE, not once at the end. `join-pane -v` halves the anchor pane, so
+    # an unbalanced stack runs out of room geometrically: the 7th subagent was refused with
+    # "no space for a new pane" while the window still had 56 rows, because the anchor it was
+    # splitting had been halved down to nothing. Evening the stack after each move keeps every
+    # pane at height/n and raises the ceiling from ~6 panes to as many as the window has rows.
+    # Measured: 7 panes into a 56-row window, 6 placed and the last refused, before this.
+    [ -n "$win" ] && [ "$win" != "@dry-run" ] && _rw select-layout -t "$win" even-vertical >/dev/null 2>&1
     n=$((n + 1))
   done <<EOF
 $rows
 EOF
+
+  # The lead's own window still needs its sizing: pulling panes out of it leaves the survivors'
+  # geometry exactly as it was, so the chat stays at whatever width the departed stack left it.
   _normalize_agent_window "$target"
-  _even_subagent_heights "$target"
   echo "fleet-layout subagents: placed $n"
 }
 

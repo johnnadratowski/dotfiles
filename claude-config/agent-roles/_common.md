@@ -16,8 +16,10 @@ only what you'd get wrong *without knowing to look*. Procedure lives behind poin
 - **Tests that need Docker, the shared DB or a fixed port are the STANDING TESTER's alone.**
   `SendMessage` the fleet's `…-tester` (worktree + suite); never run them in your lane and
   never spawn a tester subagent. DB-free gates (format/lint/types/unit) stay yours.
-- **Spawn placement:** lane agent → its own window; reviewer/subagent → current window,
-  under its spawner. `run_in_background: false` = in-process, blocks the turn, no pane.
+- **Spawn placement:** lane agent → its own window; reviewer/subagent → the `g-subagents`
+  window, never stacked under its spawner (John, 2026-08-18). `fleet-layout subagents` moves
+  it there and a tmux `after-split-window` hook runs that automatically, so placement needs no
+  command from you. `run_in_background: false` = in-process, blocks the turn, no pane.
 - **A background agent goes idle, not away.** It stays addressable until stopped.
 - **Blocked on a person? Tell the LEAD** — one `SendMessage` naming the decision, the moment
   you block. Never write `.claude/needs-input` yourself; the lead owns it (2026-08-04). You

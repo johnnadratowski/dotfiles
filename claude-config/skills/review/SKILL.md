@@ -129,9 +129,10 @@ One anchor per target (`<target>-review`), so each derives its own.
    > against the right one.
 
    > **Placement — leave `run_in_background` at its default (background).** A reviewer is
-   > task-scoped, so it belongs **in the current window**, stacked under the pane that spawned
-   > it and selectable in the agent list, where you can watch and steer it mid-review. The
-   > `SubagentStart` hook places it automatically (`fleet-layout subagents`). Do NOT use
+   > task-scoped, so its pane belongs in the **`g-subagents`** window, never stacked under the
+   > pane that spawned it (John, 2026-08-18) — you watch and steer it from the agent list,
+   > which does not care where the pane sits. A tmux `after-split-window` hook places it
+   > automatically (`fleet-layout subagents`), so you run nothing yourself. Do NOT use
    > `run_in_background: false` here — that runs in-process with no pane and no agent-list row,
    > which is right for a one-shot lookup and wrong for a review you may want to interrupt.
    > **It will not exit on its own**: stop it once its verdict is in. Canonical rule: CLAUDE.md

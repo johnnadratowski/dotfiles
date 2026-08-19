@@ -14,12 +14,15 @@ and of the agents' pane topology. It **never starts or stops an agent**.
 | `wide` | ultra-wide monitor — 4 agents in one 2×2 window |
 | `dual` | ordinary second monitor — 2 agents per window |
 | `single` | laptop — one window per agent |
-| `subagents` | restacks reviewer/tester panes **beneath** the pane that spawned them |
+| `subagents` | moves reviewer/tester panes out to the **`g-subagents`** window |
 | `agent-windows` | gives every live agent the same shape: chat left, companion column right |
 
 All are `--dry-run`-able. `subagents` exists because with `teammateMode: "tmux"` the harness
 otherwise appends a spawn into the cell's 40%-wide right column and the window becomes
-unreadable; the `SubagentStart` hook runs it for you.
+unreadable. It parks them in a window of their own rather than under their spawner (John,
+2026-08-18); a tmux `after-split-window` hook runs it for you on every spawn, so you never
+place a pane by hand. `g-subagents` is created on demand and disappears when its last subagent
+exits — its absence is normal.
 
 ## Up and down — `~/.claude/scripts/team-boot.sh`
 

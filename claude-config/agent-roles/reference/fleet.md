@@ -40,8 +40,8 @@ Three kinds, three placements, and the kind is decided by **how long it lives**:
 | Kind | Spawn as | Lands | Why |
 |---|---|---|---|
 | **Lane agent** (`feature-N`) — long-lived | background teammate, then `EnterWorktree` into its lane | **its own tmux window** (`fleet-layout single`/`dual`/`wide`) | it outlives any one task; it needs a full window you can sit in |
-| **Reviewer / tester** — task-scoped | background (`run_in_background` default) | **the current window**, stacked under the pane that spawned it | you watch and steer it mid-run; `fleet-layout subagents` places it, and the `SubagentStart` hook runs that automatically |
-| **Any agent's own subagent** | background | **the current window**, selectable in the agent list below the prompt | same reason — it belongs to whoever spawned it and should be readable next to them |
+| **Reviewer / tester** — task-scoped | background (`run_in_background` default) | **the `g-subagents` window** — never under the pane that spawned it (John, 2026-08-18) | a lead's window is the one the human reads all day; five helper panes stacked in it make it unreadable. `fleet-layout subagents` moves them, run automatically by a tmux `after-split-window` hook |
+| **Any agent's own subagent** | background | **the `g-subagents` window**, and selectable in the agent list below its spawner's prompt | you steer it from the agent list, which does not care where its pane sits — so the pane costs the reader nothing by living elsewhere |
 
 **`run_in_background: false` is the escape hatch, not the default.** It runs the subagent
 *in-process*: no pane, no team membership, no agent-list row — it blocks the turn and returns
