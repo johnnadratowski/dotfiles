@@ -63,8 +63,14 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Same no-_fleet.sh fallback pattern the rest of this file uses. Fails the safe way: an
 # undefined function would abort the `&& continue` and enumerate the harness's throwaway
 # subagent worktrees as lanes, which is the bug this predicate exists to prevent.
-command -v fleet_not_a_lane >/dev/null 2>&1 ||
-  fleet_not_a_lane() { case "${1:-}" in agent-*|.*|'') return 0 ;; *) return 1 ;; esac; }
+command -v fleet_not_a_lane >/dev/null 2>&1 || fleet_not_a_lane() {
+  case "${1:-}" in
+    agent-*|.*|'') return 0 ;;
+    team-lead|*-team-lead) return 1 ;;
+    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9]) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 
 is_alive() {  # pid token — canonical predicate when sourced, plain pid check otherwise
   if command -v fleet_alive >/dev/null 2>&1; then fleet_alive "$1" "$2"; else kill -0 "$1" 2>/dev/null; fi

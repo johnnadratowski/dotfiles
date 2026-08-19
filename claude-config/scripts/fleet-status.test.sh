@@ -79,20 +79,35 @@ busy_old(){ : > "$FAKEHOME/.claude/agent-busy/$1"; touch -t 202601010000 "$FAKEH
 run(){ HOME="$FAKEHOME" COLUMNS="${COLUMNS:-160}" bash "$SCRIPT" --once --lanes-dir "$LANES" "$@" </dev/null 2>&1; }
 # A row is now MULTI-LINE: the agent line plus its indented 📌 / ❓ continuations. grep for
 # the name, then take every following indented continuation until the next agent line.
-row(){ run | awk -v n="$1" '
-  $0 ~ ("^ +[^ ]+ +" n " ") {show=1; print; next}
+#
+# THE LABEL COLUMN IS OPTIONAL IN THIS MATCH, and that is not laziness. Every fixture lane
+# below is now lane-SHAPED (`alpha-1`, not `alpha`), because `fleet_not_a_lane` tests the
+# shape — so they now render with the display label a real lane has (`○  vii  alpha-1`),
+# where before they had none (`○  alpha-1`). Matching only the labelled form would tie all
+# ~55 row assertions to the label table; matching only the bare form is what they used to do,
+# and it silently returned NOTHING for every row the moment the label appeared. Both shapes
+# are legal output, so the matcher accepts both and the label is asserted where it is the
+# subject, not incidentally by 55 tests that are about something else.
+#
+# ONE MATCHER, TWO CALLERS. `rowin` takes the table as an argument (for the sections that
+# build their own with a different --lanes-dir); `row` is it applied to the default table.
+# They were two copies of the same awk, and the label column broke the copy nobody thought
+# to update — a drift this suite tests OTHER files for and had quietly grown itself.
+rowin(){ printf '%s\n' "$2" | awk -v n="$1" '
+  $0 ~ ("^ +[^ ]+ +([^ ]+ +)?" n " ") {show=1; print; next}
   show && /^      / {print; next}
   show {show=0}
 '; }
+row(){ rowin "$1" "$(run)"; }
 
 echo "fleet-status.sh"
 
 # ── the three live states ────────────────────────────────────────────────────────────────
-lane alpha;  live alpha;  busy_now alpha
-lane bravo;  live bravo;  busy_old bravo
-lane chas;   live chas    # no marker at all
-lane delta                # lane on disk, nothing occupying it
-lane echo_;  dead echo_
+lane alpha-1;  live alpha-1;  busy_now alpha-1
+lane bravo-2;  live bravo-2;  busy_old bravo-2
+lane chas-3;   live chas-3    # no marker at all
+lane delta-4                # lane on disk, nothing occupying it
+lane echo-5;  dead echo-5
 
 # NOT A LANE: the harness's throwaway isolation-worktree checkout, which now shares this
 # directory with the real lanes. Made LIVE deliberately — an unfiltered enumerator would render
@@ -100,14 +115,30 @@ lane echo_;  dead echo_
 # indistinguishable from correctly-filtered.
 lane agent-deadbeefcafe0001; live agent-deadbeefcafe0001; busy_now agent-deadbeefcafe0001
 
-has "a freshly-touched marker reads busy"                       " busy "    "$(row alpha)"
+# ALSO NOT A LANE, and this one wears no telltale prefix. Agents create ad-hoc worktrees in
+# this same directory by hand for ship and merge jobs, named for the JOB. Two of them
+# (`manual-testing-audit`, `merge-fst`) outlived their merged PRs and rendered as fleet lanes
+# for days — and because `lane_num` reads trailing digits, a name with none resolves to LANE
+# 0 and claims team-lead's 8080/3000/35729 block. Same hazard as the `agent-*` fixture above,
+# reached without the prefix that one is caught by, which is why the predicate now tests the
+# lane's SHAPE instead of enumerating intruders.
+#
+# LIVE AND BUSY, for the same reason: an enumerator that still calls this a lane renders a
+# running agent, and a dead fixture could not tell a correct filter from a broken one.
+lane manual-testing-audit; live manual-testing-audit; busy_now manual-testing-audit
+
+has "a freshly-touched marker reads busy"                       " busy "    "$(row alpha-1)"
 has "an old marker reads quiet, NOT busy (fleet_busy would say busy for 30m)" \
-                                                                " quiet " "$(row bravo)"
-has "no marker reads idle"                                      " idle "    "$(row chas)"
-has "a lane with no live registration reads down"               " down "    "$(row delta)"
-has "a dead pid does not count as live"                         " down "    "$(row echo_)"
+                                                                " quiet " "$(row bravo-2)"
+has "no marker reads idle"                                      " idle "    "$(row chas-3)"
+has "a lane with no live registration reads down"               " down "    "$(row delta-4)"
+has "a dead pid does not count as live"                         " down "    "$(row echo-5)"
+# ANCHORED ON THE STATE WORD, not on a field number. These were `$4, $5` and broke the moment
+# the lane-shaped rename gave every fixture row a label column — a positional index silently
+# measures whatever has shifted into it, which is the failure mode this whole suite exists to
+# catch elsewhere. The two columns after the state are what the assertion is about; say that.
 eq  "down rows show no context or uptime" "- -" \
-    "$(row delta | awk '{print $4, $5}')"
+    "$(row delta-4 | awk '{for(i=1;i<=NF;i++) if($i ~ /^(busy|idle|quiet|down)$/) {print $(i+1), $(i+2); exit}}')"
 
 # ── the header tally ─────────────────────────────────────────────────────────────────────
 # 3/5, not 4/6: the live `agent-deadbeefcafe0001` above is a harness worktree, not a lane, and
@@ -116,55 +147,61 @@ eq  "down rows show no context or uptime" "- -" \
 has "header counts live lanes"       "3/5 lanes up"      "$(run | head -1)"
 hasnt "a harness isolation worktree is not rendered as an agent" \
                                      "agent-deadbeefcafe0001" "$(run)"
+# THE COUNT IS THE ASSERTION THAT MATTERS. `manual-testing-audit` is live and busy, so an
+# enumerator that admits it renders `4/6` here AND a row below — the two halves fail
+# together, and the count is the one a reader of the panel actually acts on.
+hasnt "a hand-made job worktree is not rendered as a lane" \
+                                     "manual-testing-audit" "$(run)"
+hasnt "…and does not inflate the header's lane count"  "4/6"  "$(run | head -1)"
 has "header counts busy lanes"       "1 busy"            "$(run | head -1)"
 hasnt "a stale busy marker does NOT wear a question mark" "needs you" "$(run | head -1)"
 
 # ── facts read off the lane ──────────────────────────────────────────────────────────────
 printf 'FEAT-42\thttps://example.invalid/FEAT-42\n# a comment\nresume prose that is not an id\n' \
-  > "$LANES/alpha/.claude/current-work"
-has "current-work yields the tracker id"           "FEAT-42" "$(row alpha)"
-hasnt "current-work does not leak the resume prose" "resume prose" "$(row alpha)"
+  > "$LANES/alpha-1/.claude/current-work"
+has "current-work yields the tracker id"           "FEAT-42" "$(row alpha-1)"
+hasnt "current-work does not leak the resume prose" "resume prose" "$(row alpha-1)"
 
 # ── the branch is the loser of that resolution, and says so ──────────────────────────────
 # A lane keeps the branch of work it has FINISHED until someone branches again, so a lane on
 # `john/dx-16-…` while actively working FEAT-42 is normal and the branch's id is the stale
 # one. The table shows what the agent is doing and marks the disagreement; it used to show
 # DX-16 and the reader had no way to see FEAT-42 at all.
-mkdir -p "$LANES/alpha/gitdir"
-printf 'ref: refs/heads/john/dx-16-move-plans-to-documents\n' > "$LANES/alpha/gitdir/HEAD"
-printf 'gitdir: %s\n' "$LANES/alpha/gitdir" > "$LANES/alpha/.git"
+mkdir -p "$LANES/alpha-1/gitdir"
+printf 'ref: refs/heads/john/dx-16-move-plans-to-documents\n' > "$LANES/alpha-1/gitdir/HEAD"
+printf 'gitdir: %s\n' "$LANES/alpha-1/gitdir" > "$LANES/alpha-1/.git"
 has "a branch left on finished work does not displace the current ticket" \
-                                                   "FEAT-42" "$(row alpha)"
-hasnt "…and the branch's stale id is not in the column" "DX-16" "$(row alpha)"
-has "…but the disagreement is marked"              "≠branch" "$(row alpha)"
-rm -rf "$LANES/alpha/gitdir" "$LANES/alpha/.git"
-hasnt "with the branch gone the marker goes too"   "≠branch" "$(row alpha)"
+                                                   "FEAT-42" "$(row alpha-1)"
+hasnt "…and the branch's stale id is not in the column" "DX-16" "$(row alpha-1)"
+has "…but the disagreement is marked"              "≠branch" "$(row alpha-1)"
+rm -rf "$LANES/alpha-1/gitdir" "$LANES/alpha-1/.git"
+hasnt "with the branch gone the marker goes too"   "≠branch" "$(row alpha-1)"
 
 assistant_line "TRANSCRIPT PIN" > "$T/t.jsonl"
-transcript alpha "$T/t.jsonl"
-has "context% is derived from the transcript usage" " 2% " "$(row alpha)"
+transcript alpha-1 "$T/t.jsonl"
+has "context% is derived from the transcript usage" " 2% " "$(row alpha-1)"
 
 # ── the status line is the LEAD's, not the agent's ───────────────────────────────────────
 # The panel used to scrape the agent's own last 📌 out of its transcript. That reports the
 # last thing the agent SAID, which for a parked lane is whatever it was mid-thought about
 # hours ago. This assertion is the whole point of the rework: a live transcript pin sits on
-# disk for alpha and must NOT appear.
-status alpha "PR #124 staged, parked"
-has  "the lead-written status is shown"              "PR #124 staged, parked" "$(row alpha)"
-hasnt "the agent's own transcript pin is NOT shown"  "TRANSCRIPT PIN"         "$(row alpha)"
+# disk for alpha-1 and must NOT appear.
+status alpha-1 "PR #124 staged, parked"
+has  "the lead-written status is shown"              "PR #124 staged, parked" "$(row alpha-1)"
+hasnt "the agent's own transcript pin is NOT shown"  "TRANSCRIPT PIN"         "$(row alpha-1)"
 hasnt "and no pin glyph is rendered at all"          "📌"                      "$(run)"
 # Counted, not string-compared against "": an empty second line is also what a BROKEN row()
-# produces, so the negative has to be stated as "alpha grew a line and chas did not".
-eq   "a lane with a status owns two lines"        "2" "$(row alpha | wc -l | tr -d ' ')"
-eq   "a lane with no status file owns just one"   "1" "$(row chas  | wc -l | tr -d ' ')"
+# produces, so the negative has to be stated as "alpha-1 grew a line and chas-3 did not".
+eq   "a lane with a status owns two lines"        "2" "$(row alpha-1 | wc -l | tr -d ' ')"
+eq   "a lane with no status file owns just one"   "1" "$(row chas-3  | wc -l | tr -d ' ')"
 
 # ── the 60-char cap ──────────────────────────────────────────────────────────────────────
 # Uncapped, one verbose entry owns the pane and the column stops being scannable — which is
 # what happened to the free-text asks. The cap is enforced at READ so JSON sees it too.
-status bravo "$(python3 -c 'print("x"*95)')"
-has "an over-long status is clipped"          "…" "$(row bravo)"
+status bravo-2 "$(python3 -c 'print("x"*95)')"
+has "an over-long status is clipped"          "…" "$(row bravo-2)"
 eq  "…to exactly 60 cells"  "60" \
-    "$(row bravo | sed -n '2p' | python3 -c 'import sys;print(len(sys.stdin.readline().strip()))')"
+    "$(row bravo-2 | sed -n '2p' | python3 -c 'import sys;print(len(sys.stdin.readline().strip()))')"
 
 # ── a status that stopped being maintained says so ───────────────────────────────────────
 # THE REGRESSION. Nothing refreshes this file — a human writes it — so a lane the lead stopped
@@ -173,22 +210,22 @@ eq  "…to exactly 60 cells"  "60" \
 # is exactly what made the frozen one invisible. Worse, ids inside it stay clickable, so a
 # four-day-old "PR #130 open; awaiting your merge" rendered like PR data fetched a second ago.
 # The line is kept — it is the only description of the lane there is — and wears its age.
-status chas "FEAT-6 PR #130 open; awaiting your merge"
-has   "a fresh status carries no age suffix" "awaiting your merge" "$(row chas)"
-hasnt "…and nothing about being old"         "old"                 "$(row chas)"
+status chas-3 "FEAT-6 PR #130 open; awaiting your merge"
+has   "a fresh status carries no age suffix" "awaiting your merge" "$(row chas-3)"
+hasnt "…and nothing about being old"         "old"                 "$(row chas-3)"
 touch -t "$(python3 -c '
 import time
 print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 4*86400)))')" \
-      "$LANES/chas/.claude/status"
-has "a four-day-old status is marked as old"     "(4d old)" "$(row chas)"
-has "…and the line itself is kept, not blanked"  "PR #130"  "$(row chas)"
+      "$LANES/chas-3/.claude/status"
+has "a four-day-old status is marked as old"     "(4d old)" "$(row chas-3)"
+has "…and the line itself is kept, not blanked"  "PR #130"  "$(row chas-3)"
 # One hour is inside a working session; the line still means "now" and must stay undecorated.
 touch -t "$(python3 -c '
 import time
 print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 3600)))')" \
-      "$LANES/chas/.claude/status"
-hasnt "an hour-old status is NOT marked" "old" "$(row chas)"
-rm -f "$LANES/chas/.claude/status"
+      "$LANES/chas-3/.claude/status"
+hasnt "an hour-old status is NOT marked" "old" "$(row chas-3)"
+rm -f "$LANES/chas-3/.claude/status"
 
 # ── the OTHER clock: when the agent itself was last active ───────────────────────────────
 # The age above says when the LEAD last wrote the claim. It cannot say whether the lane is
@@ -199,58 +236,62 @@ rm -f "$LANES/chas/.claude/status"
 touch -t "$(python3 -c '
 import time
 print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 3*3600)))')" \
-      "$FAKEHOME/.claude/projects/$(printf '%s' "$LANES/alpha" | sed 's/[^A-Za-z0-9]/-/g')/session.jsonl"
-has "a lane wears its agent's last activity"        "active 3h ago"          "$(row alpha)"
-has "…beside the status rather than instead of it"  "PR #124 staged, parked" "$(row alpha)"
+      "$FAKEHOME/.claude/projects/$(printf '%s' "$LANES/alpha-1" | sed 's/[^A-Za-z0-9]/-/g')/session.jsonl"
+has "a lane wears its agent's last activity"        "active 3h ago"          "$(row alpha-1)"
+has "…beside the status rather than instead of it"  "PR #124 staged, parked" "$(row alpha-1)"
 # A lane with NO status is exactly where this is the only thing known about it, so it must
 # still render — a second line that exists only when the lead wrote one would go dark on the
 # rows that need it most.
 eq "a lane with no status but a live transcript still reports activity" "1" \
-   "$(row alpha | grep -c 'active 3h ago')"
-transcript chas "$T/t.jsonl"
-has "…and shows it with no status line at all" "active" "$(row chas)"
-rm -rf "$FAKEHOME/.claude/projects/$(printf '%s' "$LANES/chas" | sed 's/[^A-Za-z0-9]/-/g')"
-hasnt "a lane whose transcript cannot be found claims no activity" "active" "$(row chas)"
+   "$(row alpha-1 | grep -c 'active 3h ago')"
+transcript chas-3 "$T/t.jsonl"
+has "…and shows it with no status line at all" "active" "$(row chas-3)"
+rm -rf "$FAKEHOME/.claude/projects/$(printf '%s' "$LANES/chas-3" | sed 's/[^A-Za-z0-9]/-/g')"
+hasnt "a lane whose transcript cannot be found claims no activity" "active" "$(row chas-3)"
 
 # ON A NARROW PANE THE PROSE GIVES WAY, NOT THE CLOCK. Truncation runs from the right, so the
 # naive join drops the one part of this line nobody maintains and leaves the human-written
 # sentence looking authoritative with nothing to date it — the exact failure the field exists
 # to end. The status is shortened instead and the clock survives whole.
-status alpha "$(python3 -c 'print("y"*95)')"      # clipped to 60, wider than a 72-col pane
-narrow="$(COLUMNS=72 run | grep -F -A2 ' alpha ' | grep -F 'active')"
+status alpha-1 "$(python3 -c 'print("y"*95)')"      # clipped to 60, wider than a 72-col pane
+narrow="$(COLUMNS=72 run | grep -F -A2 ' alpha-1 ' | grep -F 'active')"
 has  "a narrow pane keeps the activity clock whole" "· active 3h ago" "$narrow"
 has  "…and shortens the lead's prose to make room"  "yyy…"            "$narrow"
-status alpha "PR #124 staged, parked"
+status alpha-1 "PR #124 staged, parked"
 
 # ── needs-input renders under the status ─────────────────────────────────────────────────
-printf 'park FEAT-6 or rerun once #111 lands?\n' > "$LANES/alpha/.claude/needs-input"
-has "needs-input is shown"                   "park FEAT-6"   "$(row alpha)"
-has "the status is still shown alongside the ask" "PR #124 staged, parked" "$(row alpha)"
+printf 'park FEAT-6 or rerun once #111 lands?\n' > "$LANES/alpha-1/.claude/needs-input"
+has "needs-input is shown"                   "park FEAT-6"   "$(row alpha-1)"
+has "the status is still shown alongside the ask" "PR #124 staged, parked" "$(row alpha-1)"
 has "only an explicit needs-input counts as needing you" "⚠️ 1 needs you" "$(run | head -1)"
 
-printf '%s\n' "$(python3 -c 'print("q"*95)')" > "$LANES/chas/.claude/needs-input"
+printf '%s\n' "$(python3 -c 'print("q"*95)')" > "$LANES/chas-3/.claude/needs-input"
 eq "an over-long ask is clipped to 60 too" "60" \
-   "$(row chas | sed -n '2p' | python3 -c '
+   "$(row chas-3 | sed -n '2p' | python3 -c '
 import sys
 # the icon + space lead-in is 2 codepoints the cap does not count
 print(len(sys.stdin.readline().strip()) - 2)')"
-rm -f "$LANES/chas/.claude/needs-input"
+rm -f "$LANES/chas-3/.claude/needs-input"
 
 # ── typed asks ───────────────────────────────────────────────────────────────────────────
 # Nine identical markers tell you only that there are nine. The kind is what lets the reader
 # batch — reviews in one sitting, product calls in another — so it has to survive to the row.
 printf 'review: the DX-6 diff\nproduct: fold MON-10 in?\nship: merge #124\ntriage: whose is this?\nsomething else\n' \
-  > "$LANES/chas/.claude/needs-input"
-has "a review: ask carries the review glyph"    "🔍 the DX-6 diff"      "$(row chas)"
-has "a product: ask carries the product glyph"  "💬 fold MON-10 in?"    "$(row chas)"
-has "a ship: ask carries the ship glyph"        "🚀 merge #124"         "$(row chas)"
-has "a triage: ask carries the triage glyph"    "🔖 whose is this?"     "$(row chas)"
-has "an untyped ask is a general action item"   "✅ something else"     "$(row chas)"
-hasnt "the kind token itself is consumed, not printed" "review:"        "$(row chas)"
+  > "$LANES/chas-3/.claude/needs-input"
+has "a review: ask carries the review glyph"    "🔍 the DX-6 diff"      "$(row chas-3)"
+has "a product: ask carries the product glyph"  "💬 fold MON-10 in?"    "$(row chas-3)"
+has "a ship: ask carries the ship glyph"        "🚀 merge #124"         "$(row chas-3)"
+has "a triage: ask carries the triage glyph"    "🔖 whose is this?"     "$(row chas-3)"
+has "an untyped ask is a general action item"   "✅ something else"     "$(row chas-3)"
+hasnt "the kind token itself is consumed, not printed" "review:"        "$(row chas-3)"
 has "the umbrella glyph still counts them all"  "⚠️ 6 needs you"        "$(run | head -1)"
-has  "a lane owing answers wears the umbrella"          "⚠️ chas" "$(row chas | head -1)"
-hasnt "…not the kind of its first ask"                  "🔍 chas" "$(row chas | head -1)"
-rm -f "$LANES/chas/.claude/needs-input"
+# The glyph alone, because `row` has ALREADY scoped this to chas-3's line — an umbrella on
+# another lane's row could never reach this string. It used to read "⚠️ chas-3", which the
+# label column now sits inside; re-pinning that adjacency would tie the assertion to the
+# lane-name table (lane 3 = `woo`) for no gain over what it actually claims.
+has  "a lane owing answers wears the umbrella"          "⚠️" "$(row chas-3 | head -1)"
+hasnt "…not the kind of its first ask"                  "🔍 chas-3" "$(row chas-3 | head -1)"
+rm -f "$LANES/chas-3/.claude/needs-input"
 
 # ── alignment ────────────────────────────────────────────────────────────────────────────
 # ⚠️ is two cells wide where len() counts two codepoints as two; if neither the width nor the
@@ -265,16 +306,21 @@ Z=[(0xFE00,0xFE0F)]
 def w(s):
     return sum(0 if any(a<=ord(c)<=b for a,b in Z)
                else 2 if any(a<=ord(c)<=b for a,b in W) else 1 for c in s)
-# agent lines only: two leading spaces, an icon, the name, then a state word.
-rows=[l for l in sys.stdin if re.match(r"^  \S+ +\S+ +(busy|idle|quiet|down) ", l)]
+# agent lines only: two leading spaces, an icon, an OPTIONAL label, the name, then a state
+# word. The label group is optional for the same reason `row` makes it optional — both shapes
+# are legal output, and requiring one silently selected NOTHING, which this probe reports as
+# a single width (`0` rows) rather than as a mismatch. A probe that answers "aligned" when it
+# found no rows at all is worse than no probe: the `if rows else 0` guard below is what turns
+# that into a visible 0.
+rows=[l for l in sys.stdin if re.match(r"^  \S+ +\S+( +\S+)? +(busy|idle|quiet|down) ", l)]
 print(len({w(re.split(r" (busy|idle|quiet|down) ", l)[0]) for l in rows}) if rows else 0)')"
 eq "every row puts its state column at the same cell" "1" "$widths"
 
 # ── subagents: live agents that occupy no lane ───────────────────────────────────────────
 # A reviewer runs in ITS SPAWNER'S cwd, so every per-cwd fact would be the spawner's. The row
 # must carry only what is unambiguously the subagent's own.
-printf 'cwd:%s' "$LANES/alpha" > "$FAKEHOME/.claude/running-agents/rev-a.$$"
-printf '%s' "$LANES/alpha" > "$FAKEHOME/.claude/agents/rev-a.cwd"
+printf 'cwd:%s' "$LANES/alpha-1" > "$FAKEHOME/.claude/running-agents/rev-a.$$"
+printf '%s' "$LANES/alpha-1" > "$FAKEHOME/.claude/agents/rev-a.cwd"
 has "a live agent with no lane is listed as a subagent" "rev-a"        "$(run)"
 has "and it is indented under the lanes"                "└"           "$(run)"
 has "the header counts subagents separately"            "1 subagent"  "$(run | head -1)"
@@ -287,8 +333,8 @@ hasnt "a subagent does NOT borrow its spawner's activity" "active"              
 rm -f "$FAKEHOME/.claude/running-agents/rev-a.$$" "$FAKEHOME/.claude/agents/rev-a.cwd"
 
 # ── the lane is not the agent: WORKFLOW_AGENT_NAME_PREFIX ────────────────────────────────
-# A lane is a DIRECTORY (`foxtrot`). The agent occupying it is a MACHINE-GLOBAL registry name
-# that the prefix prepends to (`g-foxtrot`) — the registry collides between fleets on one
+# A lane is a DIRECTORY (`foxtrot-6`). The agent occupying it is a MACHINE-GLOBAL registry name
+# that the prefix prepends to (`g-foxtrot-6`) — the registry collides between fleets on one
 # machine, the lane cannot. Reading the registry under the LANE's name reported every lane of
 # a fully live fleet as `down` AND re-emitted each of its agents as a ticketless `subagent`
 # row: one outage rendered twice, in two places. Both halves are asserted here, because
@@ -296,78 +342,74 @@ rm -f "$FAKEHOME/.claude/running-agents/rev-a.$$" "$FAKEHOME/.claude/agents/rev-
 #
 # EVERY FIXTURE BELOW IS REMOVED AT THE END OF THE SECTION. The lane tally and the --json
 # count are asserted against the five lanes above, both before this point and after it.
-lane foxtrot
-printf 'cwd:%s' "$LANES/foxtrot" > "$FAKEHOME/.claude/running-agents/g-foxtrot.$$"
-busy_now g-foxtrot
-# NO cwd sidecar for g-foxtrot, deliberately: that isolates step 1 (the configured prefix) as
+lane foxtrot-6
+printf 'cwd:%s' "$LANES/foxtrot-6" > "$FAKEHOME/.claude/running-agents/g-foxtrot-6.$$"
+busy_now g-foxtrot-6
+# NO cwd sidecar for g-foxtrot-6, deliberately: that isolates step 1 (the configured prefix) as
 # the only thing that can resolve this lane, so the assertion cannot be satisfied by the
 # cwd-based fallback and silently stop testing the prefix.
 runp(){ WORKFLOW_AGENT_NAME_PREFIX=g- run "$@"; }
 rowp(){ WORKFLOW_AGENT_NAME_PREFIX=g- row "$@"; }
 
-has  "a prefixed agent occupies its lane"                    " busy "     "$(rowp foxtrot)"
-has  "…and the row is still keyed by the LANE name"          " foxtrot "  "$(rowp foxtrot)"
-hasnt "…so the agent name never replaces it in the table"    "g-foxtrot"  "$(runp)"
+has  "a prefixed agent occupies its lane"                    " busy "     "$(rowp foxtrot-6)"
+has  "…and the row is still keyed by the LANE name"          " foxtrot-6 "  "$(rowp foxtrot-6)"
+hasnt "…so the agent name never replaces it in the table"    "g-foxtrot-6"  "$(runp)"
 hasnt "…and the lane agent is not ALSO emitted as a subagent" "1 subagent" "$(runp | head -1)"
-has  "with no prefix configured the same lane reads down"    " down "     "$(row foxtrot)"
+has  "with no prefix configured the same lane reads down"    " down "     "$(row foxtrot-6)"
 
 # STEP 3 — attribution with NO prefix configured anywhere. The agent's cwd sidecar names this
 # lane and its name ends in the lane name, which is enough to attribute it. This is what keeps
 # the view working when the main-clone workflow.config cannot be derived (a WORKFLOW_LANES_DIR
 # pointing outside the clone).
-lane golf
-printf 'cwd:%s' "$LANES/golf" > "$FAKEHOME/.claude/running-agents/z-golf.$$"
-printf '%s' "$LANES/golf" > "$FAKEHOME/.claude/agents/z-golf.cwd"
-busy_now z-golf
-has  "an unconfigured prefix still attributes via the cwd sidecar" " busy "  "$(row golf)"
-hasnt "…and that agent is not double-emitted either"              "z-golf"  "$(run)"
+lane golf-7
+printf 'cwd:%s' "$LANES/golf-7" > "$FAKEHOME/.claude/running-agents/z-golf-7.$$"
+printf '%s' "$LANES/golf-7" > "$FAKEHOME/.claude/agents/z-golf-7.cwd"
+busy_now z-golf-7
+has  "an unconfigured prefix still attributes via the cwd sidecar" " busy "  "$(row golf-7)"
+hasnt "…and that agent is not double-emitted either"              "z-golf-7"  "$(run)"
 
 # THE SUFFIX TEST IS LOAD-BEARING, and this is the case that proves it. A subagent runs in its
 # SPAWNER's cwd, so a lane path is the sidecar value of the lane agent AND of every subagent
 # the lane has spawned. Skipping the sweep on "cwd is a lane path" would delete this row —
 # retiring the standing tester and every task subagent from the view to fix the lane rows.
-printf 'cwd:%s' "$LANES/golf" > "$FAKEHOME/.claude/running-agents/g-tester.$$"
-printf '%s' "$LANES/golf" > "$FAKEHOME/.claude/agents/g-tester.cwd"
+printf 'cwd:%s' "$LANES/golf-7" > "$FAKEHOME/.claude/running-agents/g-tester.$$"
+printf '%s' "$LANES/golf-7" > "$FAKEHOME/.claude/agents/g-tester.cwd"
 has  "a subagent sharing a lane's cwd is still listed"   "g-tester"  "$(run)"
-has  "…as a subagent, not as that lane"                  " golf "    "$(row golf)"
+has  "…as a subagent, not as that lane"                  " golf-7 "    "$(row golf-7)"
 rm -f "$FAKEHOME/.claude/running-agents/g-tester.$$" "$FAKEHOME/.claude/agents/g-tester.cwd"
 
 # LIVENESS IS PER CANDIDATE, not resolved-then-checked. A stale prefixed entry left by a dead
 # agent must not win the lane and report `down` over a live unprefixed one — the failure would
 # look exactly like the bug this section fixes, from the opposite direction.
-lane hotel
-printf 'cwd:%s' "$LANES/hotel" > "$FAKEHOME/.claude/running-agents/g-hotel.$DEADPID"
-live hotel; busy_now hotel
-has "a stale prefixed entry does not beat a live bare one" " busy " "$(rowp hotel)"
+lane hotel-8
+printf 'cwd:%s' "$LANES/hotel-8" > "$FAKEHOME/.claude/running-agents/g-hotel-8.$DEADPID"
+live hotel-8; busy_now hotel-8
+has "a stale prefixed entry does not beat a live bare one" " busy " "$(rowp hotel-8)"
 
 # THE PREFIX COMES FROM THE MAIN CLONE'S workflow.config when the env does not carry it, which
 # is how the live fleet actually resolves it — no agent exports the variable. The derivation is
 # `<lanes>/../..`, so the fixture has to be clone-shaped rather than a bare directory.
 CLONE="$T/clone"; L2="$CLONE/.claude/worktrees"
-mkdir -p "$L2/india/.claude" "$CLONE/.claude"
+mkdir -p "$L2/india-9/.claude" "$CLONE/.claude"
 printf 'WORKFLOW_AGENT_NAME_PREFIX="q-"\n' > "$CLONE/.claude/workflow.config"
-printf 'cwd:%s' "$L2/india" > "$FAKEHOME/.claude/running-agents/q-india.$$"
-busy_now q-india
+printf 'cwd:%s' "$L2/india-9" > "$FAKEHOME/.claude/running-agents/q-india-9.$$"
+busy_now q-india-9
 c2="$(HOME="$FAKEHOME" COLUMNS=160 bash "$SCRIPT" --once --lanes-dir "$L2" </dev/null 2>&1)"
 # ROW-SCOPED, not whole-output. Asserted against the full table this reads ` busy ` off ANY
 # row — and the registry still holds the live subagents from the sections above, so it passed
-# against a deliberately broken build that rendered india itself as `down`. The assertion has
+# against a deliberately broken build that rendered india-9 itself as `down`. The assertion has
 # to name the row it is about.
-rowin(){ printf '%s\n' "$2" | awk -v n="$1" '
-  $0 ~ ("^ +[^ ]+ +" n " ") {show=1; print; next}
-  show && /^      / {print; next}
-  show {show=0}'; }
-has   "the prefix is read from the main clone's workflow.config" " busy "  "$(rowin india "$c2")"
-hasnt "…and that agent is not emitted as a subagent as well"     "q-india" "$c2"
-rm -f "$FAKEHOME/.claude/running-agents/q-india.$$" "$FAKEHOME/.claude/agent-busy/q-india"
+has   "the prefix is read from the main clone's workflow.config" " busy "  "$(rowin india-9 "$c2")"
+hasnt "…and that agent is not emitted as a subagent as well"     "q-india-9" "$c2"
+rm -f "$FAKEHOME/.claude/running-agents/q-india-9.$$" "$FAKEHOME/.claude/agent-busy/q-india-9"
 rm -rf "$CLONE"
 
-rm -rf "$LANES/foxtrot" "$LANES/golf" "$LANES/hotel"
-rm -f "$FAKEHOME/.claude/running-agents/g-foxtrot.$$" "$FAKEHOME/.claude/agent-busy/g-foxtrot" \
-      "$FAKEHOME/.claude/running-agents/z-golf.$$" "$FAKEHOME/.claude/agents/z-golf.cwd" \
-      "$FAKEHOME/.claude/agent-busy/z-golf" \
-      "$FAKEHOME/.claude/running-agents/g-hotel.$DEADPID" \
-      "$FAKEHOME/.claude/running-agents/hotel.$$" "$FAKEHOME/.claude/agent-busy/hotel"
+rm -rf "$LANES/foxtrot-6" "$LANES/golf-7" "$LANES/hotel-8"
+rm -f "$FAKEHOME/.claude/running-agents/g-foxtrot-6.$$" "$FAKEHOME/.claude/agent-busy/g-foxtrot-6" \
+      "$FAKEHOME/.claude/running-agents/z-golf-7.$$" "$FAKEHOME/.claude/agents/z-golf-7.cwd" \
+      "$FAKEHOME/.claude/agent-busy/z-golf-7" \
+      "$FAKEHOME/.claude/running-agents/g-hotel-8.$DEADPID" \
+      "$FAKEHOME/.claude/running-agents/hotel-8.$$" "$FAKEHOME/.claude/agent-busy/hotel-8"
 
 # ── 4ME, the fleet-level list ────────────────────────────────────────────────────────────
 # It belongs to no lane, so it renders last under its own heading. The label and the row
@@ -413,11 +455,11 @@ j="$(run --json | python3 -c '
 import json,sys
 rows=[json.loads(l) for l in sys.stdin if l.strip()]
 d={r["name"]:r for r in rows}
-print(len(rows), d["alpha"]["state"], d["delta"]["state"], d["alpha"]["issue"],
-      d["alpha"]["context_pct"], d["delta"]["context_pct"],
+print(len(rows), d["alpha-1"]["state"], d["delta-4"]["state"], d["alpha-1"]["issue"],
+      d["alpha-1"]["context_pct"], d["delta-4"]["context_pct"],
       # Seconds, unformatted — JSON consumers want the number and each renderer picks its own
       # wording. ~3h for the lane whose transcript was aged above; None where there is none.
-      10000 < d["alpha"]["last_active"] < 11600, d["delta"]["last_active"])')"
+      10000 < d["alpha-1"]["last_active"] < 11600, d["delta-4"]["last_active"])')"
 eq "--json emits one object per lane with the same facts" \
    "5 busy down FEAT-42 2 None True None" "$j"
 

@@ -53,8 +53,14 @@ fi
 # other product's fleet resolved to one particular product's lanes — silently, since the path
 # exists on this machine. Same derivation as fleet_lanes_dir: the main clone's basename plus
 # `-worktrees`, taken from the shared git common dir so it is worktree-invariant.
-command -v fleet_not_a_lane >/dev/null 2>&1 ||
-  fleet_not_a_lane() { case "${1:-}" in agent-*|.*|'') return 0 ;; *) return 1 ;; esac; }
+command -v fleet_not_a_lane >/dev/null 2>&1 || fleet_not_a_lane() {
+  case "${1:-}" in
+    agent-*|.*|'') return 0 ;;
+    team-lead|*-team-lead) return 1 ;;
+    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9]) return 1 ;;
+    *) return 0 ;;
+  esac
+}
 _derive_lanes_dir() {
   local common parent
   common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1

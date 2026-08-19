@@ -39,12 +39,38 @@
 # lane 0 and claimed team-lead's 8080/3000 port block. A dev stack started against that would
 # have collided with the lead's.
 #
-# Matching the harness's own prefix (plus dotfiles) rather than allow-listing `feature-*` and
-# `team-lead`: an allow-list would silently drop a lane the moment someone names one `ui-2`,
-# and dropping a real lane is the more expensive mistake — it makes an agent invisible to
-# status, shutdown and staffing at once.
+# THE PREFIX MATCH WAS ONLY EVER HALF THE FILTER, and the half it missed cost the same bug
+# again (2026-08-19). The harness is not the only other writer in that directory: agents
+# create ad-hoc worktrees there by hand for ship and merge jobs, named for the JOB
+# (`manual-testing-audit`, `merge-fst`), and those follow no prefix at all. Both outlived
+# their merged PRs, both enumerated as lanes for days, and — the part that is not cosmetic —
+# `lane_num` gives a name with no trailing digits **lane 0**, so both silently claimed
+# team-lead's 8080/3000/35729 block. Verbatim the hazard the paragraph above describes,
+# reached by a different door.
+#
+# SO THE TEST IS THE LANE'S SHAPE, NOT A LIST OF INTRUDERS. A lane is `team-lead` or
+# `<prefix>-<digits>`, because that trailing number is what derives the worktree, the branch
+# and the port block — a durable lane always has one and a job-named worktree never does.
+# Enumerating intruders can only ever describe the ones we have already been bitten by;
+# naming what a lane IS closes the class.
+#
+# This is the SAME discriminator `fleet_resolve_role`, `fleet_lane_display_name` and
+# `_is_lane_agent` (fleet-layout.sh) already apply — see the `feature IS A LANE SHAPE` note
+# further down. Three readers already refused to call `manual-testing-audit` a lane while
+# this one still did; that disagreement is what let it render. Now all four agree.
+#
+# THE OLD COMMENT'S OBJECTION IS ANSWERED, NOT IGNORED. It rejected an allow-list because
+# someone naming a lane `ui-2` would have it silently dropped. A SHAPE test keeps `ui-2`,
+# `agentic-2` and `x-1` — every probe in the drift test still classifies identically. What it
+# drops is a name with no lane number, which cannot be a working lane anyway: it would
+# resolve to lane 0 and fight the lead for ports.
 fleet_not_a_lane() {
-  case "${1:-}" in agent-*|.*|'') return 0 ;; *) return 1 ;; esac
+  case "${1:-}" in
+    agent-*|.*|'') return 0 ;;
+    team-lead|*-team-lead) return 1 ;;
+    *-[0-9]|*-[0-9][0-9]|*-[0-9][0-9][0-9]) return 1 ;;
+    *) return 0 ;;
+  esac
 }
 
 # Identity token for THIS process.
