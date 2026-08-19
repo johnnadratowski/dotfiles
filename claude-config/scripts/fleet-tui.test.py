@@ -147,6 +147,23 @@ async def main():
     # app.load() was, which cannot fail the way the user suspected it was failing.
     calls = {"snapshot": 0, "prs": []}
 
+    # LANES WITH A REVIEW STAGED. Their 4ME rows are SYNTHESISED on every call, exactly as
+    # snapshot() synthesises them, rather than written into the ask file — because that is
+    # the whole nature of a derived row and a fixture that faked one as a file line would be
+    # testing a row that cannot exist. It also means retiring a flag makes the row disappear
+    # here for the same reason it does in the fleet: nothing re-reads it into being.
+    staged_lanes = []
+
+    def _derived_rows():
+        rows = []
+        for lp in staged_lanes:
+            rv = fleet_tui.staged_review(
+                os.path.join(lp, ".claude", fleet_tui.REVIEW_FILE))
+            if rv:
+                rows.append({"name": os.path.basename(lp), "label": "jaa",
+                             "path": lp, "review": rv})
+        return fleet_tui._review_asks(rows)
+
     def fake_snapshot():
         calls["snapshot"] += 1
         base = {
@@ -172,7 +189,8 @@ async def main():
             # SORTED, exactly as the real snapshot() sorts — oldest `[added:]` first. A
             # fixture that skipped the sort would let the panel's ordering go untested while
             # every row-level assertion still passed.
-            "fleet": sorted(fleet_tui._ask_lines(fleet_path), key=fleet_tui.ask_sort_key),
+            "fleet": sorted(fleet_tui._ask_lines(fleet_path) + _derived_rows(),
+                            key=fleet_tui.ask_sort_key),
             "fleet_path": fleet_path,
             # Read through the REAL reader on every call, exactly as snapshot() does, so the
             # "a goal edited mid-session lands on the next tick" assertion is testing the
@@ -931,6 +949,15 @@ async def main():
         # mis-keyed `x`. `t` writes a POSITIVE mark the lead reads, and the answer with it.
         # The file is restored at the end of the block: later tests own this fixture too.
         fleet_before_mark = open(fleet_path).read()
+        # A REAL LANE WITH A REAL FLAG, because `t` on a derived row reaches OUT of the ask
+        # file and retires that file — the one action on this panel with an effect outside
+        # it, so it is driven end-to-end rather than asserted on intent.
+        staged_lane = os.path.join(tmp, "lanes", "feature-9")
+        os.makedirs(os.path.join(staged_lane, ".claude"), exist_ok=True)
+        staged_flag = os.path.join(staged_lane, ".claude", fleet_tui.REVIEW_FILE)
+        with open(staged_flag, "w") as f:
+            f.write("UI-4 closing goals\nbase_ref: 3737e63c — THE MERGE BASE, deliberately\n")
+        staged_lanes.append(staged_lane)     # synthesised from here on, never a file line
         with open(fleet_path, "w") as f:
             f.write("product: MON-16 — High or Urgent? [MON-16] [added:2026-08-19]\n"
                     "  Urgent was argued from overlapping ticks.\n"
@@ -991,17 +1018,78 @@ async def main():
         ok("an empty note marks the row done and writes no note trailer at all",
            plain == "✅ todo: bump the date? [added:2026-08-19]", plain)
 
-        # A DERIVED ROW IS COMPUTED FROM LIVE STATE, so there is no line to rewrite — the same
-        # refusal `x` makes. Asserted on the FILE as well as the state: a write here would be
-        # undone on the next tick and would read as the key having failed.
+        # ── a DERIVED row: `t` force-clears it, `x` still will not ───────────────────────
+        # A derived row is synthesised from a lane's flag file every tick, so there is no line
+        # to delete and `x` is refused. That left NO way off the panel for a review the engine
+        # had already resolved — John hit exactly this. `t` clears it by retiring the flag the
+        # row is computed from, and demands a note, because when the flag is gone that note is
+        # the only surviving answer to "why is this not on the list any more".
+
+        # A derived row that names NO lane is still refused: nothing to retire, so ticking it
+        # would be the same empty gesture `x` is refused for. This is the row the old refusal
+        # assertion was actually exercising once `t` learned the derived path — kept, and now
+        # saying which branch it tests.
         before_derived = open(fleet_path).read()
-        fleet.index = ask_row("derived:")
+        fleet.index = ask_row("woo staged one")
         await pilot.pause()
         await pilot.press("t")
         await pilot.pause()
-        ok("t refuses a derived row rather than pretending to mark it",
+        ok("a derived row naming no lane is refused — there is nothing to retire",
            app.marking is None and not note_inp.has_class("-show")
            and open(fleet_path).read() == before_derived)
+
+        fleet.index = ask_row("jaa has a review staged")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        ok("t on a derived row that names a lane opens the note field instead of refusing",
+           app.marking is not None and note_inp.has_class("-show"))
+        ok("…and says the note is REQUIRED, since this one reaches outside the panel",
+           "REQUIRED" in screen_text(app), screen_text(app))
+        await pilot.press("enter")          # empty — mandatory here, unlike an ordinary row
+        await pilot.pause()
+        await pilot.pause()
+        ok("an EMPTY note is refused on a derived row, and the flag is left staged",
+           (app.marking is not None, os.path.exists(staged_flag),
+            open(fleet_path).read() == before_derived) == (True, True, True))
+        note_inp.value = "approved in monocle round 4; engine lost the stage"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+        ok("…while a note RETIRES the flag, so the row stops being synthesised at source",
+           not os.path.exists(staged_flag) and fleet_tui.staged_review(staged_flag) is None)
+        cleared_log = open(staged_flag + ".cleared").read()
+        ok("…keeping the flag's hand-written content and the note in a log beside it",
+           ("base_ref: 3737e63c — THE MERGE BASE, deliberately" in cleared_log
+            and "approved in monocle round 4" in cleared_log), cleared_log)
+        materialised = [ln for ln in open(fleet_path).read().splitlines()
+                        if "jaa" in ln and ln.startswith("✅")][0]
+        # THE TICKED ROW IS WRITTEN INTO THE FILE, because a row that merely vanished would
+        # be a delete — and the lead would never learn it had been force-cleared, or why.
+        ok("…and the row is MATERIALISED into the ask file, ticked, carrying the note",
+           dict(fleet_tui.ask_detail(materialised)["trailers"]).get("note")
+           == "approved in monocle round 4; engine lost the stage", materialised)
+        # THE TRAP THIS AVOIDS: `[derived:]` is exactly what makes `x` refuse a row. A
+        # materialised line that kept it would be one the lead could never sweep — a row
+        # welded to the panel for good, which is a worse version of the bug being fixed.
+        mt = dict(fleet_tui.ask_detail(materialised)["trailers"])
+        ok("…with `derived` and `review` STRIPPED, so the lead can sweep it like any other",
+           (mt.get("derived"), mt.get("review")) == (None, None), mt)
+        fleet.index = ask_row("jaa")
+        await pilot.pause()
+        await pilot.press("x")
+        await pilot.pause()
+        await pilot.pause()
+        ok("…proved by sweeping it with x, which a derived row refuses",
+           "jaa" not in open(fleet_path).read(), open(fleet_path).read())
+        # AND IT DOES NOT COME BACK. The row was synthesised from the flag on every tick, so
+        # the only proof the clear actually took is that a fresh snapshot no longer produces
+        # it — the exact failure John reported was a row that returned every scan.
+        await pilot.press("r")
+        await pilot.pause()
+        await pilot.pause()
+        ok("…and it is not re-synthesised on the next scan, which is what `x` could never do",
+           ask_row("jaa has a review staged") == -1 and "jaa" not in screen_text(app))
 
         fleet.index = ask_row("MON-16")
         await pilot.pause()
@@ -2713,6 +2801,53 @@ async def main():
             fh.write("")
         ok("an EMPTY flag file still means staged", fleet_tui.staged_review(flag) is not None,
            fleet_tui.staged_review(flag))
+
+        # ── RETIRING A FLAG, which is the only way to clear a derived row ────────────────
+        # THE FILE'S EXISTENCE IS THE SIGNAL, so the file is what has to go. A record kept
+        # BESIDE it — dismissed ids, a stored mtime, a hash — would have to be invalidated by
+        # whatever stages the next review, and nothing documents who that is: `grep -rnF
+        # monocle-staged` over the repo finds only the constant that READS it. A suppression
+        # record that guessed wrong would hide a real review, which is worse than the stale
+        # row it cleared. Removing the file assumes nothing about the writer.
+        with open(flag, "w") as fh:
+            fh.write("SRV-28 diff\nbase_ref: abc123 — the merge base, deliberately\n")
+        why = fleet_tui.retire_staged_review(flag, "approved in monocle, engine lost it")
+        ok("retiring a flag clears the signal and reports no error",
+           (why, os.path.exists(flag)) == ("", False), (why, os.path.exists(flag)))
+        cleared = open(flag + ".cleared").read()
+        # THE HAND-AUTHORED CONTENT SURVIVES. These files carry review provenance a person
+        # wrote — base_ref reasoning, diff stats, which rounds were audited — and a clear
+        # that discarded it would destroy the only record of what was being cleared.
+        ok("…keeping what the flag said, and the note, in a log beside it",
+           ("base_ref: abc123 — the merge base, deliberately" in cleared
+            and "approved in monocle, engine lost it" in cleared), cleared)
+        ok("…and the row stops being synthesised, because nothing is staged any more",
+           fleet_tui.staged_review(flag) is None)
+        # A SECOND CLEAR APPENDS. Clobbering would mean the newest clear silently erased the
+        # record of the previous one — the log exists precisely because these decisions are
+        # the only surviving answer to "why is this not on the list".
+        with open(flag, "w") as fh:
+            fh.write("SRV-31 diff\n")
+        fleet_tui.retire_staged_review(flag, "second one")
+        twice = open(flag + ".cleared").read()
+        ok("…and a later clear APPENDS to that log rather than clobbering it",
+           ("SRV-28 diff" in twice and "SRV-31 diff" in twice
+            and twice.count("=== cleared ") == 2), twice)
+        ok("a lane with no flag at all is refused, not silently reported as cleared",
+           fleet_tui.retire_staged_review(flag, "n") != "")
+
+    # IT FAILS TOWARD THE ROW STAYING UP. If the log cannot be written the flag must be left
+    # exactly where it is: clearing a signal we just failed to record reproduces the silence
+    # the feature exists to fix. Forced by making the log path a DIRECTORY, so the append
+    # raises for a reason nothing else in the test has to simulate.
+    with tempfile.TemporaryDirectory() as td:
+        blocked = os.path.join(td, fleet_tui.REVIEW_FILE)
+        with open(blocked, "w") as fh:
+            fh.write("SRV-40 diff\n")
+        os.makedirs(blocked + ".cleared")
+        why = fleet_tui.retire_staged_review(blocked, "a note")
+        ok("a clear that cannot be recorded leaves the flag UP and says so",
+           why != "" and os.path.exists(blocked), (why, os.path.exists(blocked)))
 
     staged = dict(lane_row, issue_links=[("SRV-24", "")], review={"name": "d", "age": 60})
     unstaged = dict(lane_row, issue_links=[("SRV-24", "")])

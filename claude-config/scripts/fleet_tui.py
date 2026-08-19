@@ -1012,6 +1012,78 @@ def _review_asks(rows):
     return out
 
 
+# THE ONLY WAY TO CLEAR ONE, and it is deliberately the flag itself rather than a record
+# kept beside it. See retire_staged_review.
+_DERIVED_TRAILERS = re.compile(r"\s*\[(?:derived|review):[^\[\]]*\]")
+
+
+def retire_staged_review(flag, note):
+    """Retire a staged-review flag, keeping what it said. "" on success, else why.
+
+    Takes the FLAG PATH, like `staged_review` it undoes — the two are a pair and a function
+    that took the lane instead would be the only one on this surface composing that path.
+
+    THE FLAG'S EXISTENCE IS THE SIGNAL, so retiring the file is the only clearing mechanism
+    that cannot rot. The alternatives — a dismissed-ids list, a stored mtime, a content hash
+    — all have to be invalidated by whatever stages the NEXT review, and the write contract
+    for this file is documented NOWHERE: `grep -rnF monocle-staged` over this repo returns
+    only the constant that reads it, the Monocle skills never mention it, and no role doc
+    describes writing one. It is a convention carried by whichever agent last staged a
+    review. A suppression record that guessed wrong about that writer would hide a REAL
+    review — and an invisible staged review is the one failure worse than the stale row this
+    exists to clear. Removing the file needs no assumption about the writer at all: anything
+    that stages a review must create it, because its existence is the only thing that has
+    ever made the row appear.
+
+    THE CONTENT IS APPENDED, NEVER DISCARDED. These files are hand-authored and can be
+    substantial — the one that prompted this carried the base_ref reasoning, a diff stat and
+    the provenance of five review rounds — so it is folded into a `.cleared` log beside it,
+    with the user's note, rather than deleted. A second clear appends; it never clobbers.
+
+    IT FAILS TOWARD THE ROW STAYING UP. If the log cannot be written, the flag is left
+    exactly where it is and the panel goes on showing the review. The alternative is clearing
+    a signal we just failed to record, which is the same silence this feature is fixing.
+    """
+    try:
+        with open(flag or "") as f:
+            body = f.read()
+    except OSError as e:
+        return "no staged-review flag to clear (%s)" % e.strerror
+    stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(_now()))
+    try:
+        with open(flag + ".cleared", "a") as f:
+            f.write("\n=== cleared %s ===\n%s\n%s\n" % (stamp, note, body.rstrip()))
+    except OSError as e:
+        return "could not record the clear, so the flag is still up (%s)" % e.strerror
+    try:
+        os.remove(flag)
+    except OSError as e:
+        return "recorded, but the flag could not be removed (%s)" % e.strerror
+    return ""
+
+
+def _append_ask_line(path, line):
+    """Add one line to an ask file, keeping what is already there. True when it landed.
+
+    A sibling of `_restore_line` rather than a call to it: that one puts back bytes the view
+    took OUT of this file and says so, and this one MATERIALISES a row that was never in it.
+    Same three lines, two different things to be right about.
+    """
+    try:
+        with open(path) as f:
+            body = f.read()
+    except OSError:
+        body = ""
+    if body and not body.endswith("\n"):
+        body += "\n"
+    try:
+        with open(path, "w") as f:
+            f.write(body + line + "\n")
+    except OSError:
+        return False
+    return True
+
+
 def snapshot():
     """Everything on screen, as plain data. Runs OFF the UI thread."""
     try:
@@ -3290,8 +3362,11 @@ class FleetTUI(App):
         # `_drop_line` return "" and reporting "already gone", which is a lie that would
         # look like a bug the next tick, when the row reappears.
         if dict(ask_detail(raw)["trailers"]).get("derived"):
-            self.notify("this row tracks live state — clear it by answering it",
-                        severity="warning")
+            # NAME THE WAY OUT. "Clear it by answering it" was true and useless once the
+            # engine had already been answered and the flag stayed up: the user was told what
+            # not to press and left with nothing that worked. `t` is the thing that works.
+            self.notify("this row tracks live state — answer it, or t to force-clear "
+                        "it with a note", severity="warning")
             return
         # UNDO CARRIES WHAT THE FILE HAD, not the folded `raw` this view is holding — see
         # `_drop_line`. `raw` is still what the notification quotes: that is for a human.
@@ -3341,6 +3416,9 @@ class FleetTUI(App):
             ("t", "tick this row DONE without deleting it — %s in the file, plus an optional"
                   % ASK_GENERAL),
             ("", "note you type. It stays on the list, marked, until the lead sweeps it"),
+            ("", "On a %s review row it force-clears the staged review instead, retiring"
+                 % ASK_KINDS["review"]),
+            ("", "the lane's flag file — and there the note is REQUIRED, not optional"),
         ))
         return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
                 "\n%s\n\n[dim]? or esc to close[/]" % (states, kinds, keys))
@@ -3685,24 +3763,38 @@ class FleetTUI(App):
         if not path:
             self.notify("no file behind this row", severity="warning")
             return
-        # A DERIVED ROW IS NOT IN THE FILE — the same refusal `x` makes, for the same reason.
-        # There is no line to rewrite, and a row that came back unticked on the next tick
-        # would look like the key had failed rather than like the row being computed.
-        if dict(ask_detail(raw)["trailers"]).get("derived"):
-            self.notify("this row tracks live state — clear it by answering it",
+        # A DERIVED ROW IS NOT IN THE FILE, so `t` on one does something different: it
+        # retires the FLAG the row is synthesised from, and writes the ticked row into the
+        # file itself. `x` still refuses these — deleting a computed row is meaningless,
+        # it is back on the next tick — but a review the engine no longer knows about had no
+        # way off the panel at all, which is what John hit.
+        #
+        # IT MUST NAME A LANE. Every derived row today carries `[review:<lane>]`, but one
+        # that did not would leave nothing to retire, and ticking it would be the same empty
+        # gesture `x` is refused for.
+        marks = dict(ask_detail(raw)["trailers"])
+        if marks.get("derived") and not marks.get("review"):
+            self.notify("this row tracks live state and names no lane to clear",
                         severity="warning")
             return
         self.marking = (path, raw, self._focused_list())
         inp = self.query_one("#note-input", Input)
         inp.value = ""
-        inp.placeholder = "a note for the lead — optional"
+        inp.placeholder = ("why you are clearing this — REQUIRED" if marks.get("derived")
+                           else "a note for the lead — optional")
         inp.add_class("-show")
         inp.focus()
         msg = self.query_one("#note-msg", Static)
         # `esc`, not rich's `escape`: this is prose the user wrote and every bracket in it is
         # a literal. See linkify for the crash that distinction prevents.
-        msg.update("[dim]marking [b]%s[/b] done · enter writes it, an empty note is fine · "
-                   "esc cancels[/]" % esc(clip(ask_short(ask_detail(raw)), 48)))
+        # THE DERIVED CASE SAYS WHAT IT IS ABOUT TO DO, because it is not what the other
+        # rows do: it retires a flag file in someone else's lane. A key that quietly reaches
+        # outside the panel is one the user cannot audit from the panel.
+        what = esc(clip(ask_short(ask_detail(raw)), 48))
+        msg.update(("[dim]force-clearing [b]%s[/b] · a note is REQUIRED — it is the only "
+                    "record of why · esc cancels[/]" % what) if marks.get("derived")
+                   else ("[dim]marking [b]%s[/b] done · enter writes it, an empty note is "
+                         "fine · esc cancels[/]" % what))
         msg.add_class("-show")
 
     def _mark_close(self):
@@ -3738,13 +3830,44 @@ class FleetTUI(App):
         path, raw, _ = self.marking
         note = " ".join((value or "").split())
         head = raw.split("\n", 1)[0]
-        want = ask_detail(head)["trailers"] + ([("note", note)] if note else [])
-        if ask_detail(ask_mark_done(head, note))["trailers"] != want:
+        marks = dict(ask_detail(head)["trailers"])
+        derived = bool(marks.get("derived"))
+        # A NOTE IS MANDATORY ON A DERIVED ROW and optional everywhere else, because the two
+        # ticks record different things. An ordinary row keeps its own history — the question
+        # is still there, ticked. A derived one is a signal the system raised and a human is
+        # overruling; when the flag is gone the note is the only surviving answer to "why is
+        # this not on the list any more", and an empty one makes the clear indistinguishable
+        # from the staleness it is clearing.
+        if derived and not note:
+            self.query_one("#note-msg", Static).update(
+                "[red]a note is required to force-clear a staged review[/] — it is the only "
+                "record of why this was dismissed. esc cancels.")
+            return
+        # `derived` and `review` COME OFF the materialised line. `[derived:]` is exactly what
+        # makes `x` refuse a row, so a ticked line that kept it would be one the lead could
+        # never sweep — the opposite of what ticking is for — and `[review:]` drives the 🔍
+        # badge onto a Monocle review this keypress has just retired.
+        base = _DERIVED_TRAILERS.sub("", head).rstrip() if derived else head
+        want = ask_detail(base)["trailers"] + ([("note", note)] if note else [])
+        if ask_detail(ask_mark_done(base, note))["trailers"] != want:
             self.query_one("#note-msg", Static).update(
                 "[red]that note breaks the row's own metadata[/] — an unmatched bracket on "
                 "the tail stops every trailer being read. Try it without one.")
             return
-        written = _mark_line_done(path, raw, note)
+        if derived:
+            # THE FLAG FIRST. If retiring it fails the row must stay exactly as it is —
+            # writing the ticked line anyway would leave the panel showing a cleared item
+            # beside the live one it failed to clear.
+            why = retire_staged_review(
+                os.path.join(marks.get("review", ""), ".claude", REVIEW_FILE), note)
+            if why:
+                self.query_one("#note-msg", Static).update("[red]%s[/]" % esc(why))
+                return
+            written = ask_mark_done(base, note)
+            if not _append_ask_line(path, written):
+                written = ""
+        else:
+            written = _mark_line_done(path, raw, note)
         self._mark_close()
         if not written:
             self.notify("that ask is no longer in the file", severity="warning")

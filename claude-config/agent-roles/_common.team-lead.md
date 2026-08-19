@@ -430,6 +430,15 @@ product: MON-16 — High or Urgent? [MON-16] [from:feature-3] [added:2026-08-19]
 - **A staged Monocle review appears as a `review:` row automatically**, synthesized from the
   flag files. **Do not write those by hand**: a hand-written one does not clear itself, which
   is the exact staleness this replaced.
+- **…and nothing clears the flag when the review resolves**, so one can outlive its review.
+  `x` refuses a synthesized row — there is no line to delete and it returns on the next scan —
+  which used to leave no way off the panel at all. **`t` force-clears it**, and there a note
+  is REQUIRED: it retires the lane's `.claude/monocle-staged` into a `.cleared` log beside it
+  (content kept, notes accumulated) and writes the row into the ask file as an ordinary `✅`
+  line with the note on it. **So a `✅ review:` row on your list means a human overruled a
+  signal the system was still raising — read the note before you sweep it, because the flag
+  it came from is gone.** The row stops regenerating because the flag is what generated it;
+  a genuinely new review writes a new flag and the row comes straight back.
 - **`[cmd:<command>]`** gives a row a badge that copies the command to the clipboard. Use it
   whenever an ask is "run this" — the user should never have to retype a command out of prose.
 
@@ -441,7 +450,10 @@ product: fold MON-10 into this cycle? [MON-10] [from:feature-3] [added:2026-08-1
 ```
 
 `[SRV-24]` / `[PR#147]` is the ticket (bare, no key); `[from:]` who raised it, `[added:]` when,
-`[unblocks:]` what is waiting, `[short:]` the row's own wording. **`[note:]` is the one you do
+`[unblocks:]` what is waiting, `[short:]` the row's own wording. **When an ask is about a
+specific ticket, lead the ask TEXT with the ticket id too** (`"SRV-29 — two blocking
+questions..."`), not just the trailer — trailers are hidden in the one-line views, the ask
+text never is. `[note:]` is the one you do
 not write** — it is the user's own word on a row they ticked off with `t`, and it is the answer
 you were waiting for. **The one-line views hide all
 of them except `short`** — which is not provenance but the question itself, in fewer words —
