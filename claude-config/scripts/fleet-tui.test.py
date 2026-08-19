@@ -1951,6 +1951,95 @@ async def main():
         os.unlink(block_path)
         ok("deleting an ask takes its whole context block with it, and nothing else",
            dropped and left == "ship: b?\n  ctx b\n", (dropped, left))
+        # WHAT IT RETURNS IS WHAT UNDO WRITES BACK, so the indent has to survive the trip.
+        # `_drop_line` used to answer a bare True and `u` restored the FOLDED string, whose
+        # continuation lines `fold_ask_context` had already stripped — see the round-trip
+        # assertion below for the corruption that caused.
+        ok("…and it hands back the bytes it removed, indentation intact",
+           dropped == "product: a?\n  ctx one\n  ctx two", dropped)
+
+        # THE ROUND TRIP IS THE CONTRACT, asserted on the ITEM COUNT and not only on the
+        # bytes: the failure this locks in was silent and structural. `x` then `u` on an ask
+        # with context wrote its context back flush left, and the next read parsed those
+        # lines as top-level asks — a 2-ask file became 5, the panel's count was wrong, and
+        # `x` on one of the strays deleted a sentence of someone's prose. Counting items is
+        # what a reader of the file would notice; comparing bytes is what pins the cause.
+        original = ("fleet: push the commits? [added:2026-08-19]\n"
+                    "  Six commits on master, unpushed.\n"
+                    "  Nothing depends on it.\n"
+                    "product: bump the date? [added:2026-08-19]\n"
+                    "  Today it does not.\n")
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+            tf.write(original)
+            trip_path = tf.name
+        before = fleet_tui._ask_lines(trip_path)
+        # Against a file that EXISTS, so the empty answer means "no such head" and not
+        # "could not open it" — the two share a return value and only one is under test.
+        ok("a head that matches nothing returns falsy, and leaves the file alone",
+           fleet_tui._drop_line(trip_path, "product: never written?") == ""
+           and open(trip_path).read() == original)
+        cut = fleet_tui._drop_line(trip_path, before[0])
+        fleet_tui._restore_line(trip_path, cut)
+        after = fleet_tui._ask_lines(trip_path)
+        with open(trip_path) as f:
+            round_tripped = f.read()
+        os.unlink(trip_path)
+        ok("clearing an ask with context and undoing it leaves the SAME NUMBER of asks",
+           len(after) == len(before) == 2, (len(before), len(after), round_tripped))
+        ok("…and the same asks, context still attached to the item it belongs to",
+           sorted(after) == sorted(before), (sorted(before), sorted(after)))
+        # Byte-level, because "same asks" would also pass if the indent were re-tidied to a
+        # different width — which would be this view silently rewriting a human's file.
+        ok("…and the file's own indentation, not a normalised guess",
+           "\n  Six commits on master, unpushed.\n  Nothing depends on it." in round_tripped,
+           round_tripped)
+
+        # A PARAGRAPH BREAK IS INSIDE THE ASK; THE BLANK BETWEEN ASKS IS NOT. `_ask_lines`
+        # drops blanks before folding, so a context block written with a paragraph break
+        # reads as ONE item — but the delete scan stopped at the first blank, took only the
+        # half above it, and left the rest as an indented orphan the next read counted as its
+        # own ask. Both directions are asserted, because the fix could over-correct just as
+        # easily: eating the separator blank would silently reformat the user's file every
+        # time an item above it was cleared.
+        def _cut(body, idx=0):
+            """(asks before, bytes removed, file left, asks after an undo) for one fixture."""
+            with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+                tf.write(body)
+                q = tf.name
+            was = fleet_tui._ask_lines(q)
+            gone = fleet_tui._drop_line(q, was[idx])
+            with open(q) as f:
+                rest = f.read()
+            fleet_tui._restore_line(q, gone)
+            back = fleet_tui._ask_lines(q)
+            os.unlink(q)
+            return was, gone, rest, back
+
+        inner = "fleet: push? [a]\n  ctx one\n\n  ctx two\nproduct: bump? [b]\n  its ctx\n"
+        was, gone, rest, back = _cut(inner)
+        ok("a blank line INSIDE a context block does not end the delete",
+           rest == "product: bump? [b]\n  its ctx\n", rest)
+        ok("…so no half-block is left behind to read as an ask of its own",
+           len(was) == len(back) == 2 and sorted(was) == sorted(back), (was, back))
+        # The blank is part of the bytes, so undo replays the paragraph break too. Asserted
+        # on `gone` rather than the round-tripped file because THIS is what the undo stack
+        # holds — a truncated value here is the corruption, wherever it is later written.
+        ok("…and the blank line itself survives in the removed bytes",
+           gone == "fleet: push? [a]\n  ctx one\n\n  ctx two", gone)
+
+        between = "fleet: push? [a]\n  ctx one\n\nproduct: bump? [b]\n  its ctx\n"
+        _, gone2, rest2, _ = _cut(between)
+        ok("a blank line BETWEEN two asks is left alone, not swallowed by the delete",
+           rest2 == "\nproduct: bump? [b]\n  its ctx\n", rest2)
+        ok("…and is not carried off in the removed bytes either",
+           gone2 == "fleet: push? [a]\n  ctx one", gone2)
+
+        # Trailing blanks at EOF are the same question with nothing after them to prove the
+        # block ended — the scan must still hand them back rather than absorb them.
+        eof = "product: bump? [b]\n  its ctx\nfleet: push? [a]\n  ctx\n\n\n"
+        _, _, rest3, _ = _cut(eof, idx=1)
+        ok("blank lines at end of file are not absorbed into the last ask",
+           rest3 == "product: bump? [b]\n  its ctx\n\n\n", rest3)
 
         # ── MARKING AN ASK DONE, the other half of `x` ───────────────────────────────────
         # A ROW THAT IS HANDLED MUST BE DISTINGUISHABLE FROM ONE NOBODY OPENED, and until `t`

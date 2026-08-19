@@ -165,33 +165,68 @@ def _ask_lines(path):
 
 
 def _drop_line(path, raw):
-    """Remove the first occurrence of `raw` — WITH ITS CONTEXT BLOCK. True when it changed.
+    """Remove the first occurrence of `raw` — WITH ITS CONTEXT BLOCK.
+
+    Returns THE BYTES IT REMOVED, `""` when nothing matched — truthy exactly where the old
+    `True` was, so `if _drop_line(...)` still reads as "it changed", but the text is what
+    makes `u` an actual inverse. Returning a bare True is what broke it.
+
+    UNDO MUST BE GIVEN THE FILE'S OWN BYTES, NOT THE FOLDED FORM. `raw` comes from
+    `fold_ask_context`, which STRIPS each continuation line's indent to join a block into one
+    string. Restoring that text wrote the context back FLUSH LEFT, and the next read then
+    parsed those lines as top-level asks: one item silently became N, the count in the panel
+    title was wrong, and `x` on a stray deleted prose. Measured — a 2-ask file came back as 5
+    asks after one `x` then `u`. Nothing raised, which is why it survived; the undo test's
+    fixture was a single-line ask, so it had no continuation lines to lose.
 
     Rewrites rather than truncates: another line may have been added since the snapshot, and
     a to-do list that loses an entry nobody ticked off is worse than one that fails to tick.
 
-    MATCHED ON THE FIRST LINE, DELETED AS A BLOCK. `raw` arrives folded (see `_fold_context`),
-    so matching the whole thing would depend on reproducing the exact indentation the file
-    used. The first line is the ask's identity; the indented lines under it are by definition
-    part of it, and leaving them behind would orphan a paragraph under an unrelated item.
+    MATCHED ON THE FIRST LINE, DELETED AS A BLOCK. Matching the whole folded string would
+    depend on reproducing the exact indentation the file used. The first line is the ask's
+    identity; the indented lines under it are by definition part of it, and leaving them
+    behind would orphan a paragraph under an unrelated item.
     """
     head = (raw or "").split("\n", 1)[0].rstrip()
     try:
         with open(path) as f:
             lines = f.read().splitlines()
     except OSError:
-        return False
+        return ""
     for i, ln in enumerate(lines):
         if ln.rstrip() != head:
             continue
+        # A BLANK LINE INSIDE A CONTEXT BLOCK MUST NOT END IT. `_ask_lines` drops blanks
+        # before folding, so a paragraph break reads as ONE item — but this scan used to stop
+        # at the first blank, delete only the half above it, and leave the rest behind as an
+        # indented orphan that the next read renders as its own bogus ask. Measured on
+        # `head / "  ctx one" / "" / "  ctx two"`: the head went, `  ctx two` survived as a
+        # phantom row, and the count never moved. With bytes now round-tripping through undo
+        # it also meant `u` restored half an item.
+        #
+        # SO BLANKS ARE TAKEN TENTATIVELY. `pending` counts the run of them; a genuine
+        # continuation line proves the block carried on and confirms them, while anything
+        # else ends the block and hands them back. That last part is the half worth stating:
+        # the blank line BETWEEN two asks is the file's own spacing, and swallowing it would
+        # reformat a human's list every time something above it was ticked off.
         j = i + 1
-        while j < len(lines) and lines[j].strip() and lines[j][:1].isspace():
-            j += 1
+        pending = 0
+        while j < len(lines):
+            if not lines[j].strip():
+                pending += 1
+                j += 1
+            elif lines[j][:1].isspace():
+                j += 1
+                pending = 0
+            else:
+                break
+        j -= pending
+        removed = "\n".join(lines[i:j])
         del lines[i:j]
         with open(path, "w") as f:
             f.write("\n".join(lines) + ("\n" if lines else ""))
-        return True
-    return False
+        return removed
+    return ""
 
 
 def _mark_line_done(path, raw, note=""):
@@ -927,6 +962,16 @@ def apply_now(tune_sh, name):
 
 
 def _restore_line(path, raw):
+    """Append `raw` back, VERBATIM — so the caller must hand it the file's own bytes.
+
+    It deliberately does not re-indent or otherwise tidy what it is given: this file is
+    hand-written prose and normalising it here would be a second, invisible author. The one
+    caller (`action_undo`) is fed `_drop_line`'s return value for exactly that reason.
+
+    APPENDED, NOT PUT BACK WHERE IT WAS. The list is ordered by `[added:]` at render time
+    (see ASK_SORTS), so a restored item shows in the same place either way; recording an
+    index would only be right until the next writer touched the file.
+    """
     try:
         with open(path) as f:
             body = f.read()
@@ -2012,7 +2057,7 @@ class FleetTUI(App):
         self.interval = interval
         self.data = {"lanes": [], "subs": [], "fleet": [], "error": ""}
         self.sig = None            # last STRUCTURAL snapshot, to skip no-op rebuilds
-        self.undo = None           # (path, raw) of the last cleared ask
+        self.undo = None           # (path, THE FILE'S OWN BYTES) of the last cleared ask
         self.nudge = 0             # rows the user has added to the fit with + / -
         self.full = None           # id of the panel currently fullscreened, or None
         self.fit_mode = "agents"   # which list `=` is currently fitting: "agents" or "4ME"
@@ -3242,14 +3287,17 @@ class FleetTUI(App):
         else:
             return
         # A DERIVED ROW HAS NOTHING IN THE FILE TO DELETE. Refusing loudly beats letting
-        # `_drop_line` return False and reporting "already gone", which is a lie that would
+        # `_drop_line` return "" and reporting "already gone", which is a lie that would
         # look like a bug the next tick, when the row reappears.
         if dict(ask_detail(raw)["trailers"]).get("derived"):
             self.notify("this row tracks live state — clear it by answering it",
                         severity="warning")
             return
-        if _drop_line(path, raw):
-            self.undo = (path, raw)
+        # UNDO CARRIES WHAT THE FILE HAD, not the folded `raw` this view is holding — see
+        # `_drop_line`. `raw` is still what the notification quotes: that is for a human.
+        removed = _drop_line(path, raw)
+        if removed:
+            self.undo = (path, removed)
             self.notify(f"cleared · u to undo — {clip(raw, 40)}")
             self.load()
         else:
