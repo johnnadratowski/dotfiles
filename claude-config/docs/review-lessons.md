@@ -10,6 +10,37 @@ stays with its product (e.g. `.claude/docs/review-lessons.md` in goals-onchain).
 
 Each entry: what was missed, why it was missable, and the check that would have caught it.
 
+## 2026-08-19 — A fixture describing a state the system cannot produce, and the green it bought
+
+A 4ME row synthesized from a flag file is **deliberately absent from the ask file** — it is
+recomputed every scan, and its absence from the file is the whole of what "derived" means.
+The test fixture wrote such a row **into** the file as a literal line, because that was the
+cheap way to get one onto the panel.
+
+**The fixture described a state the system cannot reach.** In production that file is
+precisely where a derived row is *not*. Every assertion resting on it was about a shape that
+does not occur — including, it turned out, the interesting one.
+
+**And a refusal test went on passing after the behaviour it named was removed.** When the
+mark-done key learned to act on derived rows, `ok("t refuses a derived row …")` stayed green
+— because the fixture's row also lacked the `[review:]` trailer, so it was now being refused
+by a *different, newly added* branch. The name described the old behaviour; the green
+described the new one. Nothing in a passing assertion says which branch produced the pass.
+
+**Why it was missable.** Both halves are invisible from the test's own text. A fixture line
+reads as data, not as a claim about what the system can produce; and a suite that goes
+506 → 521 all-green offers no signal that one of those greens changed meaning underneath.
+
+**The check.** Build the fixture **through the same producer production uses** — here, having
+the fake snapshot call `_review_asks()` instead of hand-writing its output. A fixture that
+goes through the producer *cannot* describe a state the producer cannot reach, and retiring
+the flag then makes the row vanish in the test for the same reason it does in the fleet. The
+second, cheaper habit: **when behaviour changes, re-read every test whose name asserts the OLD
+behaviour and still passes.** A green that survives a behaviour change is a claim about which
+branch ran, and it needs checking rather than celebrating. Here it was caught only when an
+unrelated assertion failed — sweeping the materialized row — because the fake line was still
+sitting in the file beside the real one.
+
 ## 2026-08-13 — A retry keyed on absence-of-exception, from an egress that swallows its failures
 
 A cron path refused a wire, then had to alert operators and notify the business. Both had to

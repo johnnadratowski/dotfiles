@@ -1043,6 +1043,16 @@ def retire_staged_review(flag, note):
     IT FAILS TOWARD THE ROW STAYING UP. If the log cannot be written, the flag is left
     exactly where it is and the panel goes on showing the review. The alternative is clearing
     a signal we just failed to record, which is the same silence this feature is fixing.
+
+    NOTHING CALLS THIS ON RESOLUTION YET, and that absence is the defect underneath the key.
+    The flag is not cleared when the review is answered, so a shipped review leaves its row
+    standing until a person notices and force-clears it — which is the whole reason `t` had
+    to learn this at all. Whatever observes the resolution (a verdict returned, a PR merged)
+    should call THIS function rather than removing the file itself: a bare `rm` is what
+    happened the first time and it left no record of what was cleared or why, which is the
+    failure the `.cleared` log exists to prevent. Manual and automatic want identical
+    behaviour, so there is one place to be right about it. Recorded here, beside the code,
+    because this repo keeps its reasoning in docstrings and carries no TODO comments.
     """
     try:
         with open(flag or "") as f:
