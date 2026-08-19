@@ -76,7 +76,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One definition of the 60-char cap and of the ask vocabulary, shared with the table renderer
 # so the two views cannot type the same item differently.
 from _agent_facts import (ASK, ASK_GENERAL, ASK_KINDS, LINE_MAX,  # noqa: E402
-                          ASK_SORTS, ask_detail, ask_kind, ask_short, ask_sort_key,
+                          ASK_SORTS, ask_detail, ask_kind, ask_mark_done, ask_short,
+                          ask_sort_key,
                           fold_ask_context, goal_mentions,
                           ask_trailers, branch_for, branch_ticket_for, clip, fleet_goal,
                           fleet_goal_path, fmt_age, fmt_ago, refresh_open_prs, status_text,
@@ -191,6 +192,38 @@ def _drop_line(path, raw):
             f.write("\n".join(lines) + ("\n" if lines else ""))
         return True
     return False
+
+
+def _mark_line_done(path, raw, note=""):
+    """Tick an ask off IN PLACE — `✅` onto its head line, an optional `[note:]` on the tail.
+
+    Returns the line it wrote, `""` when nothing matched — the same truthiness contract as
+    `_drop_line`, whose head-line matching this shares and for the same reason: `raw` arrives
+    folded, so its first line is the only part of it that exists in the file verbatim.
+
+    THE ROW STAYS. That is the entire point of the key. `x` removes an item and takes with it
+    the fact that anyone dealt with it, so on the lead's next sync a handled ask and an ask
+    nobody had opened looked identical — and both looked identical to a mis-keyed `x`. A
+    marked row is a POSITIVE statement, left standing until the lead's own sweep removes it.
+
+    ONLY THE HEAD LINE IS REWRITTEN. The indented lines under an ask are the reasoning that
+    made it answerable; they are still worth reading after it has been answered, and they are
+    not where a marker belongs.
+    """
+    head = (raw or "").split("\n", 1)[0].rstrip()
+    try:
+        with open(path) as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return ""
+    for i, ln in enumerate(lines):
+        if ln.rstrip() != head:
+            continue
+        lines[i] = ask_mark_done(ln.rstrip(), note)
+        with open(path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+        return lines[i]
+    return ""
 
 
 _TICKET = re.compile(r"\b([A-Z]{2,5}-\d+)\b")
@@ -1881,6 +1914,16 @@ class FleetTUI(App):
     #ask-detail-fields { height: auto; width: 100%; }
     #ask-detail-msg { height: auto; color: $text-muted; }
 
+    /* THE NOTE FIELD `t` OPENS, one row above the footer — on the BASE layer, not inside a
+       dialog. `t` acts on the row under the cursor whether or not the 4ME overlay is up, so a
+       field that lived in that overlay would be unreachable in the common case. Hidden
+       entirely when idle: it is a prompt, not a row the panel pays for permanently. The
+       panels absorb its two rows because #fleet is `1fr` and the fit measures #panels. */
+    #note-input { display: none; margin: 0; }
+    #note-input.-show { display: block; }
+    #note-msg { display: none; height: auto; padding: 0 1; color: $text-muted; }
+    #note-msg.-show { display: block; }
+
     /* THE FOCUSED PANEL HAS TO BE UNMISTAKABLE. Both panels carrying the same quiet border
        left the reader guessing which one `x` was about to act on — and `x` deletes. So the
        unfocused panel is dimmed to a plain grey hairline and the focused one takes a heavy
@@ -1921,6 +1964,12 @@ class FleetTUI(App):
         Binding("o", "open_ticket", "open ticket"),
         Binding("a", "apply_now", "", show=False),
         Binding("x", "clear_ask", "clear ask"),
+        # `t` TICKS A ROW OFF WITHOUT DELETING IT — the other half of `x`, and the half the
+        # lead can actually see. `k` is the obvious mnemonic for "kept" and is TAKEN: it is
+        # the vim cursor pair (`j`/`k`), the most-pressed key on this panel, so rebinding it
+        # would trade a new feature for the navigation. `t` is free, and "tick" is already the
+        # word this file uses for the gesture (see action_clear_ask) and for the ✅ it writes.
+        Binding("t", "mark_done", "mark done"),
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
         # `c` CYCLES THE 4ME CATEGORY FILTER. Chosen because every other letter on this screen
@@ -1982,6 +2031,7 @@ class FleetTUI(App):
         # have now, not a preference.
         self.subs_open = False
         self.editing = None        # the cfg entry currently being edited, or None
+        self.marking = None        # (path, raw, list) the note field is open for, or None
         self._fitted_want = None   # rows the cards wanted at the last fit, clamp aside
         self.refreshed_at = None   # when the last snapshot LANDED, epoch seconds
         self.refreshing = False    # a request is in flight right now
@@ -2010,6 +2060,10 @@ class FleetTUI(App):
         with Panels(id="panels"):
             yield ListView(id="lanes")
             yield ListView(id="fleet")
+        # The note field `t` opens, between the panels and the footer. Its two rows come
+        # out of the `1fr` panel while it is up and go straight back when it closes.
+        yield Input(id="note-input")
+        yield Static("", id="note-msg")
         yield Static(self.legend_markup(), id="legend")
         with Detail(id="detail"):
             yield Static("", id="detail-head")
@@ -2353,7 +2407,7 @@ class FleetTUI(App):
 
         Left and right never move internally because the panels are stacked, not columned.
         """
-        if self.editing is None and direction in ("U", "D"):
+        if self.editing is None and self.marking is None and direction in ("U", "D"):
             regions = self._nav_regions()
             here = self._focused_list()
             if here in regions:
@@ -2852,6 +2906,11 @@ class FleetTUI(App):
             rows.append(("deferred", "[yellow]%s[/]" % esc(d["deferral"])))
         if t.get("unblocks"):
             rows.append(("unblocks", linkify(t["unblocks"], ctx)))
+        # THE USER'S OWN WORD ON THE ROW, written with the ✅ by `t`. Rendered exactly as
+        # `unblocks` is — linkified, so a note that names a ticket or a PR is clickable from
+        # here like every other id on this screen.
+        if t.get("note"):
+            rows.append(("note", linkify(t["note"], ctx)))
         # UNKNOWN TRAILERS RENDER AS-IS, under no label. The format will grow past this
         # reader, and an extension the dialog refused to draw would be a fact the lead wrote
         # down and never saw again.
@@ -2899,7 +2958,15 @@ class FleetTUI(App):
         pane by agent-tune.sh, so anything outside the two fixed vocabularies is refused
         here rather than written and discovered later; keeping the field open with the bad
         text in it is what lets the user fix a typo instead of retyping.
+
+        TWO FIELDS SHARE THIS HANDLER, so it dispatches on the id first. The knob editor and
+        the `t` note are the same gesture on different subjects and are deliberately not the
+        same code: one validates against a fixed vocabulary an agent will be told to obey, the
+        other accepts any prose a human types and only checks that it can be read back.
         """
+        if event.input.id == "note-input":
+            self.mark_submit(event.value)
+            return
         e, data = self.editing, (self.detail or {}).get("data")
         if not e or not data:
             return
@@ -3223,6 +3290,9 @@ class FleetTUI(App):
             ("m", "focus the Monocle pane of the review on this row  (badge: %s)" % REVIEW_BADGE),
             ("d", "open the document this row references — prose or context"),
             ("y", "copy this row's command to the clipboard  (badge: %s)" % CMD_BADGE),
+            ("t", "tick this row DONE without deleting it — %s in the file, plus an optional"
+                  % ASK_GENERAL),
+            ("", "note you type. It stays on the list, marked, until the lead sweeps it"),
         ))
         return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
                 "\n%s\n\n[dim]? or esc to close[/]" % (states, kinds, keys))
@@ -3522,8 +3592,124 @@ class FleetTUI(App):
         the user cannot undo by pressing it again."""
         if self.editing is not None:
             self.edit_cancel()
+        elif self.marking is not None:
+            self._mark_close()
         elif not self.close_top_overlay() and self.full:
             self.action_fullscreen()
+
+    def action_mark_done(self):
+        """`t` — tick the row off WITHOUT deleting it, with an optional note for the lead.
+
+        THE OTHER HALF OF `x` (John, 2026-08-19): "I think those reviews from ott and woo were
+        approved, right? Perhaps we should have a mark completed you can check when you update
+        the list. Perhaps I could leave a note when I mark completed or clear for you so I can
+        have more control over the 4m list." Until now the only way to signal "I have handled
+        this" was to delete the row — which is also what a mis-keyed `x` looks like, and which
+        throws away the one thing the lead needed to read: that it was handled, and with what
+        answer.
+
+        IT WORKS WITH THE 4ME OVERLAY OPEN, unlike `x`, and the difference is not an
+        inconsistency. `x` must be swallowed there because it DELETES the very ask the dialog
+        is showing, out of a list the dialog is covering; `t` rewrites that ask in place and
+        the dialog repaints to show the tick. Marking what you are reading is the case, not
+        the hazard.
+        """
+        # The lane dialog still swallows it: nothing under it is a 4ME row, and its own Input
+        # owns the keyboard. A second press while the field is up is a no-op, not a re-open —
+        # re-opening would silently discard the note half-typed into it.
+        if self.detail is not None or self.marking is not None:
+            return
+        if self.ask is not None:
+            path, raw = self.data.get("fleet_path") or "", self.ask["raw"]
+        else:
+            w = self._focused_list()
+            item = w.highlighted_child
+            if isinstance(item, Ask):
+                path, raw = item.path, item.raw
+            elif isinstance(item, Lane):
+                asks = item.row.get("raw_asks") or []
+                if not asks:
+                    self.notify("nothing to mark on this lane", severity="warning")
+                    return
+                path, raw = item.row["ask_path"], asks[0]
+            else:
+                return
+        if not path:
+            self.notify("no file behind this row", severity="warning")
+            return
+        # A DERIVED ROW IS NOT IN THE FILE — the same refusal `x` makes, for the same reason.
+        # There is no line to rewrite, and a row that came back unticked on the next tick
+        # would look like the key had failed rather than like the row being computed.
+        if dict(ask_detail(raw)["trailers"]).get("derived"):
+            self.notify("this row tracks live state — clear it by answering it",
+                        severity="warning")
+            return
+        self.marking = (path, raw, self._focused_list())
+        inp = self.query_one("#note-input", Input)
+        inp.value = ""
+        inp.placeholder = "a note for the lead — optional"
+        inp.add_class("-show")
+        inp.focus()
+        msg = self.query_one("#note-msg", Static)
+        # `esc`, not rich's `escape`: this is prose the user wrote and every bracket in it is
+        # a literal. See linkify for the crash that distinction prevents.
+        msg.update("[dim]marking [b]%s[/b] done · enter writes it, an empty note is fine · "
+                   "esc cancels[/]" % esc(clip(ask_short(ask_detail(raw)), 48)))
+        msg.add_class("-show")
+
+    def _mark_close(self):
+        """Put the field away and give the keyboard back to the list `t` was pressed on."""
+        back = self.marking[2] if self.marking else None
+        self.marking = None
+        inp = self.query_one("#note-input", Input)
+        inp.remove_class("-show")
+        inp.value = ""
+        msg = self.query_one("#note-msg", Static)
+        msg.update("")
+        msg.remove_class("-show")
+        if back is not None:
+            back.focus()
+
+    def mark_submit(self, value):
+        """Write the tick — and REFUSE a note the reader could not get back out.
+
+        THE NOTE IS A TRAILER, AND TRAILERS ARE EATEN RIGHT TO LEFT. So an unmatched bracket
+        typed into this field does not merely lose the note: it stops the parse at the tail
+        and takes `added`, `short`, `ticket` and `derived` down with it — the row loses its
+        age, its sort slot, its badges and its short form at once, and dumps raw trailer text
+        into the visible list. That is a lot of damage for one character in a free-text field.
+
+        THE CHECK IS THE READER'S OWN, not a guess about which characters are dangerous. The
+        line is built, parsed back, and required to carry exactly the trailers it had plus
+        this one — so balanced brackets (`see [SRV-1]`, which `ask_trailers` handles) are
+        allowed through, and only what actually breaks is refused. A rejected note keeps the
+        field open with the text still in it, exactly as a rejected knob value does.
+        """
+        if not self.marking:
+            return
+        path, raw, _ = self.marking
+        note = " ".join((value or "").split())
+        head = raw.split("\n", 1)[0]
+        want = ask_detail(head)["trailers"] + ([("note", note)] if note else [])
+        if ask_detail(ask_mark_done(head, note))["trailers"] != want:
+            self.query_one("#note-msg", Static).update(
+                "[red]that note breaks the row's own metadata[/] — an unmatched bracket on "
+                "the tail stops every trailer being read. Try it without one.")
+            return
+        written = _mark_line_done(path, raw, note)
+        self._mark_close()
+        if not written:
+            self.notify("that ask is no longer in the file", severity="warning")
+            self.load()
+            return
+        # FOLLOW THE EDIT, the way show_ask follows the lead's. `_reaim_ask` re-finds the open
+        # ask by its exact line first, and that line just changed — a TICKETLESS ask would
+        # otherwise fall through to the kind check, whose kind the tick has also just changed,
+        # and the dialog would report the row the user is reading as gone.
+        if self.ask is not None:
+            self.ask["raw"] = "\n".join([written] + raw.split("\n", 1)[1:])
+        self.notify("marked done · %s" % ("note: " + clip(note, 40) if note else "no note"))
+        self.load()
 
     def action_undo(self):
         if not self.undo:

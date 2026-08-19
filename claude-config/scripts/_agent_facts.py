@@ -487,8 +487,13 @@ def ask_kind(line):
 # `derived` marks a row SYNTHESIZED from live state rather than written into the file — the
 # staged-review rows are, so `x` must refuse them: nothing in the file would be deleted, and
 # the row would reappear on the next tick looking like a failed delete.
+# `note` is THE USER'S OWN WORD on a row — `[note:approved, ott's version]` — written by the
+# TUI's `t` key beside the tick it adds. It is the only trailer on this list that comes from
+# the person rather than from an agent, and it is the reason marking is not deleting: `x`
+# takes the row away and the reason with it, so the lead's next sync could not tell an item
+# that had been dealt with from one nobody had looked at.
 ASK_TRAILER_KEYS = ("ticket", "from", "added", "unblocks", "short",
-                    "review", "cmd", "derived")
+                    "review", "cmd", "derived", "note")
 
 # ONE LEVEL OF NESTED BRACKETS IS ALLOWED INSIDE A TRAILER BODY, and that is not a nicety.
 # The body used to be `[^\[\]]+` — no bracket at all — and trailers are eaten RIGHT TO LEFT,
@@ -579,6 +584,38 @@ def ask_detail(line):
     body, deferral = ask_deferral(body)
     return {"kind": kind, "icon": icon, "text": body, "context": context,
             "deferral": deferral, "trailers": trailers}
+
+
+# THE ONE WRITER OF THE RESOLVED FORM, and it arrives late: `ask_kind` has PARSED a leading
+# `✅` since the beginning — the lead writes a finished item as `✅ MON-10 B3 RESOLVED` by hand
+# — but nothing could WRITE one, so the only thing the user could do to a row they had already
+# dealt with was delete it. John, 2026-08-19: "perhaps we should have a mark completed you can
+# check when you update the list. Perhaps I could leave a note when I mark completed or clear
+# for you so I can have more control over the 4m list."
+def ask_mark_done(line, note=""):
+    """The same ask, written as RESOLVED: a leading `✅`, and an optional `[note:]` trailer.
+
+    A REWRITE OF THE LEADING MARKER, NOT OF THE FORMAT. The kind token, the prose and every
+    existing trailer are left exactly where they were, so `product: fold it in? [SRV-1]`
+    becomes `✅ product: fold it in? [SRV-1]` — which every reader here already handles: the
+    tick is the icon, the rest is the prose, the trailers are still trailers. A line that
+    already carries the tick keeps exactly ONE, the same de-duplication `ask_kind` makes and
+    for the same reason — a doubled glyph reads as a second marker with a meaning to work out.
+
+    THE NOTE IS COLLAPSED TO ONE LINE. It is typed into a single-line field and lands on the
+    TAIL of an ask, where a newline would turn everything after it into a context line of its
+    own: a note is metadata ABOUT the row, never a second row.
+
+    IT DOES NOT VALIDATE THE NOTE. An unbalanced bracket in it would defeat `ask_trailers` and
+    take the row's other trailers down with it (they are eaten right to left), but the caller
+    is the one that can do something about that — it has the user and the field they typed
+    into. See FleetTUI.mark_submit, which parses the result back before writing it.
+    """
+    line = (line or "").rstrip()
+    if not line.startswith(ASK_GENERAL):
+        line = "%s %s" % (ASK_GENERAL, line.lstrip())
+    note = " ".join((note or "").split())
+    return "%s [note:%s]" % (line, note) if note else line
 
 
 # AN INDENTED LINE CONTINUES THE ASK ABOVE IT. Added 2026-08-19, when the user's verdict was

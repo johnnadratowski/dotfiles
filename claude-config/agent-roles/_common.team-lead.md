@@ -383,6 +383,12 @@ tomorrow, in the panel they actually drive the fleet from.
   in one line that you did. Measured: a lane refuted the fact under a question while the question
   still sat on the list, and the user came back to decide something that no longer existed.
 - **You clear it; nobody else does.** Lanes never write these files, so no lane can clear one.
+- **A `✅` ON A ROW IS THE USER SAYING THEY HANDLED IT** — they press `t` in the TUI, which
+  rewrites that row's first line to `✅ <the ask as it was>` and may add a **`[note:]`
+  trailer** with their answer in it. It is deliberately not a delete: an item nobody has
+  opened and an item that has been dealt with used to look identical to you, because both
+  were absences. **Read the note, act on it, and then delete the row — that sweep is yours.**
+  A `✅` row you leave standing is the same stale item as any other.
 
 ### An ask carries its CONTEXT — the row is not the whole item
 
@@ -435,7 +441,9 @@ product: fold MON-10 into this cycle? [MON-10] [from:feature-3] [added:2026-08-1
 ```
 
 `[SRV-24]` / `[PR#147]` is the ticket (bare, no key); `[from:]` who raised it, `[added:]` when,
-`[unblocks:]` what is waiting, `[short:]` the row's own wording. **The one-line views hide all
+`[unblocks:]` what is waiting, `[short:]` the row's own wording. **`[note:]` is the one you do
+not write** — it is the user's own word on a row they ticked off with `t`, and it is the answer
+you were waiting for. **The one-line views hide all
 of them except `short`** — which is not provenance but the question itself, in fewer words —
 and show kind + ask + age + deferral — a row is a column, and provenance there costs the width the question needs. Enter on
 a 4ME row in the TUI opens a dialog that shows the ask **in full** with the trailers as labelled

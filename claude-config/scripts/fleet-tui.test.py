@@ -924,6 +924,187 @@ async def main():
         ok("x on the fleet panel clears that item",
            "merge #124" not in open(fleet_path).read())
 
+        # ── t marks a row DONE without deleting it, and can carry a note ──────────────────
+        # THE FAILURE THIS CLOSES IS A LIE OF OMISSION. `x` was the only thing the user could
+        # do to a row they had already dealt with, so on the lead's next sync a handled ask
+        # and an ask nobody had opened were the same thing — an absence — and so was a
+        # mis-keyed `x`. `t` writes a POSITIVE mark the lead reads, and the answer with it.
+        # The file is restored at the end of the block: later tests own this fixture too.
+        fleet_before_mark = open(fleet_path).read()
+        with open(fleet_path, "w") as f:
+            f.write("product: MON-16 — High or Urgent? [MON-16] [added:2026-08-19]\n"
+                    "  Urgent was argued from overlapping ticks.\n"
+                    "review: woo staged one [derived:staged-review] [added:2026-08-19]\n"
+                    "todo: bump the date? [added:2026-08-19]\n"
+                    "fleet: push the commits? [added:2026-08-19]\n")
+        await pilot.press("r")
+        await pilot.pause()
+        await pilot.pause()
+
+        def ask_row(needle):
+            """The panel index of the row carrying `needle` — never a hard-coded number.
+
+            The list is SORTED on its way to the screen, so an index literal would silently
+            come to mean a different ask the moment the order or the fixture changed."""
+            for i, it in enumerate(fleet.children):
+                if isinstance(it, fleet_tui.Ask) and needle in it.raw:
+                    return i
+            return -1
+
+        note_inp = app.query_one("#note-input", fleet_tui.Input)
+        fleet.focus()
+        fleet.index = ask_row("MON-16")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        ok("t opens the note field on the highlighted 4ME row",
+           note_inp.has_class("-show") and app.marking is not None)
+        ok("…and names the row it is about, so the field is never ambiguous",
+           "MON-16" in screen_text(app))
+        note_inp.value = "approved, ott's version"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+        marked_line = open(fleet_path).read().splitlines()[0]
+        ok("enter marks the row done in the FILE — tick first, note on the tail",
+           marked_line == "✅ product: MON-16 — High or Urgent? [MON-16] [added:2026-08-19] "
+                          "[note:approved, ott's version]", marked_line)
+        # THE ROW STAYS. This is the whole difference from `x`, and the reason the count is
+        # asserted and not just the text: a mark that also removed the row would pass a
+        # "starts with ✅" check on a file it had emptied.
+        ok("…and the ask is STILL ON THE LIST — marking is not deleting",
+           len(fleet_tui._ask_lines(fleet_path)) == 4,
+           fleet_tui._ask_lines(fleet_path))
+        ok("…with its context block untouched, since that is what made it answerable",
+           "\n  Urgent was argued from overlapping ticks.\n" in open(fleet_path).read())
+        ok("…and the field closes and hands the keyboard back to the list",
+           not note_inp.has_class("-show") and app.marking is None and fleet.has_focus)
+
+        fleet.index = ask_row("bump the date")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        await pilot.press("enter")          # submitted EMPTY — a note is optional
+        await pilot.pause()
+        await pilot.pause()
+        plain = [ln for ln in open(fleet_path).read().splitlines() if "bump the date" in ln][0]
+        ok("an empty note marks the row done and writes no note trailer at all",
+           plain == "✅ todo: bump the date? [added:2026-08-19]", plain)
+
+        # A DERIVED ROW IS COMPUTED FROM LIVE STATE, so there is no line to rewrite — the same
+        # refusal `x` makes. Asserted on the FILE as well as the state: a write here would be
+        # undone on the next tick and would read as the key having failed.
+        before_derived = open(fleet_path).read()
+        fleet.index = ask_row("derived:")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        ok("t refuses a derived row rather than pretending to mark it",
+           app.marking is None and not note_inp.has_class("-show")
+           and open(fleet_path).read() == before_derived)
+
+        fleet.index = ask_row("MON-16")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        note_inp.value = "changed my mind"
+        await pilot.press("escape")
+        await pilot.pause()
+        ok("escape abandons the note and writes nothing",
+           app.marking is None and not note_inp.has_class("-show")
+           and "changed my mind" not in open(fleet_path).read())
+
+        await pilot.press("enter")          # the 4ME overlay, on the row just marked
+        await pilot.pause()
+        ok("the note is a LABELLED FIELD in the ask dialog, rendered like unblocks",
+           "[dim]note      [/] approved, ott's version" in screen_text(app),
+           screen_text(app))
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # `t` WORKS WITH THE 4ME OVERLAY OPEN, UNLIKE `x`, and the row here is TICKETLESS on
+        # purpose: `_reaim_ask` falls back to position-and-kind for those, and the mark
+        # changes the kind — so without the dialog being told what was written it would
+        # report the very ask the user is reading as gone.
+        fleet.index = ask_row("push the commits")
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        ok("t acts on the ask the 4ME overlay is showing — a mark rewrites it, never removes "
+           "it, so there is nothing to hide from the reader",
+           app.marking is not None and app.ask is not None)
+        note_inp.value = "pushed"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+        pushed = [ln for ln in open(fleet_path).read().splitlines()
+                  if "push the commits" in ln][0]
+        ok("…and the dialog follows the edit instead of reporting the row gone",
+           (pushed, app.ask is not None,
+            "(cleared from the list)" in screen_text(app))
+           == ("✅ fleet: push the commits? [added:2026-08-19] [note:pushed]", True, False),
+           (pushed, app.ask))
+        await pilot.press("escape")
+        await pilot.pause()
+
+        # THE GUARD ON THE NOTE IS THE READER, NOT A CHARACTER BLACKLIST. A note is a
+        # trailer and trailers are eaten RIGHT TO LEFT, so an unmatched bracket does not
+        # merely lose the note — it stops the parse at the tail and takes the row's `added`,
+        # `short`, ticket and `derived` down with it: the row loses its age, its sort slot and
+        # its badges at once. Both halves are asserted, because a guard that refused
+        # everything with a bracket in it would pass the refusal test alone.
+        guard_before = open(fleet_path).read()
+        fleet.index = ask_row("bump the date")
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        note_inp.value = "oops ]"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+        ok("a note the reader could not get back out is REFUSED, nothing written, field open",
+           app.marking is not None and note_inp.has_class("-show")
+           and open(fleet_path).read() == guard_before, open(fleet_path).read())
+        note_inp.value = "see [SRV-9]"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+        balanced = [ln for ln in open(fleet_path).read().splitlines()
+                    if "bump the date" in ln][0]
+        ok("…while a BALANCED bracket goes through, since ask_trailers reads one level of it",
+           dict(fleet_tui.ask_detail(balanced)["trailers"]).get("note") == "see [SRV-9]",
+           balanced)
+
+        # THE LANE PANEL MARKS THAT LANE'S FIRST ASK, the same row `x` clears there — the item
+        # under the cursor is a lane, not an ask, and both keys have to resolve it the same
+        # way or the two halves of the gesture would act on different things.
+        lane_before = open(ask_path).read()
+        lanes.focus()
+        lanes.index = 0
+        await pilot.pause()
+        await pilot.press("t")
+        await pilot.pause()
+        note_inp.value = "handed the answer over"
+        await pilot.press("enter")
+        await pilot.pause()
+        await pilot.pause()
+        ok("t on a lane row marks that lane's first ask, note and all",
+           open(ask_path).read().splitlines()[0]
+           == "✅ %s [note:handed the answer over]" % lane_before.splitlines()[0],
+           open(ask_path).read())
+        with open(ask_path, "w") as f:
+            f.write(lane_before)
+        fleet.focus()
+        await pilot.pause()
+
+        with open(fleet_path, "w") as f:
+            f.write(fleet_before_mark)
+        await pilot.press("r")
+        await pilot.pause()
+        await pilot.pause()
+
         # ── enter opens the agent detail overlay ─────────────────────────────────────────
         # The lane's two config files, layered the way _config.sh layers them. The fixtures
         # are chosen so every failure mode is distinguishable: a value set in BOTH files (the
@@ -1770,6 +1951,68 @@ async def main():
         os.unlink(block_path)
         ok("deleting an ask takes its whole context block with it, and nothing else",
            dropped and left == "ship: b?\n  ctx b\n", (dropped, left))
+
+        # ── MARKING AN ASK DONE, the other half of `x` ───────────────────────────────────
+        # A ROW THAT IS HANDLED MUST BE DISTINGUISHABLE FROM ONE NOBODY OPENED, and until `t`
+        # the only way to say "I dealt with this" was to delete it — indistinguishable from a
+        # mis-keyed `x`, and it threw away the answer along with the question.
+        # Asserted through ask_detail rather than on the string, because what matters is that
+        # the READERS still see the same ask: a marker that cost the row its kind, its prose
+        # or its trailers would be a new format, not a mark.
+        marked = fleet_tui.ask_mark_done(
+            "product: fold it in? [SRV-1] [added:2026-08-19]", "approved, ott's version")
+        ok("marking writes the tick, keeps the kind token, the prose and every trailer, and "
+           "adds the note",
+           (marked.startswith("✅"),
+            fleet_tui.ask_detail(marked)["text"],
+            fleet_tui.ask_detail(marked)["trailers"])
+           == (True, "product: fold it in?",
+               [("ticket", "SRV-1"), ("added", "2026-08-19"),
+                ("note", "approved, ott's version")]), marked)
+        ok("…and with no note there is no note trailer at all, just the tick",
+           fleet_tui.ask_detail(fleet_tui.ask_mark_done("product: fold it in? [SRV-1]"))
+           ["trailers"] == [("ticket", "SRV-1")],
+           fleet_tui.ask_mark_done("product: fold it in? [SRV-1]"))
+        # ONE TICK, NOT TWO. `ask_kind` already de-duplicates a leading ✅ when it READS one,
+        # for the same reason: a doubled glyph reads as a second marker with a meaning to
+        # work out, and there is none. Marking a row twice is an ordinary thing to do.
+        ok("…and marking an already-marked ask keeps exactly one tick",
+           fleet_tui.ask_mark_done(fleet_tui.ask_mark_done("todo: a thing")) == "✅ todo: a thing",
+           fleet_tui.ask_mark_done(fleet_tui.ask_mark_done("todo: a thing")))
+        # A NOTE IS METADATA ABOUT THE ROW, NEVER A SECOND ROW. It lands on the TAIL, so a
+        # newline in it would make everything after the break a context line of its own — and
+        # the reader would then attach that context to this ask as if someone had written it.
+        ok("…and a note carrying a newline is collapsed, never split into a context line",
+           fleet_tui.ask_detail(fleet_tui.ask_mark_done("todo: a thing", "one\ntwo"))
+           ["context"] == "",
+           fleet_tui.ask_mark_done("todo: a thing", "one\ntwo"))
+
+        # THE FILE WRITER TOUCHES THE HEAD LINE AND NOTHING ELSE. The context under an ask is
+        # the reasoning that made it answerable and is still worth reading once it is
+        # answered, so a marker that consumed or re-indented it would be destroying the half
+        # of the item the block change existed to add.
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+            tf.write("product: a? [SRV-2]\n  ctx one\n  ctx two\nship: b?\n")
+            mark_path = tf.name
+        wrote = fleet_tui._mark_line_done(mark_path, fleet_tui._ask_lines(mark_path)[0], "yes")
+        with open(mark_path) as f:
+            marked_file = f.read()
+        ok("marking rewrites the head line IN PLACE and leaves the block and its neighbours "
+           "untouched",
+           marked_file == "✅ product: a? [SRV-2] [note:yes]\n  ctx one\n  ctx two\nship: b?\n",
+           marked_file)
+        ok("…and it is still ONE item, with its context still attached",
+           fleet_tui._ask_lines(mark_path)
+           == ["✅ product: a? [SRV-2] [note:yes]\nctx one\nctx two", "ship: b?"],
+           fleet_tui._ask_lines(mark_path))
+        ok("…and it hands back the line it wrote", wrote == "✅ product: a? [SRV-2] [note:yes]",
+           wrote)
+        # Against a file that EXISTS, so the empty answer means "no such head" rather than
+        # "could not open it" — the two share a return value and only one is under test.
+        ok("a head that matches nothing writes nothing and answers falsy",
+           fleet_tui._mark_line_done(mark_path, "product: never written?") == ""
+           and open(mark_path).read() == marked_file)
+        os.unlink(mark_path)
 
         ok("a `[short:]` trailer is what the one-line views show, not the prose",
            fleet_tui.ask_short(fleet_tui.ask_detail(
