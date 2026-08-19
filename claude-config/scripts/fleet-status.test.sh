@@ -437,6 +437,23 @@ hasnt "…nor when it was added"                "added:2026-08-10"        "$(run
 printf 'product: fold MON-10 in? (deferred 2026-08-11 — until SRV-21) [MON-10]\n' \
   > "$T/needs-input-fleet"
 has   "the deferral stamp is kept inline, unlike the trailers" "deferred 2026-08-11" "$(run)"
+
+# AN ASK'S INDENTED CONTEXT IS PART OF IT, NOT MORE ASKS. This reader walked the file line by
+# line and counted every continuation as its own item: live, 3 asks written across 30 lines
+# rendered as "30 needs you" in the header while the TUI's 4ME panel, which folds, said 4.
+# The header number is the one a reader plans their next few minutes around.
+#
+# NUMBERED, NOT COUNTED BY EYE: asserting item 2 is the SECOND ask proves the context lines
+# were folded away rather than merely clipped out of sight. And the header count is asserted
+# beside it, because that is the half the user acts on.
+printf 'ship: merge #124\n  the branch is green\n  and Patrick has signed off\nproduct: fold MON-10 in?\n  it is cheap\n' \
+  > "$T/needs-input-fleet"
+has   "an ask's indented context does not become extra asks" " 2  💬 fold MON-10 in?" "$(run)"
+# 3 = the two fleet asks above PLUS chas-3's own lane ask from the needs-input section. The
+# unfolded reading of the same fixtures is 6 (five fleet LINES + chas-3), so this number does
+# discriminate — it is spelled out here because it is not simply "the asks in this printf".
+has   "…and the header counts ITEMS, not lines"              "3 needs you"            "$(run | head -1)"
+hasnt "…and no context line is rendered as an item of its own" "the branch is green"  "$(run)"
 rm -f "$T/needs-input-fleet"
 hasnt "with no fleet asks there is no heading" "4ME" "$(run)"
 

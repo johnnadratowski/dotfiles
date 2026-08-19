@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _agent_facts import (  # noqa: E402
     ASK, agent_transcript, agent_transcript_exact, ask_kind, ask_trailers,
-    monocle_state,
+    fold_ask_context, monocle_state,
     branch_ticket_for, clip, context_for, fleet_goal,
     fleet_goal_path, fmt_age, fmt_ago, fmt_secs, last_active, needs_input, needs_input_items,
     open_prs_for, status_age, status_line, tickets_for,
@@ -57,9 +57,25 @@ def general_asks():
             body = f.read().strip()
     except OSError:
         return []
+    # FOLDED FIRST, exactly as needs_input_items already does for the per-lane files — this
+    # reader is the one that never did. An ask's context lines are INDENTED under it, so a raw
+    # `splitlines()` walk counts every one of them as its own ask: the live fleet list held 3
+    # asks across 30 non-comment lines, and this header read "30 needs you" while the TUI's
+    # 4ME panel, which folds, read 4. The number the user plans their next few minutes around
+    # was ten times the work they actually owed.
+    #
+    # Verbatim the failure `fold_ask_context`'s own comment predicts — "a folder in only one
+    # reader would leave the other rendering every context line as its own bogus ask … and
+    # the count at the top would be wrong". The folder was put in _agent_facts for both
+    # readers to share; this one just never called it.
+    kept = [ln.rstrip() for ln in body.splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#")]
     out = []
-    for ln in body.splitlines():
-        if not ln.strip() or ln.lstrip().startswith("#"):
+    for ln in fold_ask_context(kept):
+        # …then ONLY THE HEAD LINE, same as needs_input_items. This is a one-line column; the
+        # context block belongs to the surface that has room to show it.
+        ln = ln.split("\n", 1)[0].strip()
+        if not ln:
             continue
         icon, text = ask_kind(ln)
         # Trailers are for the surface that can afford them. This is a one-line column, and a
