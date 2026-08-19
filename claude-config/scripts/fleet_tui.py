@@ -1902,6 +1902,34 @@ class CfgRow(ListItem):
         yield Static(self.markup())
 
 
+class EmacsInput(Input):
+    """`Input`, plus the two emacs motions Textual does not already ship.
+
+    MOST OF THE LAYER IS ALREADY THERE and rebinding it would be noise: textual 8.2.8 binds
+    ctrl+a home, ctrl+e end, ctrl+d delete-right, ctrl+w delete-word-left, ctrl+u
+    delete-all-left and ctrl+k kill-to-end — measured off `Input.BINDINGS`, not assumed. Only
+    the two character motions are missing, so only those are added.
+
+    ctrl+n / ctrl+p ARE DELIBERATELY NOT BOUND. These fields are single-line, so "next line"
+    and "previous line" have nothing to move to; the nearest emacs meaning is minibuffer
+    history, which does not exist here. Binding them to the list BEHIND the dialog was the
+    other option and is worse — it would move the cursor off the row the note is about while
+    the note is being typed, and the row a mark lands on is captured when `t` is pressed, so
+    the panel would disagree with what is about to be written.
+
+    THE APP'S ctrl+k IS NOT A COLLISION, though it looks like one: `ctrl+k` is bound at app
+    level to the tmux pane move. A focused Input consumes it first and the app action never
+    runs — measured, not reasoned about, and there is a test that fails if that stops being
+    true. ctrl+j and ctrl+l DO reach the app from inside a field, which is left alone: their
+    emacs meanings (newline-and-indent, recenter) are meaningless in one line of text.
+    """
+
+    BINDINGS = [
+        Binding("ctrl+f", "cursor_right", "", show=False),
+        Binding("ctrl+b", "cursor_left", "", show=False),
+    ]
+
+
 class Detail(Vertical):
     """The overlay Enter opens on an agent row: its git state, its live session, its config.
 
@@ -2189,7 +2217,7 @@ class FleetTUI(App):
             yield ListView(id="fleet")
         # The note field `t` opens, between the panels and the footer. Its two rows come
         # out of the `1fr` panel while it is up and go straight back when it closes.
-        yield Input(id="note-input")
+        yield EmacsInput(id="note-input")
         yield Static("", id="note-msg")
         yield Static(self.legend_markup(), id="legend")
         with Detail(id="detail"):
@@ -2201,7 +2229,7 @@ class FleetTUI(App):
                 yield Static("", id="detail-status")
             yield Static("", id="detail-git")
             yield ListView(id="detail-cfg")
-            yield Input(id="detail-input")
+            yield EmacsInput(id="detail-input")
             yield Static("", id="detail-msg")
         with AskDetail(id="ask-detail"):
             yield Static("", id="ask-detail-head")
@@ -2567,6 +2595,25 @@ class FleetTUI(App):
         box.scroll_down() if direction == "down" else box.scroll_up()
         return True
 
+    def _scroll_top(self, selector):
+        """Put a dialog's scroll box back to the top. CALLED ON OPEN, AND ONLY ON OPEN.
+
+        A dialog is ONE WIDGET REUSED FOR EVERY SUBJECT, so the offset it opens at is the
+        last reader's rather than this one's: read a long ask to the bottom, close it, open a
+        short one, and it renders scrolled past its own first line. The offset survives
+        because the widget is never remounted — `-show` only stops it being displayed —
+        which is measurable: an offset of 20 is still 20 after a hide/show cycle.
+
+        NEVER FROM THE TICK. `refresh_ask` and `refresh_detail` repaint this same box every
+        few seconds while somebody is reading it, and resetting there would drag them back to
+        the top mid-sentence — a worse bug than the one this fixes, and a much more annoying
+        one. There is a test that scrolls, refreshes, and asserts the offset did not move.
+        """
+        try:
+            self.query_one(selector, VerticalScroll).scroll_home(animate=False)
+        except NoMatches:
+            pass
+
     def _cursor_list(self):
         """j/k move the list the reader is actually looking at — the overlay's, when it is up.
         Moving the hidden lane cursor instead would silently re-aim `x` and `enter`."""
@@ -2718,6 +2765,7 @@ class FleetTUI(App):
         self.query_one("#detail-git", Static).update("")
         self.query_one("#detail-msg", Static).update(DETAIL_HINT)
         self.query_one("#detail-cfg", ListView).clear()
+        self._scroll_top("#detail-status-box")
         self.run_worker(lambda: self._load_detail(row), thread=True, group="detail")
 
     def refresh_detail(self):
@@ -2902,6 +2950,9 @@ class FleetTUI(App):
         self.query_one("#ask-detail").add_class("-show")
         self.query_one("#ask-detail-msg", Static).update(ASK_HINT)
         self.show_ask()
+        # AFTER the paint, not before: the box is scrolled relative to content it does not
+        # have until show_ask has written it.
+        self._scroll_top("#ask-detail-box")
 
     def refresh_ask(self):
         """Repaint the open 4ME overlay on the same tick the panel behind it refreshes.
@@ -3429,6 +3480,8 @@ class FleetTUI(App):
             ("", "On a %s review row it force-clears the staged review instead, retiring"
                  % ASK_KINDS["review"]),
             ("", "the lane's flag file — and there the note is REQUIRED, not optional"),
+            ("^f ^b", "in either text field: move a character. ^a ^e line start/end,"),
+            ("", "^k kill to end, ^d delete forward, ^w ^u delete word/line back"),
         ))
         return ("[b]LANE[/]\n%s\n\n[b]ACTION ITEMS[/]\n%s\n\n[b]KEYS THE FOOTER CANNOT SHOW[/]"
                 "\n%s\n\n[dim]? or esc to close[/]" % (states, kinds, keys))

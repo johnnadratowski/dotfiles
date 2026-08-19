@@ -986,6 +986,46 @@ async def main():
         await pilot.pause()
         ok("t opens the note field on the highlighted 4ME row",
            note_inp.has_class("-show") and app.marking is not None)
+
+        # ── EMACS MOTIONS IN THE NOTE FIELD ──────────────────────────────────────────────
+        # Only ctrl+f / ctrl+b are ours: textual 8.2.8 already binds ctrl+a home, ctrl+e end,
+        # ctrl+d delete-right, ctrl+w delete-word-left, ctrl+u delete-all-left and ctrl+k
+        # kill-to-end. The home/end pair is asserted anyway — not to test textual, but because
+        # this field is where a user will reach for them, and an upgrade that dropped them
+        # would be silent otherwise.
+        note_inp.value = "hello world"
+        note_inp.cursor_position = 11
+        await pilot.pause()
+        await pilot.press("ctrl+b")
+        await pilot.pause()
+        ok("ctrl+b steps the cursor back a character", note_inp.cursor_position == 10,
+           note_inp.cursor_position)
+        await pilot.press("ctrl+f")
+        await pilot.pause()
+        ok("…and ctrl+f steps it forward again", note_inp.cursor_position == 11,
+           note_inp.cursor_position)
+        await pilot.press("ctrl+a")
+        await pilot.pause()
+        ok("…ctrl+a goes to the start of the line", note_inp.cursor_position == 0,
+           note_inp.cursor_position)
+        await pilot.press("ctrl+e")
+        await pilot.pause()
+        ok("…and ctrl+e to the end", note_inp.cursor_position == 11,
+           note_inp.cursor_position)
+
+        # THE ONE THAT LOOKS LIKE A COLLISION AND IS NOT. `ctrl+k` is bound at APP level to
+        # the tmux pane move; a focused Input consumes it first, so inside this field it
+        # kills to end of line and the pane never moves. That ordering is textual's, not
+        # ours — which is exactly why it is pinned here: if it ever changes, or if someone
+        # rebinds ctrl+k more aggressively, a user loses their half-typed note to a pane jump.
+        note_inp.cursor_position = 5
+        await pilot.pause()
+        await pilot.press("ctrl+k")
+        await pilot.pause()
+        ok("ctrl+k kills to end of line in the field, and does NOT move the tmux pane",
+           note_inp.value == "hello", note_inp.value)
+        note_inp.value = ""
+        await pilot.pause()
         ok("…and names the row it is about, so the field is never ambiguous",
            "MON-16" in screen_text(app))
         note_inp.value = "approved, ott's version"
@@ -1613,6 +1653,41 @@ async def main():
             await pilot.pause()
         ok("an ask reworded under the open overlay lands on the next tick",
            "AND NEWLY REWORDED" in ask_text(), ask_text())
+
+        # ── A DIALOG OPENS AT THE TOP, whatever the last reader left it at ──────────────
+        # One widget serves every subject, and `-show` only stops it being DISPLAYED — it is
+        # never remounted, so its scroll offset is the previous ask's. Read a long one to the
+        # bottom, open a short one, and it renders past its own first line.
+        with open(fleet_path, "w") as f:
+            f.write("product: a question with a lot behind it [MON-10] [added:2026-08-10]\n"
+                    + "".join("  context line %02d, long enough to need scrolling\n" % i
+                              for i in range(40)))
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        box = app.query_one("#ask-detail-box", fleet_tui.VerticalScroll)
+        for _ in range(6):
+            await pilot.press("j")          # j SCROLLS this overlay; it holds no list
+        await pilot.pause()
+        scrolled = box.scroll_offset.y
+        ok("j scrolls the open 4ME overlay away from the top", scrolled > 0, scrolled)
+
+        # THE TICK MUST NOT TOUCH IT. This box is repainted every few seconds while it is
+        # being read, so a reset living in the refresh would drag the reader back to the top
+        # mid-sentence — a worse bug than the one being fixed, and the reason the reset is on
+        # the OPEN path alone. Asserted directly, because the two paths share the repaint.
+        app.load()
+        for _ in range(4):
+            await pilot.pause()
+        ok("…and a refresh under the reader does NOT yank them back to the top",
+           box.scroll_offset.y == scrolled, (scrolled, box.scroll_offset.y))
+
+        await pilot.press("escape")
+        await pilot.pause()
+        await pilot.press("enter")          # reopen, on the same long ask
+        await pilot.pause()
+        ok("…but reopening a dialog starts it at the top, not where the last one was left",
+           box.scroll_offset.y == 0, box.scroll_offset.y)
 
         await pilot.press("escape")
         await pilot.pause()
