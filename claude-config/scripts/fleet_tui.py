@@ -2807,6 +2807,7 @@ class FleetTUI(App):
         """Paint the overlay. `keep` restores the cursor across the reload a save triggers."""
         if self.detail is None:
             return                 # closed while the worker was still reading
+        first_paint = self.detail["data"] is None
         self.detail["data"] = data
         # Written only when the markup actually differs, for the same reason the lane rows are:
         # a refresh that repaints identical text is itself a visible flicker, and this now runs
@@ -2832,6 +2833,15 @@ class FleetTUI(App):
             # user may be mid-typing in the value field, and moving focus there would eat the
             # keystroke that followed it.
             cfg.focus()
+        if first_paint:
+            # `open_detail` already reset the scroll box, but before ANY real content existed
+            # — it was still showing "loading…", so the box had nothing to be scrolled past.
+            # `cfg.focus()` above can pull the scroll position back down to bring the list
+            # into view once it is populated, which is the actual mechanism behind "opens
+            # scrolled past its own first line": the box was at the top, then focus moved it.
+            # Reset AFTER focus, and ONLY on the paint that follows an open — never on a
+            # tick-driven refresh, which is exactly the case the docstring below warns about.
+            self._scroll_top("#detail-status-box")
 
     def detail_head_markup(self, data):
         live = data.get("live")

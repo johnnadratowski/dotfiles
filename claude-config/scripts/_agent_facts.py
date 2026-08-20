@@ -570,7 +570,12 @@ def ask_detail(line):
     """
     raw = (line or "").strip()
     raw, _, tail = raw.partition("\n")
-    context = "\n".join(ln.strip() for ln in tail.splitlines() if ln.strip())
+    # A BLANK LINE IN THE SOURCE IS A PARAGRAPH BREAK, not noise to drop. Filtering it out
+    # (the old behaviour) fed the dialog one unbroken block regardless of how the writer
+    # structured it — every context, however carefully paragraphed on disk, rendered as a
+    # single wall of text. Runs of 2+ blank lines collapse to one, so accidental extra
+    # spacing in the source doesn't inflate the dialog with dead space.
+    context = re.sub(r"\n{2,}", "\n\n", "\n".join(ln.strip() for ln in tail.splitlines())).strip()
     m = _ASK_KIND.match(raw)
     if m and m.group(1) in ASK_KINDS:
         kind, icon, body = m.group(1), ASK_KINDS[m.group(1)], raw[m.end():].strip()
