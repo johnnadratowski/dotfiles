@@ -389,6 +389,12 @@ tomorrow, in the panel they actually drive the fleet from.
   opened and an item that has been dealt with used to look identical to you, because both
   were absences. **Read the note, act on it, and then delete the row — that sweep is yours.**
   A `✅` row you leave standing is the same stale item as any other.
+- **Two keys write the note for them**, for the two answers that are always the same word:
+  **`p`** on a staged `review:` row ticks it `[note:approved]`, and **`M`** on a `ship:` row
+  whose ticket is a PR number ticks it `[note:merged]`. Both go through the same write path
+  as `t` and produce the same `✅` row — the only difference is that the user did not have to
+  type the word. **Everything else still takes `t`**, precisely so a real answer keeps its
+  real note.
 
 ### An ask carries its CONTEXT — the row is not the whole item
 
@@ -441,6 +447,25 @@ product: MON-16 — High or Urgent? [MON-16] [from:feature-3] [added:2026-08-19]
   a genuinely new review writes a new flag and the row comes straight back.
 - **`[cmd:<command>]`** gives a row a badge that copies the command to the clipboard. Use it
   whenever an ask is "run this" — the user should never have to retype a command out of prose.
+
+### EVERY OPEN PR GETS A ROW (STANDING, John 2026-08-20)
+
+**An open PR is a thing waiting on the user, so it belongs on the list like any other ask.**
+Before this, a PR you opened lived only in a chat message that scrolled away — and the panel's
+own per-lane PR column cannot stand in for it, because it matches on the lane's *checked-out
+branch* or its *ticket id*, and a lane returns to its own branch the moment `gh pr create`
+returns. Adhoc work (no ticket) is invisible there permanently. Measured: #189 — a
+safety-critical test restore — was open, unmerged, and on no surface the user drives from.
+
+- **Write a `ship:` row the turn a PR opens**, with `[PR#<n>]` as the ticket trailer so the
+  row links to it and `M` can resolve it. One row per PR.
+- **Say what merging it releases**, not what it contains — same depth rule as every other ask.
+  "Master's Docker-kill guard is untested until this lands" beats a diffstat.
+- **`M` closes it as merged** — one keystroke, no note typed, exactly as `p` does for a review.
+  `t` still takes a note when the answer is anything other than a plain merge (closed
+  unmerged, superseded, split).
+- **Sweep it like any `✅` row**: the user pressing `M` is them telling you it landed. Verify
+  the merge, then delete the row that same turn.
 
 **Write what you know about an ask as TRAILERS** — optional bracket fields at the *end* of the
 first line, after any `(deferred …)` stamp:

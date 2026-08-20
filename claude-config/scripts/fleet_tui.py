@@ -2126,6 +2126,7 @@ class FleetTUI(App):
         # word this file uses for the gesture (see action_clear_ask) and for the ✅ it writes.
         Binding("t", "mark_done", "mark done"),
         Binding("p", "approve_review", "approve"),
+        Binding("M", "close_merged", "merged"),
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
         # `c` CYCLES THE 4ME CATEGORY FILTER. Chosen because every other letter on this screen
@@ -3856,6 +3857,30 @@ class FleetTUI(App):
             return
         self.marking = (path, raw, self._focused_list())
         self.mark_submit("approved")
+
+    def action_close_merged(self):
+        """`M` — one keystroke for the other recurring case: a `ship:` row's PR landed.
+
+        Same shape as `p`/approve_review, same reason: typing "merged" every time a PR you
+        already tracked on the list actually merges is friction for an answer that is always
+        the same word. Goes through the identical `mark_submit` write path as `t`/`p` — this
+        is that flow with the note pre-decided, not a new one.
+
+        SCOPED TO PR-TRACKING ROWS. The ticket trailer distinguishes them already —
+        `_ASK_TICKET_PR` is the same pattern `ask_ticket_url` uses to tell a PR number
+        (`#186`) from a tracker id (`SRV-24`) for linking. A row with no ticket, or a
+        tracker-id ticket, is not what `M` answers; `t` still handles those.
+        """
+        path, raw = self._mark_target()
+        if raw is None:
+            return
+        marks = dict(ask_detail(raw)["trailers"])
+        tid = marks.get("ticket", "")
+        if not _ASK_TICKET_PR.match(tid):
+            self.notify("not a PR row — use t to mark this done", severity="warning")
+            return
+        self.marking = (path, raw, self._focused_list())
+        self.mark_submit("merged")
 
     def action_mark_done(self):
         """`t` — tick the row off WITHOUT deleting it, with an optional note for the lead.
