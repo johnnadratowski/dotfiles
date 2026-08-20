@@ -2113,10 +2113,17 @@ class FleetTUI(App):
         Binding("r", "reload", "reload"),
         # ENTER GAINED A SECOND MEANING RATHER THAN LOSING ITS FIRST. On an agent row it now
         # opens the detail overlay — the row is a card about a lane, and "show me this lane"
-        # is what pressing it on one should do. The ticket it used to open moved to `o`, is
+        # is what pressing it on one should do. The ticket it used to open moved to `O`, is
         # still a link inside the overlay, and is still what enter does on a 4ME row.
         Binding("enter", "enter", "details"),
-        Binding("o", "open_ticket", "open ticket"),
+        # `o` OPENS THE ROW ITSELF; `O` OPENS THE ROW'S TICKET (John, 2026-08-20).
+        # The lowercase key answers "show me this thing" without the user first having to
+        # decide WHICH of a row's several openable things they mean — it dispatches on what
+        # the row actually carries: its PR, else its staged review, else its document.
+        # The ticket moved to the shifted key because it is the one thing a row nearly always
+        # has, so it was crowding out the things that vary.
+        Binding("o", "open_current", "open"),
+        Binding("O", "open_ticket", "ticket"),
         Binding("a", "apply_now", "", show=False),
         Binding("x", "clear_ask", "clear ask"),
         # `t` TICKS A ROW OFF WITHOUT DELETING IT — the other half of `x`, and the half the
@@ -2125,8 +2132,12 @@ class FleetTUI(App):
         # would trade a new feature for the navigation. `t` is free, and "tick" is already the
         # word this file uses for the gesture (see action_clear_ask) and for the ✅ it writes.
         Binding("t", "mark_done", "mark done"),
-        Binding("p", "approve_review", "approve"),
-        Binding("M", "close_merged", "merged"),
+        # `m` IS THE ONE-KEY VERDICT, and it dispatches for the same reason `o` does (John,
+        # 2026-08-20). It replaced a `p`-for-approved / `M`-for-merged pair, which asked the
+        # user to classify the row before pressing — work the row's own trailers already do.
+        # A staged review takes "approved", a PR row takes "merged", and a row that is
+        # neither is refused rather than given whichever word came first.
+        Binding("m", "mark_verdict", "verdict"),
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
         # `c` CYCLES THE 4ME CATEGORY FILTER. Chosen because every other letter on this screen
@@ -2138,10 +2149,14 @@ class FleetTUI(App):
         # it changes how the list READS, never what is in it, and the panel title names the
         # state so the top row never means something the reader cannot see.
         Binding("s", "cycle_sort", "sort"),
-        # THE THREE THINGS A ROW CAN OPEN, on the keyboard as well as on their badges. A
-        # badge that is only clickable is unreachable from the keys every other row action
-        # uses, and this panel is driven from the keyboard.
-        Binding("m", "open_review", "monocle"),   # focus the lane's Monocle pane
+        # THE THINGS A ROW CAN OPEN, on the keyboard as well as on their badges. A badge that
+        # is only clickable is unreachable from the keys every other row action uses, and
+        # this panel is driven from the keyboard.
+        # `d` SURVIVES `o` RATHER THAN BEING REPLACED BY IT. `o` picks the row's most
+        # specific target and a document is last in that order, so on a row carrying BOTH a
+        # PR and a doc, `o` reaches the PR and `d` is the only key that reaches the doc.
+        # Monocle has no such escape hatch — its 🔎 badge is still clickable — because a row
+        # with a staged review and a PR at once does not occur today.
         Binding("d", "open_doc", "doc"),          # open the row's document
         Binding("y", "copy_cmd", "copy cmd"),     # yank the row's command to the clipboard
         Binding("question_mark", "legend", "legend"),
@@ -3235,11 +3250,87 @@ class FleetTUI(App):
             return
         self.query_one("#detail-msg", Static).update(msg)
 
+    def _open_subject(self):
+        """The row `o` acts on: (trailers, lane_row) — either may be empty/None.
+
+        SAME OVERLAY-FIRST RESOLUTION as `_row_trailers` and `action_open_ticket`, and for the
+        reason recorded there: while a dialog is up the focused widget is not a list, so
+        asking the cursor answers about a row the user cannot see.
+
+        Returns BOTH shapes rather than a union because the two row kinds carry their
+        openable things in genuinely different places — an ask in its trailers, a lane in the
+        facts collected for it — and flattening them here would only move the branch.
+        """
+        if self.ask is not None:
+            return dict(ask_detail(self.ask["raw"])["trailers"]), None
+        item = self._focused_list().highlighted_child
+        if isinstance(item, Ask):
+            return dict(ask_detail(item.raw)["trailers"]), None
+        if isinstance(item, Lane):
+            return {}, (getattr(item, "row", {}) or {})
+        return {}, None
+
+    def action_open_current(self):
+        """`o` — open what this row IS: its PR, else its staged review, else its document.
+
+        John, 2026-08-20. The key it replaced opened the row's TICKET, which is the one thing
+        nearly every row has — so the keyboard's most reachable letter was spent on the least
+        informative target, and a PR row's actual subject needed a different key that the
+        footer was too narrow to advertise.
+
+        THE ORDER IS MOST-SPECIFIC-FIRST, and it is the user's: a PR is a thing to go look at
+        and act on; a staged review is the same but lives in a pane rather than a browser; a
+        document is the fallback because a row that references one usually references it as
+        SUPPORT for the ask rather than as the ask itself.
+
+        A row with nothing openable is REFUSED, and the refusal names `O` — the ticket is
+        almost certainly what such a user wanted, and a key that silently does nothing is
+        indistinguishable from a key that is broken.
+        """
+        marks, lane = self._open_subject()
+        if lane is not None:
+            # A LANE'S PR IS NOT IN A TRAILER — it is matched to the lane by branch or by
+            # in-progress issue id (see `open_prs_for`). First one wins; a lane routinely has
+            # more than one in flight, and the panel already shows them all.
+            prs = lane.get("open_prs") or []
+            if prs:
+                _n, url = prs[0][0], prs[0][1]
+                subprocess.Popen(["open", url])
+                self.notify("opened #%s" % _n)
+                return
+            self.notify("nothing to open on this lane — O opens its ticket",
+                        severity="warning")
+            return
+        tid = marks.get("ticket", "")
+        if _ASK_TICKET_PR.match(tid):
+            url = ask_ticket_url(tid, self.data.get("ctx") or {})
+            if not url:
+                # The repo base is LEARNED, never assembled — same rule as `ask_ticket_url`'s.
+                # Saying so beats opening a guessed URL that 404s while looking authoritative.
+                self.notify("%s has no repo URL recorded" % tid, severity="warning")
+                return
+            subprocess.Popen(["open", url])
+            self.notify("opened %s" % tid)
+            return
+        if marks.get("review"):
+            self.open_review(marks["review"])
+            return
+        d = ask_detail(self.ask["raw"]) if self.ask is not None else None
+        if d is None:
+            item = self._focused_list().highlighted_child
+            d = ask_detail(item.raw) if isinstance(item, Ask) else None
+        urls = (doc_refs(d["text"])[1] + doc_refs(d.get("context") or "")[1]) if d else []
+        if urls:
+            subprocess.Popen(["open", urls[0]])
+            self.notify("opened %s" % os.path.basename(urls[0].split("?")[0]))
+            return
+        self.notify("nothing to open on this row — O opens its ticket", severity="warning")
+
     def action_open_ticket(self):
         """Open the ticket of whatever the user is actually pointing at.
 
         IT USED TO READ `#lanes` UNCONDITIONALLY, whichever panel had focus. On a 4ME row that
-        made `o` — and, through the fall-through, enter — report on a lane the user was not
+        made `O` — and, through the fall-through, enter — report on a lane the user was not
         looking at: "no ticket on this lane" about someone else's row, or worse, silently
         opening an unrelated ticket. Every other key here acts on the focused panel; this one
         now does too, and an ask resolves its id from its `[TICKET]` trailer.
@@ -3478,13 +3569,17 @@ class FleetTUI(App):
         keys = "\n".join("  %-6s %s" % (k, d) for k, d in (
             ("enter", "on an agent row: its git state and config, editable"),
             ("", "on a 4ME row: the ask in full, with its ticket and provenance"),
-            ("o", "open the ticket of the row you are on — lane or ask"),
+            ("o", "open what this row IS — its PR, else its staged review, else its"),
+            ("", "document. Most-specific-first, so on a row carrying both a PR and a"),
+            ("", "doc this reaches the PR and `d` is what reaches the doc"),
+            ("O", "open the row's TICKET — lane or ask. The shifted key because nearly"),
+            ("", "every row has one, so it was crowding out the things that vary"),
             ("a", "in the detail view: apply the live knobs to the running agent"),
             ("c", "cycle the 4ME category filter — all, then each kind present. The row"),
             ("", "numbers keep their gaps, because a number is an address, not a position"),
             ("s", "cycle the 4ME order — latest, earliest, goal. Named in the panel title"),
-            ("m", "focus the Monocle pane of the review on this row  (badge: %s)" % REVIEW_BADGE),
-            ("d", "open the document this row references — prose or context"),
+            ("d", "open the document this row references — prose or context. Still its own"),
+            ("", "key because `o` reaches a doc LAST, so a row with a PR needs this one"),
             ("y", "copy this row's command to the clipboard  (badge: %s)" % CMD_BADGE),
             ("t", "tick this row DONE without deleting it — %s in the file, plus an optional"
                   % ASK_GENERAL),
@@ -3808,9 +3903,9 @@ class FleetTUI(App):
             self.action_fullscreen()
 
     def _mark_target(self):
-        """Resolve (path, raw) for whichever row `t`/`p` would act on, or (None, None).
+        """Resolve (path, raw) for whichever row `t`/`m` would act on, or (None, None).
 
-        SHARED BY `t` (mark_done) AND `p` (approve_review) — both start by finding the same
+        SHARED BY `t` (mark_done) AND `m` (mark_verdict) — both start by finding the same
         row, and a second copy of this resolution is how the two would quietly diverge on
         which row "the highlighted one" means. Notifies and returns (None, None) on every
         refusal, so a caller just checks `raw is None` rather than re-deciding what to tell
@@ -3842,54 +3937,46 @@ class FleetTUI(App):
             return None, None
         return path, raw
 
-    def action_approve_review(self):
-        """`p` — one keystroke for the overwhelmingly common case: approving a staged review.
+    def action_mark_verdict(self):
+        """`m` — one keystroke for the two verdicts that are always the same word.
 
-        John, 2026-08-20: typing "approve" into the note field every time was the friction —
-        `t` still exists for everything else (a real note, or ticking a row that isn't a
-        review). This is `t` with the note pre-decided, not a new write path: it sets
-        `self.marking` exactly as `t` does and hands off to the SAME `mark_submit`, so a
-        `p` press is byte-for-byte what typing "approve" and pressing enter produces —
-        including the derived-row flag retirement, the trailer-safety check, and the
-        `.cleared` log entry.
+        A staged review is ticked "approved"; a row whose ticket is a PR number is ticked
+        "merged". Typing either into the note field every time was the friction; `t` still
+        exists for everything else — a real note, or a row that is neither of these.
 
-        SCOPED TO REVIEW ROWS ONLY. A `p` on an ordinary ask would silently invent an
-        "approve" that was never asked for — this key answers one specific, recurring
-        question ("is the staged diff good"), not a generic yes to whatever the row says.
+        NOT A NEW WRITE PATH. It sets `self.marking` exactly as `t` does and hands off to the
+        SAME `mark_submit`, so a press is byte-for-byte what typing the word and pressing
+        enter produces — including the derived-row flag retirement, the trailer-safety check
+        and the `.cleared` log entry.
+
+        ONE KEY, NOT TWO (John, 2026-08-20). This replaced a `p`/`M` pair that split the two
+        cases across separate keys, which made the USER classify the row before pressing —
+        work the row's own trailers already do, and a decision that is easy to get wrong on a
+        list where both kinds sit adjacent. Dispatching here also means a mis-press cannot
+        write the wrong word: a row that is neither is refused, never given whichever verdict
+        the key happened to carry.
+
+        REVIEW IS TESTED FIRST because it is the narrower claim. The `[review:]` trailer is
+        written only by the staged-review synthesis, whereas a `[PR#…]` ticket is written by
+        hand on any row that mentions a PR — so a hypothetical row carrying both is far more
+        likely to BE a review than to be a PR that happens to reference one.
         """
         path, raw = self._mark_target()
         if raw is None:
             return
         marks = dict(ask_detail(raw)["trailers"])
-        if not marks.get("review"):
-            self.notify("not a staged review — use t to mark this done", severity="warning")
+        if marks.get("review"):
+            verdict = "approved"
+        elif _ASK_TICKET_PR.match(marks.get("ticket", "")):
+            # The same pattern `ask_ticket_url` uses to tell a PR number (`#186`) from a
+            # tracker id (`SRV-24`), so the two readings of a ticket cannot drift apart.
+            verdict = "merged"
+        else:
+            self.notify("not a staged review or a PR row — use t to mark this done",
+                        severity="warning")
             return
         self.marking = (path, raw, self._focused_list())
-        self.mark_submit("approved")
-
-    def action_close_merged(self):
-        """`M` — one keystroke for the other recurring case: a `ship:` row's PR landed.
-
-        Same shape as `p`/approve_review, same reason: typing "merged" every time a PR you
-        already tracked on the list actually merges is friction for an answer that is always
-        the same word. Goes through the identical `mark_submit` write path as `t`/`p` — this
-        is that flow with the note pre-decided, not a new one.
-
-        SCOPED TO PR-TRACKING ROWS. The ticket trailer distinguishes them already —
-        `_ASK_TICKET_PR` is the same pattern `ask_ticket_url` uses to tell a PR number
-        (`#186`) from a tracker id (`SRV-24`) for linking. A row with no ticket, or a
-        tracker-id ticket, is not what `M` answers; `t` still handles those.
-        """
-        path, raw = self._mark_target()
-        if raw is None:
-            return
-        marks = dict(ask_detail(raw)["trailers"])
-        tid = marks.get("ticket", "")
-        if not _ASK_TICKET_PR.match(tid):
-            self.notify("not a PR row — use t to mark this done", severity="warning")
-            return
-        self.marking = (path, raw, self._focused_list())
-        self.mark_submit("merged")
+        self.mark_submit(verdict)
 
     def action_mark_done(self):
         """`t` — tick the row off WITHOUT deleting it, with an optional note for the lead.

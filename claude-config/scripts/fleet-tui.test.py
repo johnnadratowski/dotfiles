@@ -1070,6 +1070,62 @@ async def main():
         ok("an empty note marks the row done and writes no note trailer at all",
            plain == "✅ todo: bump the date? [added:2026-08-19]", plain)
 
+        # ── `m`: ONE KEY, TWO VERDICTS, DISPATCHED ON THE ROW (John, 2026-08-20) ─────────
+        # It replaced a `p`/`M` pair, and the reason it is worth testing is the reason it
+        # replaced them: the key now DECIDES, so a wrong decision writes a wrong word into
+        # the lead's list silently. All three branches are exercised against rows that sit
+        # adjacent in one file, because adjacent-and-different is the case a dispatcher
+        # reading the wrong row would pass.
+        before_m = open(fleet_path).read()
+        with open(fleet_path, "w") as f:
+            f.write("ship: land the release [PR#124] [added:2026-08-19]\n"
+                    "review: read the diff [review:/tmp/lane-x] [added:2026-08-19]\n"
+                    "product: pick one [SRV-9] [added:2026-08-19]\n")
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+        fleet.focus()
+        m_notes = []
+        real_notify, app.notify = app.notify, \
+            lambda msg, **k: m_notes.append((str(msg), k.get("severity")))
+        try:
+            for needle, label, want in (
+                ("land the release", "m on a PR row ticks it merged, with no typing", "merged"),
+                ("read the diff", "…and on a staged review it ticks approved instead",
+                 "approved"),
+            ):
+                fleet.index = ask_row(needle)
+                await pilot.pause()
+                await pilot.press("m")
+                await pilot.pause()
+                await pilot.pause()
+                line = [ln for ln in open(fleet_path).read().splitlines()
+                        if needle in ln][0]
+                got = dict(fleet_tui.ask_detail(line)["trailers"]).get("note")
+                ok(label, line.startswith("✅") and got == want, line)
+            # THE REFUSAL IS THE POINT OF DISPATCHING AT ALL. A row that is neither must get
+            # NO verdict — inventing one is worse than doing nothing, because the lead reads
+            # the note as the user's answer.
+            m_notes.clear()
+            untouched = open(fleet_path).read()
+            fleet.index = ask_row("pick one")
+            await pilot.pause()
+            await pilot.press("m")
+            await pilot.pause()
+            await pilot.pause()
+            ok("…while a row that is neither is REFUSED, and nothing is written",
+               open(fleet_path).read() == untouched and app.marking is None,
+               open(fleet_path).read())
+            ok("…naming `t` as the key that does work there",
+               any("use t" in msg and sev == "warning" for msg, sev in m_notes), m_notes)
+        finally:
+            app.notify = real_notify
+        with open(fleet_path, "w") as f:
+            f.write(before_m)
+        app.load()
+        await pilot.pause()
+        await pilot.pause()
+
         # ── a DERIVED row: `t` force-clears it, `x` still will not ───────────────────────
         # A derived row is synthesised from a lane's flag file every tick, so there is no line
         # to delete and `x` is refused. That left NO way off the panel for a review the engine
@@ -1521,20 +1577,34 @@ async def main():
         await pilot.press("escape")
         await pilot.pause()
 
-        # The key enter USED to be. It still opens the ticket from the 4ME panel, and `o`
-        # opens it from a lane row — the meaning moved, it was not deleted.
+        # `o` OPENS THE ROW, `O` OPENS ITS TICKET (John, 2026-08-20). The lane fixture has
+        # BOTH — PR #133 and ticket DX-6 — which is what makes these two assertions able to
+        # disagree with each other. A fixture carrying only one would let a dispatcher that
+        # ignored its input pass both.
         opened = []
         real_popen, fleet_tui.subprocess.Popen = fleet_tui.subprocess.Popen, \
             lambda argv, *a, **k: opened.append(argv)
         try:
+            # SET THE PR HERE rather than relying on the fixture's opening value — an earlier
+            # block empties it and never puts it back, so a test written against the initial
+            # state passes today and silently stops exercising the PR branch the moment
+            # anything above it moves. State this block depends on, this block establishes.
+            volatile["prs"] = [(133, "https://gh/x/pull/133", False)]
+            app.load()
+            await pilot.pause()
             lanes.focus()
             lanes.index = 0
             await pilot.pause()
             await pilot.press("o")
             await pilot.pause()
-            ok("o opens the lane's ticket — enter's old job, not lost",
-               opened == [["open", "https://example.invalid/DX-6"]], opened)
+            ok("o on a lane opens its PR, not its ticket",
+               opened == [["open", "https://gh/x/pull/133"]], opened)
             ok("…and pressing it did NOT open the overlay", app.detail is None)
+            opened.clear()
+            await pilot.press("O")
+            await pilot.pause()
+            ok("…while O opens the lane's TICKET — enter's old job, moved not deleted",
+               opened == [["open", "https://example.invalid/DX-6"]], opened)
             opened.clear()
             # THE BUG THIS REPLACES, and why the old test could not see it. Enter on a 4ME row
             # fell through to action_open_ticket, which read the LANES list no matter which
@@ -1558,11 +1628,51 @@ async def main():
                (app.ask, app.detail, opened))
             await pilot.press("o")
             await pilot.pause()
-            ok("…and o there opens the ASK's own ticket, not the highlighted lane's",
+            ok("…and o there opens the ASK's own PR, not the highlighted lane's",
                opened == [["open", "https://github.com/acme/goals/pull/124"]], opened)
             await pilot.press("escape")
             await pilot.pause()
             ok("…and escape closes it", app.ask is None)
+
+            # THE DISPATCH, one row per branch. Each fixture carries exactly ONE openable
+            # thing, so a branch that fired on the wrong input opens the wrong URL rather
+            # than merely opening something — which is what the old assertions allowed.
+            opened.clear()
+            notes = []
+            real_notify, app.notify = app.notify, \
+                lambda msg, **k: notes.append((str(msg), k.get("severity")))
+            try:
+                for line, label, want in (
+                    ("triage: read this [added:2026-08-19]\n"
+                     "  file:///tmp/findings.md\n",
+                     "a doc-only row opens its document",
+                     [["open", "file:///tmp/findings.md"]]),
+                    ("product: decide this [SRV-1] [added:2026-08-19]\n",
+                     "a row with only a TRACKER ticket has nothing for o — and the refusal "
+                     "names O",
+                     []),
+                ):
+                    with open(fleet_path, "w") as f:
+                        f.write(line)
+                    app.load()
+                    await pilot.pause()
+                    await pilot.pause()
+                    fleet.focus()
+                    fleet.index = 0
+                    await pilot.pause()
+                    notes.clear()
+                    await pilot.press("o")
+                    await pilot.pause()
+                    ok(label, opened == want, (opened, notes))
+                    opened.clear()
+                # NAMED, not merely warned. A key that does nothing is indistinguishable from
+                # a key that is broken, and the ticket is what such a user almost certainly
+                # wanted — so the refusal has to say which key gets it.
+                ok("…the refusal says so in as many words",
+                   any("O opens its ticket" in m and s == "warning" for m, s in notes),
+                   notes)
+            finally:
+                app.notify = real_notify
         finally:
             fleet_tui.subprocess.Popen = real_popen
 
