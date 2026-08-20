@@ -3492,6 +3492,15 @@ class FleetTUI(App):
             ("", "On a %s review row it force-clears the staged review instead, retiring"
                  % ASK_KINDS["review"]),
             ("", "the lane's flag file — and there the note is REQUIRED, not optional"),
+            # THE TWO ONE-KEY VERDICTS. Both are `t` with the note pre-filled, so everything
+            # said above about `t` — the mark, the sweep, the flag retirement — is true of
+            # them too; the only thing they remove is typing the same word every time. Each
+            # refuses on a row it does not fit rather than writing the wrong note, which is
+            # why they are separate keys and not a mode.
+            ("p", "on a %s row with a staged review: tick it approved, no typing"
+                  % ASK_KINDS["review"]),
+            ("M", "on a %s row whose ticket is a PR: tick it merged, no typing"
+                  % ASK_KINDS["ship"]),
             ("^f ^b", "in either text field: move a character. ^a ^e line start/end,"),
             ("", "^k kill to end, ^d delete forward, ^w ^u delete word/line back"),
         ))

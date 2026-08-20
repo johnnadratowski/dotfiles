@@ -229,11 +229,23 @@ async def main():
            "uncommitted" not in text, text)
         ok("…nor the agent's last-active clock, which travelled with it",
            "active " not in text, text)
+        # THE LEGEND IS NOT A ROW, and these four are about rows. It is reference prose, free
+        # to contain the word "review" followed by a colon — so measured against the whole
+        # screen, "the kind token is consumed" was answering a question about the legend's
+        # wording, and it reddened the first time the legend gained a sentence.
+        # Excluding one panel rather than selecting the row widgets is deliberate: lane asks
+        # and fleet asks are different widgets, so a select-list would silently stop covering
+        # whichever kind was renamed. The three `in` assertions below are the positive
+        # control — an over-narrow filter would make the "not in" one pass vacuously, and
+        # they fail loudly if it does.
+        rows_text = "\n".join(str(w.content)
+                              for w in app.screen.query(Static) if w.id != "legend")
         # The id inside it is a link by now, so match around it rather than through it.
-        ok("a review: ask carries the review glyph", "🔍 the [link=" in text, text)
-        ok("…and the words after the linked id survive", "[/link] diff" in text, text)
-        ok("an untyped ask is a general action item", "✅ something untyped" in text, text)
-        ok("the kind token is consumed, not printed", "review:" not in text, text)
+        ok("a review: ask carries the review glyph", "🔍 the [link=" in rows_text, rows_text)
+        ok("…and the words after the linked id survive", "[/link] diff" in rows_text, rows_text)
+        ok("an untyped ask is a general action item",
+           "✅ something untyped" in rows_text, rows_text)
+        ok("the kind token is consumed, not printed", "review:" not in rows_text, rows_text)
         ok("the header counts every ask", "3 needs you" in text, text)
         # A GAP THE GLYPH CANNOT SWALLOW. The umbrella is the VS16 emoji form, which the
         # terminal draws double-width in one cell, so the single space that used to follow it
