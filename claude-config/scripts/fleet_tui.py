@@ -2125,6 +2125,7 @@ class FleetTUI(App):
         # would trade a new feature for the navigation. `t` is free, and "tick" is already the
         # word this file uses for the gesture (see action_clear_ask) and for the ✅ it writes.
         Binding("t", "mark_done", "mark done"),
+        Binding("p", "approve_review", "approve"),
         Binding("u", "undo", "undo"),
         Binding("f", "fullscreen", "fullscreen"),
         # `c` CYCLES THE 4ME CATEGORY FILTER. Chosen because every other letter on this screen
@@ -3796,6 +3797,66 @@ class FleetTUI(App):
         elif not self.close_top_overlay() and self.full:
             self.action_fullscreen()
 
+    def _mark_target(self):
+        """Resolve (path, raw) for whichever row `t`/`p` would act on, or (None, None).
+
+        SHARED BY `t` (mark_done) AND `p` (approve_review) — both start by finding the same
+        row, and a second copy of this resolution is how the two would quietly diverge on
+        which row "the highlighted one" means. Notifies and returns (None, None) on every
+        refusal, so a caller just checks `raw is None` rather than re-deciding what to tell
+        the user.
+
+        The lane dialog swallows both keys before this is ever called: nothing under it is a
+        4ME row, and its own Input owns the keyboard. A second press while the note field is
+        up is a no-op, not a re-open — re-opening would silently discard a half-typed note.
+        """
+        if self.detail is not None or self.marking is not None:
+            return None, None
+        if self.ask is not None:
+            path, raw = self.data.get("fleet_path") or "", self.ask["raw"]
+        else:
+            w = self._focused_list()
+            item = w.highlighted_child
+            if isinstance(item, Ask):
+                path, raw = item.path, item.raw
+            elif isinstance(item, Lane):
+                asks = item.row.get("raw_asks") or []
+                if not asks:
+                    self.notify("nothing to mark on this lane", severity="warning")
+                    return None, None
+                path, raw = item.row["ask_path"], asks[0]
+            else:
+                return None, None
+        if not path:
+            self.notify("no file behind this row", severity="warning")
+            return None, None
+        return path, raw
+
+    def action_approve_review(self):
+        """`p` — one keystroke for the overwhelmingly common case: approving a staged review.
+
+        John, 2026-08-20: typing "approve" into the note field every time was the friction —
+        `t` still exists for everything else (a real note, or ticking a row that isn't a
+        review). This is `t` with the note pre-decided, not a new write path: it sets
+        `self.marking` exactly as `t` does and hands off to the SAME `mark_submit`, so a
+        `p` press is byte-for-byte what typing "approve" and pressing enter produces —
+        including the derived-row flag retirement, the trailer-safety check, and the
+        `.cleared` log entry.
+
+        SCOPED TO REVIEW ROWS ONLY. A `p` on an ordinary ask would silently invent an
+        "approve" that was never asked for — this key answers one specific, recurring
+        question ("is the staged diff good"), not a generic yes to whatever the row says.
+        """
+        path, raw = self._mark_target()
+        if raw is None:
+            return
+        marks = dict(ask_detail(raw)["trailers"])
+        if not marks.get("review"):
+            self.notify("not a staged review — use t to mark this done", severity="warning")
+            return
+        self.marking = (path, raw, self._focused_list())
+        self.mark_submit("approved")
+
     def action_mark_done(self):
         """`t` — tick the row off WITHOUT deleting it, with an optional note for the lead.
 
@@ -3813,28 +3874,8 @@ class FleetTUI(App):
         the dialog repaints to show the tick. Marking what you are reading is the case, not
         the hazard.
         """
-        # The lane dialog still swallows it: nothing under it is a 4ME row, and its own Input
-        # owns the keyboard. A second press while the field is up is a no-op, not a re-open —
-        # re-opening would silently discard the note half-typed into it.
-        if self.detail is not None or self.marking is not None:
-            return
-        if self.ask is not None:
-            path, raw = self.data.get("fleet_path") or "", self.ask["raw"]
-        else:
-            w = self._focused_list()
-            item = w.highlighted_child
-            if isinstance(item, Ask):
-                path, raw = item.path, item.raw
-            elif isinstance(item, Lane):
-                asks = item.row.get("raw_asks") or []
-                if not asks:
-                    self.notify("nothing to mark on this lane", severity="warning")
-                    return
-                path, raw = item.row["ask_path"], asks[0]
-            else:
-                return
-        if not path:
-            self.notify("no file behind this row", severity="warning")
+        path, raw = self._mark_target()
+        if raw is None:
             return
         # A DERIVED ROW IS NOT IN THE FILE, so `t` on one does something different: it
         # retires the FLAG the row is synthesised from, and writes the ticked row into the
