@@ -188,7 +188,7 @@ fleet_agent_in_dir() {
 # plus three inline fallbacks). `_config.test.sh` asserts they all agree, so a missed one
 # turns the suite red rather than shipping a silent disagreement.
 #
-# agent-fanout.sh, fleet-layout.sh and statusline-fleet.sh all DELEGATE here (DX-jn-cc-011).
+# agent-fanout.sh and fleet-layout.sh both DELEGATE here (DX-jn-cc-011).
 # Each keeps an inline copy only as a FALLBACK for a clone with no _fleet.sh, and each guards
 # with `if command -v fleet_busy` — never `&& fleet_busy || inline`, in which the inline copy
 # would run on every not-busy answer and the compound would be `fleet_busy OR inline` (two

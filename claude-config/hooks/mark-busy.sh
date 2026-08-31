@@ -60,8 +60,8 @@ done
 # one — and idle is what authorises `team-boot.sh down` to kill it and `agent-fanout restart` to
 # type into it. A destroy-guard's key input failing OPEN, on a path with no error and no output.
 #
-# Same shape (and same reason) as the inline `fleet_busy` fallbacks in agent-fanout.sh and
-# statusline-fleet.sh, and guarded the same way: `command -v`, never `f || inline`, which would
+# Same shape (and same reason) as the inline `fleet_busy` fallback in agent-fanout.sh, and
+# guarded the same way: `command -v`, never `f || inline`, which would
 # run the inline copy on every legitimately-empty answer.
 _self_token() {
   if [ -n "${TMUX_PANE:-}" ]; then printf '%s' "$TMUX_PANE"; else printf 'cwd:%s' "$PWD"; fi

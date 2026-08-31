@@ -41,13 +41,6 @@
     "maxWidth": 14
    },
    {
-    "id": "fleet-liveness",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-fleet.sh\" \"$r/.claude/scripts/statusline-fleet.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 16
-   },
-   {
     "id": "sep_a",
     "type": "flex-separator"
    },
