@@ -18,13 +18,6 @@
     "rawValue": true
    },
    {
-    "id": "fleet-role",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-role.sh\" \"$r/.claude/scripts/statusline-role.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 14
-   },
-   {
     "id": "1",
     "type": "current-working-dir",
     "color": "cyan",
