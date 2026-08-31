@@ -3,6 +3,21 @@
  "lines": [
   [
    {
+    "id": "b67f891a-22a4-4b09-9741-977a68735223",
+    "type": "version"
+   },
+   {
+    "id": "2880417e-5371-4d48-980d-d4d91b26a7f8",
+    "type": "model",
+    "rawValue": true
+   },
+   {
+    "id": "2303120f-0250-44a6-a0e9-141f01aad151",
+    "type": "thinking-effort",
+    "backgroundColor": "bgBrightBlack",
+    "rawValue": true
+   },
+   {
     "id": "fleet-role",
     "type": "custom-command",
     "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-role.sh\" \"$r/.claude/scripts/statusline-role.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
@@ -15,7 +30,8 @@
     "color": "cyan",
     "metadata": {
      "fishStyle": "true"
-    }
+    },
+    "rawValue": true
    },
    {
     "id": "fleet-branch",
@@ -25,14 +41,14 @@
     "maxWidth": 14
    },
    {
-    "id": "fleet-activity-ago",
+    "id": "fleet-liveness",
     "type": "custom-command",
-    "commandPath": "~/.claude/scripts/statusline-activity-ago.sh",
+    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-fleet.sh\" \"$r/.claude/scripts/statusline-fleet.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
     "timeout": 2000,
-    "maxWidth": 14
+    "maxWidth": 16
    },
    {
-    "id": "sep-l1",
+    "id": "sep_a",
     "type": "flex-separator"
    },
    {
@@ -57,61 +73,10 @@
     "timeout": 2000,
     "maxWidth": 8,
     "backgroundColor": "bgBrightRed"
-   }
-  ],
-  [
-   {
-    "id": "b67f891a-22a4-4b09-9741-977a68735223",
-    "type": "version"
    },
    {
-    "id": "2880417e-5371-4d48-980d-d4d91b26a7f8",
-    "type": "model"
-   },
-   {
-    "id": "2303120f-0250-44a6-a0e9-141f01aad151",
-    "type": "thinking-effort",
-    "backgroundColor": "bgBrightBlack"
-   },
-   {
-    "id": "sep-l2a",
+    "id": "sep_b",
     "type": "flex-separator"
-   },
-   {
-    "id": "9c2a1b7e-git-changes",
-    "type": "git-changes"
-   },
-   {
-    "id": "fleet-behind-base",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-behind-target.sh\" \"$r/.claude/scripts/statusline-behind-target.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 10
-   },
-   {
-    "id": "fleet-unpushed-base",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-unpushed-target.sh\" \"$r/.claude/scripts/statusline-unpushed-target.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 10
-   },
-   {
-    "id": "sep-l2b",
-    "type": "flex-separator"
-   },
-   {
-    "id": "fleet-liveness",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-fleet.sh\" \"$r/.claude/scripts/statusline-fleet.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
-    "timeout": 2000,
-    "maxWidth": 16
-   },
-   {
-    "id": "fleet-todo",
-    "type": "custom-command",
-    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; for q in \"$HOME/.claude/scripts/statusline-todo.sh\" \"$r/.claude/scripts/statusline-todo.sh\"; do [ -x \"$q\" ] || continue; out=$(\"$q\" </dev/null) || exit 0; [ -n \"$out\" ] && printf \"\\033[38;5;16m%s\\033[39m\" \"$out\"; break; done; exit 0'",
-    "timeout": 2000,
-    "preserveColors": true
    },
    {
     "id": "fleet-pr",
@@ -119,6 +84,13 @@
     "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; [ -f \"$r/.claude/workflow.config\" ] || exit 0; for q in \"$HOME/.claude/scripts/statusline-pr.sh\" \"$r/.claude/scripts/statusline-pr.sh\"; do [ -x \"$q\" ] && { \"$q\"; break; }; done; exit 0'",
     "timeout": 2000,
     "maxWidth": 22,
+    "preserveColors": true
+   },
+   {
+    "id": "fleet-todo",
+    "type": "custom-command",
+    "commandPath": "sh -c 'r=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; for q in \"$HOME/.claude/scripts/statusline-todo.sh\" \"$r/.claude/scripts/statusline-todo.sh\"; do [ -x \"$q\" ] || continue; out=$(\"$q\" </dev/null) || exit 0; [ -n \"$out\" ] && printf \"\\033[38;5;16m%s\\033[39m\" \"$out\"; break; done; exit 0'",
+    "timeout": 2000,
     "preserveColors": true
    }
   ]
